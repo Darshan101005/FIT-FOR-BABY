@@ -1,7 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image } from 'expo-image';
 
 const { width } = Dimensions.get('window');
 
@@ -14,7 +15,7 @@ export default function GetStartedScreen() {
         <Image 
           source={require('../assets/logos/logo-icon.svg')}
           style={styles.logo}
-          resizeMode="contain"
+          contentFit="contain"
         />
         
         <View style={styles.textContainer}>

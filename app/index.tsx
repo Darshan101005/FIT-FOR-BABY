@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Image, StyleSheet, View } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -45,7 +46,7 @@ export default function SplashScreen() {
         <Image 
           source={require('../assets/logos/logo-full.svg')}
           style={styles.logo}
-          resizeMode="contain"
+          contentFit="contain"
         />
       </Animated.View>
       

@@ -1,7 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Animated, Dimensions, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image } from 'expo-image';
 
 const { width } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
@@ -105,7 +106,7 @@ export default function VerifyOTPScreen() {
               <Image 
                 source={require('../assets/logos/logo-icon.svg')}
                 style={styles.logo}
-                resizeMode="contain"
+                contentFit="contain"
               />
             </View>
 

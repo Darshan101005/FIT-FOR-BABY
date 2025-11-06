@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Animated, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Dimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 
 const { width } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
@@ -63,7 +64,7 @@ export default function DashboardScreen() {
             <Image 
               source={require('../assets/logos/logo-icon.svg')}
               style={styles.logo}
-              resizeMode="contain"
+              contentFit="contain"
             />
             <View>
               <Text style={styles.headerTitle}>Admin Dashboard</Text>
