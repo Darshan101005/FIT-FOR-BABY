@@ -6,7 +6,7 @@ import { Image } from 'expo-image';
 
 const { width } = Dimensions.get('window');
 
-export default function GetStartedScreen() {
+const GetStartedScreen: React.FC = () => {
   const router = useRouter();
 
   return (
@@ -18,19 +18,14 @@ export default function GetStartedScreen() {
           contentFit="contain"
         />
         
+        <Image 
+          source={require('../assets/images/couple.jpg')} 
+          style={styles.coupleImage}
+          contentFit="contain"
+        />
+
         <View style={styles.textContainer}>
-          <Text style={styles.titleNormal}>Healthcare Companion for</Text>
-          <LinearGradient
-            colors={['#22c55e', '#16a34a', '#15803d']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.gradientText}
-          >
-            <Text style={styles.titleGradient}>Expecting Mothers</Text>
-          </LinearGradient>
-          <Text style={styles.subtitle}>
-            Track nutrition, monitor activities, and ensure a healthy pregnancy journey with personalized care
-          </Text>
+          <Text style={styles.titleText}>Grow together, for your little one.</Text>
         </View>
 
         <TouchableOpacity 
@@ -39,20 +34,14 @@ export default function GetStartedScreen() {
           activeOpacity={0.85}
         >
           <LinearGradient
-            colors={['#22c55e', '#16a34a']}
+            colors={['#006dab', '#1976D2']} 
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.buttonGradient}
           >
-            <Text style={styles.primaryButtonText}>Get Started</Text>
+            <Text style={styles.primaryButtonText}>Let's Start  ▶</Text>
           </LinearGradient>
         </TouchableOpacity>
-      </View>
-
-      <View style={styles.footer}>
-        <View style={styles.dot} />
-        <View style={[styles.dot, styles.dotActive]} />
-        <View style={styles.dot} />
       </View>
     </View>
   );
@@ -73,51 +62,37 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   logo: {
-    width: 210,
-    height: 210,
-    marginBottom: 60,
+    width: 250, // Reduced width
+    height: 250, // Reduced height
+    marginBottom: 5, // Reduced margin to bring closer to the image
+  },
+  coupleImage: { 
+    width: '100%',
+    height: 350,
+    marginBottom: 10, // Adjusted margin
   },
   textContainer: {
     alignItems: 'center',
-    marginBottom: 70,
+    marginBottom: 25,
     width: '100%',
   },
-  titleNormal: {
+  titleText: { 
     fontSize: 28,
     fontWeight: '600',
     color: '#334155',
     textAlign: 'center',
-    marginBottom: 12,
-  },
-  gradientText: {
-    borderRadius: 8,
-    marginBottom: 24,
-  },
-  titleGradient: {
-    fontSize: 36,
-    fontWeight: '900',
-    color: '#ffffff',
-    textAlign: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-  },
-  subtitle: {
-    fontSize: 17,
-    color: '#64748b',
-    textAlign: 'center',
-    lineHeight: 26,
-    maxWidth: 480,
+    lineHeight: 38,
   },
   primaryButton: {
     width: '100%',
     maxWidth: 400,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#22c55e',
+    shadowColor: '#006dab', 
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
-    elevation: 10,
+    elevation: 5,
   },
   buttonGradient: {
     paddingVertical: 20,
@@ -133,7 +108,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 10,
-    paddingBottom: 50,
+    paddingBottom: 10,
   },
   dot: {
     width: 8,
@@ -143,6 +118,8 @@ const styles = StyleSheet.create({
   },
   dotActive: {
     width: 32,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#006dab', 
   },
 });
+
+export default GetStartedScreen;
