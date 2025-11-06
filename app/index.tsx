@@ -1,46 +1,58 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect } from 'react';
-import { ActivityIndicator, Animated, Image, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Image, StyleSheet, View } from 'react-native';
 
 export default function SplashScreen() {
   const router = useRouter();
-  const fadeAnim = new Animated.Value(0);
-  const scaleAnim = new Animated.Value(0.8);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 1000,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        tension: 20,
+        tension: 15,
         friction: 3,
         useNativeDriver: true,
       }),
     ]).start();
 
+    Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: 2500,
+      useNativeDriver: false,
+    }).start();
+
     setTimeout(() => {
-      router.replace('/login');
-    }, 2500);
+      router.replace('/get-started');
+    }, 2800);
   }, []);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.logoContainer, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
         <Image 
-          source={require('../assets/images/icon.png')}
+          source={require('../assets/logos/logo-full.svg')}
           style={styles.logo}
           resizeMode="contain"
         />
-        <Text style={styles.title}>Fit for Baby</Text>
-        <Text style={styles.subtitle}>Nursing Care & Wellness</Text>
       </Animated.View>
       
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#0066a1" />
+        <View style={styles.loadingBar}>
+          <Animated.View style={[styles.loadingProgress, { width: progressWidth }]} />
+        </View>
       </View>
     </View>
   );
@@ -53,30 +65,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
   logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#0066a1',
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    letterSpacing: 1,
-    fontWeight: '400',
+    width: 420,
+    height: 420,
   },
   loadingContainer: {
     position: 'absolute',
-    bottom: 60,
+    bottom: 100,
+    width: 240,
+  },
+  loadingBar: {
+    height: 4,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  loadingProgress: {
+    height: '100%',
+    backgroundColor: '#22c55e',
+    borderRadius: 3,
   },
 });
