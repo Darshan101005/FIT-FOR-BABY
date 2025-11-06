@@ -1,16 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SvgUri } from 'react-native-svg';
-import { Image } from 'expo-image';
+import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
-const { width } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,6 +18,9 @@ export default function LoginScreen() {
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const spinnerAnim = useRef(new Animated.Value(0)).current;
+
+  // Responsive sizing
+  const logoSize = isWeb ? Math.min(screenWidth * 0.5, 350) : Math.min(screenWidth * 0.85, 420);
 
   useEffect(() => {
     if (loginState === 'loading') {
@@ -99,19 +101,9 @@ export default function LoginScreen() {
           ]}
         >
           <View style={styles.toastContent}>
-            <View style={styles.toastIconContainer}>
-              {toast.type === 'error' ? (
-                <View style={styles.errorIcon}>
-                  <View style={[styles.iconLine, styles.iconLineLeft]} />
-                  <View style={[styles.iconLine, styles.iconLineRight]} />
-                </View>
-              ) : (
-                <View style={styles.successIcon}>
-                  <View style={[styles.checkLine, styles.checkLineShort]} />
-                  <View style={[styles.checkLine, styles.checkLineLong]} />
-                </View>
-              )}
-            </View>
+            <Text style={styles.toastIcon}>
+              {toast.type === 'error' ? '✗' : '✓'}
+            </Text>
             <Text style={styles.toastText}>{toast.message}</Text>
           </View>
         </Animated.View>
@@ -130,7 +122,7 @@ export default function LoginScreen() {
             <View style={styles.logoSection}>
               <Image 
                 source={require('../assets/logos/logo-icon.svg')}
-                style={styles.logo}
+                style={{ width: logoSize, height: logoSize }}
                 contentFit="contain"
               />
             </View>
@@ -238,7 +230,7 @@ export default function LoginScreen() {
                 
                 {loginState === 'success' && (
                   <LinearGradient
-                    colors={['#98be4e', '#7da53e']}
+                    colors={['#006dab', '#005a8f']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.gradientButton}
@@ -263,18 +255,20 @@ const styles = StyleSheet.create({
   toast: {
     position: 'absolute',
     top: 0,
+    left: isWeb ? undefined : 16,
     right: isWeb ? 20 : 16,
     zIndex: 1000,
     backgroundColor: '#ffffff',
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 14,
     borderRadius: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
-    maxWidth: 320,
+    maxWidth: isWeb ? 320 : undefined,
+    minWidth: isWeb ? undefined : 280,
     borderLeftWidth: 4,
   },
   toastError: {
@@ -287,87 +281,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    width: '100%',
   },
-  toastIconContainer: {
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorIcon: {
-    width: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconLine: {
-    position: 'absolute',
-    width: 2,
-    height: 18,
-    backgroundColor: '#ef4444',
-    borderRadius: 1,
-  },
-  iconLineLeft: {
-    transform: [{ rotate: '45deg' }],
-  },
-  iconLineRight: {
-    transform: [{ rotate: '-45deg' }],
-  },
-  successIcon: {
-    width: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkLine: {
-    position: 'absolute',
-    backgroundColor: '#98be4e',
-    borderRadius: 1,
-  },
-  checkLineShort: {
-    width: 2,
-    height: 6,
-    bottom: 6,
-    left: 5,
-    transform: [{ rotate: '-45deg' }],
-  },
-  checkLineLong: {
-    width: 2,
-    height: 12,
-    bottom: 3,
-    left: 9,
-    transform: [{ rotate: '45deg' }],
+  toastIcon: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    minWidth: 20,
   },
   toastText: {
     color: '#1e293b',
     fontSize: 14,
     fontWeight: '600',
     flex: 1,
+    flexWrap: 'wrap',
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingVertical: isWeb ? 10 : 10,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingVertical: isWeb ? 20 : 20,
+    paddingTop: isWeb ? 30 : 40,
   },
   contentWrapper: {
     maxWidth: 500,
     width: '100%',
     alignSelf: 'center',
     paddingHorizontal: isWeb ? 40 : 24,
+    marginTop: isWeb ? 0 : -32,
   },
   logoSection: {
     alignItems: 'center',
-    marginBottom: -150,
-  },
-  logo: {
-    width: 400,
-    height: 400,
+    marginBottom: isWeb ? -118 : -88,
   },
   headerSection: {
-    marginBottom: 24,
+    marginBottom: isWeb ? 12 : 16,
     alignItems: 'center',
   },
   title: {
@@ -404,8 +355,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingVertical: 18,
-    fontSize: 17,
+    fontSize: 16,
     color: '#1e293b',
+    fontWeight: '600',
   },
   passwordInput: {
     paddingRight: 55,
@@ -436,7 +388,7 @@ const styles = StyleSheet.create({
   },
   rememberMeText: {
     fontSize: 15,
-    color: '#64748b',
+    color: '#98be4e',
     fontWeight: '600',
   },
   continueButton: {

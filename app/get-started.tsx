@@ -1,48 +1,68 @@
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Image } from 'expo-image';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 
-const { width } = Dimensions.get('window');
+const isWeb = Platform.OS === 'web';
 
 const GetStartedScreen: React.FC = () => {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+
+  // Responsive sizing
+  const logoSize = isWeb ? Math.min(screenWidth * 0.5, 350) : Math.min(screenWidth * 0.85, 420);
+  const coupleImageHeight = isWeb ? Math.min(screenWidth * 0.35, 300) : Math.min(screenWidth * 0.7, 280);
 
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
-        <Image 
-          source={require('../assets/logos/logo-icon.svg')}
-          style={styles.logo}
-          contentFit="contain"
-        />
-        
-        <Image 
-          source={require('../assets/images/couple.jpg')} 
-          style={styles.coupleImage}
-          contentFit="contain"
-        />
-
-        <View style={styles.textContainer}>
-          <Text style={styles.titleText}>Grow together, for your little one.</Text>
-        </View>
-
-        <TouchableOpacity 
-          style={styles.primaryButton}
-          onPress={() => router.push('/login')}
-          activeOpacity={0.85}
+      <KeyboardAvoidingView 
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <LinearGradient
-            colors={['#006dab', '#1976D2']} 
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.buttonGradient}
-          >
-            <Text style={styles.primaryButtonText}>Let's Start  ▶</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.contentWrapper}>
+            <View style={styles.logoSection}>
+              <Image 
+                source={require('../assets/logos/logo-icon.svg')}
+                style={{ width: logoSize, height: logoSize }}
+                contentFit="contain"
+              />
+            </View>
+            
+            <View style={styles.imageSection}>
+              <Image 
+                source={require('../assets/images/couple.jpg')} 
+                style={{ width: '100%', height: coupleImageHeight }}
+                contentFit="contain"
+              />
+            </View>
+
+            <View style={styles.textContainer}>
+              <Text style={styles.titleText}>Grow together for your little one.</Text>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.primaryButton}
+              onPress={() => router.push('/login')}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={['#006dab', '#005a8f']} 
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.buttonGradient}
+              >
+                <Text style={styles.primaryButtonText}>Let's Start  ▶</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -52,73 +72,64 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
-  content: {
+  keyboardView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    maxWidth: 600,
+    paddingVertical: isWeb ? 20 : 20,
+    paddingTop: isWeb ? 5 : 40,
+  },
+  contentWrapper: {
+    maxWidth: 500,
     width: '100%',
     alignSelf: 'center',
+    paddingHorizontal: isWeb ? 40 : 24,
+    marginTop: isWeb ? 0 : -32,
   },
-  logo: {
-    width: 250, // Reduced width
-    height: 250, // Reduced height
-    marginBottom: 5, // Reduced margin to bring closer to the image
+  logoSection: {
+    alignItems: 'center',
+    marginBottom: isWeb ? -118 : -88,
   },
-  coupleImage: { 
-    width: '100%',
-    height: 350,
-    marginBottom: 10, // Adjusted margin
+  imageSection: {
+    alignItems: 'center',
+    marginBottom: isWeb ? 16 : 12,
   },
   textContainer: {
     alignItems: 'center',
-    marginBottom: 25,
+    marginBottom: isWeb ? 24 : 32,
     width: '100%',
   },
   titleText: { 
-    fontSize: 28,
-    fontWeight: '600',
-    color: '#334155',
+    fontSize: isWeb ? 28 : 24,
+    fontWeight: '900',
+    color: '#006dab',
     textAlign: 'center',
-    lineHeight: 38,
+    lineHeight: isWeb ? 38 : 34,
   },
   primaryButton: {
     width: '100%',
-    maxWidth: 400,
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
     shadowColor: '#006dab', 
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+    marginBottom: 24,
   },
   buttonGradient: {
     paddingVertical: 20,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 64,
   },
   primaryButtonText: {
     fontSize: 19,
     fontWeight: '800',
     color: '#ffffff',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-    paddingBottom: 10,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#cbd5e1',
-  },
-  dotActive: {
-    width: 32,
-    backgroundColor: '#006dab', 
   },
 });
 

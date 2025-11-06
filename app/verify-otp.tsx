@@ -1,19 +1,24 @@
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Animated, Dimensions, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Image } from 'expo-image';
+import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
-const { width } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
 
 export default function VerifyOTPScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [loading, setLoading] = useState(false);
+  const [otpState, setOtpState] = useState<'idle' | 'entering' | 'correct' | 'wrong'>('idle');
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const inputRefs = useRef<Array<TextInput | null>>([]);
+
+  // Responsive sizing
+  const logoSize = isWeb ? Math.min(screenWidth * 0.5, 350) : Math.min(screenWidth * 0.8, 450);
+  const boxSize = isWeb ? Math.min(screenWidth * 0.065, 55) : Math.min(screenWidth * 0.12, 48);
+  const boxHeight = isWeb ? 48 : 48;
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -39,6 +44,7 @@ export default function VerifyOTPScreen() {
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
+    setOtpState('entering');
 
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
@@ -55,27 +61,42 @@ export default function VerifyOTPScreen() {
     const otpValue = otp.join('');
     
     if (otpValue.length !== 6) {
-      showToast('Please enter complete 6-digit OTP', 'error');
+      showToast('Enter complete 6-digit OTP', 'error');
       return;
     }
 
-    if (otpValue !== '123456') {
-      showToast('Invalid OTP. Please try again.', 'error');
-      return;
+    if (otpValue === '111111') {
+      setOtpState('correct');
+      showToast('OTP verified successfully!', 'success');
+      setTimeout(() => {
+        router.replace('/dashboard');
+      }, 1500);
+    } else if (otpValue === '000000') {
+      setOtpState('wrong');
+      showToast('Incorrect OTP', 'error');
+      setTimeout(() => {
+        setOtpState('idle');
+        setOtp(['', '', '', '', '', '']);
+        inputRefs.current[0]?.focus();
+      }, 1500);
+    } else {
+      showToast('Invalid OTP', 'error');
     }
-
-    setLoading(true);
-    showToast('OTP verified successfully!', 'success');
-    setTimeout(() => {
-      setLoading(false);
-      router.replace('/dashboard');
-    }, 1500);
   };
 
   const handleResend = () => {
     showToast('OTP resent to your email', 'success');
     setOtp(['', '', '', '', '', '']);
+    setOtpState('idle');
     inputRefs.current[0]?.focus();
+  };
+
+  const getBoxStyle = (digit: string) => {
+    if (otpState === 'correct') return styles.otpBoxCorrect;
+    if (otpState === 'wrong') return styles.otpBoxWrong;
+    if (otpState === 'entering' && digit) return styles.otpBoxEntering;
+    if (digit) return styles.otpBoxFilled;
+    return null;
   };
 
   return (
@@ -88,7 +109,12 @@ export default function VerifyOTPScreen() {
             { transform: [{ translateY: toastAnim }] }
           ]}
         >
-          <Text style={styles.toastText}>{toast.message}</Text>
+          <View style={styles.toastContent}>
+            <Text style={styles.toastIcon}>
+              {toast.type === 'error' ? '✗' : '✓'}
+            </Text>
+            <Text style={styles.toastText}>{toast.message}</Text>
+          </View>
         </Animated.View>
       )}
 
@@ -105,7 +131,7 @@ export default function VerifyOTPScreen() {
             <View style={styles.logoSection}>
               <Image 
                 source={require('../assets/logos/logo-icon.svg')}
-                style={styles.logo}
+                style={{ width: logoSize, height: logoSize }}
                 contentFit="contain"
               />
             </View>
@@ -117,52 +143,62 @@ export default function VerifyOTPScreen() {
               </Text>
             </View>
 
-          <View style={styles.otpContainer}>
-            {otp.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={(ref) => {
-                  inputRefs.current[index] = ref;
-                }}
-                style={[
-                  styles.otpBox,
-                  digit && styles.otpBoxFilled,
-                ]}
-                value={digit}
-                onChangeText={(value) => handleOtpChange(value, index)}
-                onKeyPress={(e) => handleKeyPress(e, index)}
-                keyboardType="number-pad"
-                maxLength={1}
-                selectTextOnFocus
-                editable={!loading}
-              />
-            ))}
-          </View>
+            <View style={styles.otpContainer}>
+              {otp.map((digit, index) => (
+                <TextInput
+                  key={index}
+                  ref={(ref) => {
+                    inputRefs.current[index] = ref;
+                  }}
+                  style={[
+                    {
+                      width: boxSize,
+                      height: boxHeight,
+                      borderRadius: 12,
+                      borderWidth: 2,
+                      borderColor: '#006dab',
+                      textAlign: 'center',
+                      fontSize: isWeb ? 20 : 18,
+                      fontWeight: 'bold',
+                      color: '#006dab',
+                      backgroundColor: '#ffffff',
+                    },
+                    getBoxStyle(digit),
+                  ]}
+                  value={digit}
+                  onChangeText={(value) => handleOtpChange(value, index)}
+                  onKeyPress={(e) => handleKeyPress(e, index)}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  selectTextOnFocus
+                  selectionColor="transparent"
+                  editable={otpState !== 'correct' && otpState !== 'wrong'}
+                />
+              ))}
+            </View>
 
-          <TouchableOpacity 
-            style={[styles.verifyButton, loading && styles.verifyButtonDisabled]}
-            onPress={handleVerify}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={['#22c55e', '#16a34a']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.gradientButton}
+            <TouchableOpacity 
+              style={styles.verifyButton}
+              onPress={handleVerify}
+              disabled={otpState === 'correct' || otpState === 'wrong'}
+              activeOpacity={0.85}
             >
-              <Text style={styles.verifyButtonText}>
-                {loading ? 'Verifying...' : 'Verify & Continue'}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <View style={styles.resendSection}>
-            <Text style={styles.resendText}>Didn't receive the code?</Text>
-            <TouchableOpacity onPress={handleResend} disabled={loading}>
-              <Text style={styles.resendLink}>Resend OTP</Text>
+              <LinearGradient
+                colors={['#006dab', '#005a8f']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.gradientButton}
+              >
+                <Text style={styles.verifyButtonText}>Verify OTP</Text>
+              </LinearGradient>
             </TouchableOpacity>
-          </View>
+
+            <View style={styles.resendContainer}>
+              <Text style={styles.resendText}>Didn't receive the code? </Text>
+              <TouchableOpacity onPress={handleResend} activeOpacity={0.7}>
+                <Text style={styles.resendLink}>Resend OTP</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -173,33 +209,51 @@ export default function VerifyOTPScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
   },
   toast: {
     position: 'absolute',
     top: 0,
-    right: 20,
-    left: 20,
+    left: isWeb ? undefined : 16,
+    right: isWeb ? 20 : 16,
     zIndex: 1000,
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
+    maxWidth: isWeb ? 320 : undefined,
+    minWidth: isWeb ? undefined : 280,
+    borderLeftWidth: 4,
   },
   toastError: {
-    backgroundColor: '#ef4444',
+    borderLeftColor: '#ef4444',
   },
   toastSuccess: {
-    backgroundColor: '#22c55e',
+    borderLeftColor: '#98be4e',
+  },
+  toastContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  toastIcon: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    minWidth: 20,
   },
   toastText: {
-    color: '#ffffff',
-    fontSize: 15,
+    color: '#1e293b',
+    fontSize: 14,
     fontWeight: '600',
-    textAlign: 'center',
+    flex: 1,
+    flexWrap: 'wrap',
   },
   keyboardView: {
     flex: 1,
@@ -207,101 +261,95 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: isWeb ? 40 : 24,
-    paddingVertical: 40,
+    alignItems: 'center',
+    paddingVertical: isWeb ? 30 : 20,
+    marginTop: isWeb ? -48 : -128,
   },
   contentWrapper: {
     maxWidth: 500,
     width: '100%',
     alignSelf: 'center',
+    paddingHorizontal: isWeb ? 40 : 24,
+    marginTop: isWeb ? -120 : -30,
   },
   logoSection: {
     alignItems: 'center',
-    marginBottom: 40,
-  },
-  logo: {
-    width: 210,
-    height: 210,
+    marginBottom: isWeb ? -30 : -30,
   },
   headerSection: {
-    marginBottom: 50,
+    marginBottom: isWeb ? 20 : 20,
+    alignItems: 'center',
   },
   title: {
-    fontSize: 34,
+    fontSize: 36,
     fontWeight: '900',
-    color: '#0f172a',
-    marginBottom: 10,
+    color: '#006dab',
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 17,
+    fontSize: 16,
     color: '#64748b',
-    lineHeight: 26,
+    textAlign: 'center',
   },
   otpContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 40,
-    gap: isWeb ? 16 : 10,
-  },
-  otpBox: {
-    flex: 1,
-    aspectRatio: 1,
-    maxWidth: isWeb ? 75 : 55,
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    borderRadius: 16,
-    fontSize: isWeb ? 32 : 28,
-    fontWeight: '800',
-    textAlign: 'center',
-    color: '#0f172a',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    justifyContent: 'center',
+    marginBottom: 32,
+    gap: isWeb ? 12 : 8,
   },
   otpBoxFilled: {
-    borderColor: '#22c55e',
-    borderWidth: 3,
+    borderColor: '#006dab',
+    borderWidth: 2,
+  },
+  otpBoxEntering: {
+    borderColor: '#fbbf24',
+    borderWidth: 2,
+    backgroundColor: '#fef3c7',
+  },
+  otpBoxCorrect: {
+    borderColor: '#98be4e',
+    borderWidth: 2,
     backgroundColor: '#f0fdf4',
   },
+  otpBoxWrong: {
+    borderColor: '#ef4444',
+    borderWidth: 2,
+    backgroundColor: '#fee2e2',
+  },
   verifyButton: {
-    marginTop: 12,
     borderRadius: 14,
     overflow: 'hidden',
-    shadowColor: '#22c55e',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  verifyButtonDisabled: {
-    opacity: 0.6,
+    shadowColor: '#006dab',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+    marginBottom: 24,
   },
   gradientButton: {
     paddingVertical: 20,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 64,
   },
   verifyButtonText: {
     color: '#ffffff',
     fontSize: 19,
     fontWeight: '800',
   },
-  resendSection: {
+  resendContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 32,
   },
   resendText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#64748b',
+    fontWeight: '500',
   },
   resendLink: {
-    fontSize: 16,
-    color: '#22c55e',
-    fontWeight: '800',
+    fontSize: 15,
+    color: '#98be4e',
+    fontWeight: '700',
   },
 });
