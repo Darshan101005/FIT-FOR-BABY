@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -10,9 +10,18 @@ const GetStartedScreen: React.FC = () => {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
 
+  const isMobileWeb = useMemo(() => {
+    if (!isWeb) return false;
+    return /Mobi|Android|iPhone/i.test(navigator.userAgent);
+  }, []);
+
   // Responsive sizing
-  const logoSize = isWeb ? Math.min(screenWidth * 0.5, 350) : Math.min(screenWidth * 0.85, 420);
-  const coupleImageHeight = isWeb ? Math.min(screenWidth * 0.35, 300) : Math.min(screenWidth * 0.7, 280);
+  const logoSize = isMobileWeb ?
+    Math.min(screenWidth * 0.8, 500) :
+    (isWeb ? Math.min(screenWidth * 0.5, 350) : Math.min(screenWidth * 0.85, 420));
+  const coupleImageHeight = isMobileWeb ? 
+    Math.min(screenWidth * 0.91, 390) : 
+    (isWeb ? Math.min(screenWidth * 0.35, 300) : Math.min(screenWidth * 0.7, 280));
 
   return (
     <View style={styles.container}>
@@ -21,12 +30,12 @@ const GetStartedScreen: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView 
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, isMobileWeb && styles.mobileWebScrollContent]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.contentWrapper}>
-            <View style={styles.logoSection}>
+          <View style={[styles.contentWrapper, isMobileWeb && styles.mobileWebContentWrapper]}>
+            <View style={[styles.logoSection, isMobileWeb && styles.mobileWebLogoSection]}>
               <Image 
                 source={require('../assets/logos/logo-icon.svg')}
                 style={{ width: logoSize, height: logoSize }}
@@ -34,7 +43,7 @@ const GetStartedScreen: React.FC = () => {
               />
             </View>
             
-            <View style={styles.imageSection}>
+            <View style={[styles.imageSection, isMobileWeb && styles.mobileWebImageSection]}>
               <Image 
                 source={require('../assets/images/couple.jpg')} 
                 style={{ width: '100%', height: coupleImageHeight }}
@@ -82,6 +91,10 @@ const styles = StyleSheet.create({
     paddingVertical: isWeb ? 20 : 20,
     paddingTop: isWeb ? 5 : 40,
   },
+  mobileWebScrollContent: {
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
   contentWrapper: {
     maxWidth: 500,
     width: '100%',
@@ -89,13 +102,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: isWeb ? 40 : 24,
     marginTop: isWeb ? 0 : -32,
   },
+  mobileWebContentWrapper: {
+    flex: 1,
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 0,
+    paddingBottom: 80,
+  },
   logoSection: {
     alignItems: 'center',
     marginBottom: isWeb ? -118 : -88,
   },
+  mobileWebLogoSection: {
+    marginTop: -40,
+    marginBottom: 0,
+  },
   imageSection: {
     alignItems: 'center',
     marginBottom: isWeb ? 16 : 12,
+  },
+  mobileWebImageSection: {
+    marginTop: -150,
   },
   textContainer: {
     alignItems: 'center',

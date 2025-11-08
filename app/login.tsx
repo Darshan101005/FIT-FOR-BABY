@@ -2,8 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
+} from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
@@ -14,13 +25,19 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [loginState, setLoginState] = useState<'idle' | 'loading' | 'success'>('idle');
+  const [loginState, setLoginState] = useState < 'idle' | 'loading' | 'success' > ('idle');
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const spinnerAnim = useRef(new Animated.Value(0)).current;
 
-  // Responsive sizing
-  const logoSize = isWeb ? Math.min(screenWidth * 0.5, 350) : Math.min(screenWidth * 0.85, 420);
+  const isMobileWeb = useMemo(() => {
+    if (!isWeb) return false;
+    return /Mobi|Android|iPhone/i.test(navigator.userAgent);
+  }, []);
+
+  const logoSize = isMobileWeb ?
+    Math.min(screenWidth * 0.8, 500) :
+    (isWeb ? Math.min(screenWidth * 0.5, 350) : Math.min(screenWidth * 0.85, 420));
 
   useEffect(() => {
     if (loginState === 'loading') {
@@ -36,7 +53,7 @@ export default function LoginScreen() {
     }
   }, [loginState]);
 
-  const showToast = (message: string, type: 'error' | 'success') => {
+  const showToast = (message: string, type: string) => {
     setToast({ visible: true, message, type });
     Animated.spring(toastAnim, {
       toValue: 20,
@@ -59,27 +76,19 @@ export default function LoginScreen() {
       showToast('Enter email and password', 'error');
       return;
     }
-
     if (!email.includes('@')) {
       showToast('Invalid email format', 'error');
       return;
     }
-
     if (password.length < 8) {
       showToast('Password must be at least 8 characters', 'error');
       return;
     }
-
-    // Simulate login process
     setLoginState('loading');
-
-    // Simulate API call
     setTimeout(() => {
-      const isPasswordCorrect = password === 'admin123'; // Mock validation
-      
+      const isPasswordCorrect = password === 'admin123';
       if (isPasswordCorrect) {
         setLoginState('success');
-        
         setTimeout(() => {
           router.push('/verify-otp');
         }, 800);
@@ -93,7 +102,7 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       {toast.visible && (
-        <Animated.View 
+        <Animated.View
           style={[
             styles.toast,
             toast.type === 'error' ? styles.toastError : styles.toastSuccess,
@@ -101,144 +110,122 @@ export default function LoginScreen() {
           ]}
         >
           <View style={styles.toastContent}>
-            <Text style={styles.toastIcon}>
-              {toast.type === 'error' ? '✗' : '✓'}
-            </Text>
+            <Text style={styles.toastIcon}>{toast.type === 'error' ? '✗' : '✓'}</Text>
             <Text style={styles.toastText}>{toast.message}</Text>
           </View>
         </Animated.View>
       )}
 
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent}
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, isMobileWeb && styles.mobileWebScrollContent]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.contentWrapper}>
-            <View style={styles.logoSection}>
-              <Image 
-                source={require('../assets/logos/logo-icon.svg')}
-                style={{ width: logoSize, height: logoSize }}
-                contentFit="contain"
-              />
+          <View style={[styles.contentWrapper, isMobileWeb && styles.mobileWebContentWrapper]}>
+            <View>
+              <View style={[styles.logoSection, isMobileWeb && styles.mobileWebLogoSection]}>
+                <Image
+                  source={require('../assets/logos/logo-icon.svg')}
+                  style={{ width: logoSize, height: logoSize }}
+                  contentFit="contain"
+                />
+              </View>
+              {!isMobileWeb && (
+                <View style={styles.headerSection}>
+                  <Text style={styles.title}>Login</Text>
+                </View>
+              )}
             </View>
 
-            <View style={styles.headerSection}>
-              <Text style={styles.title}>Login</Text>
-            </View>
-
-            <View style={styles.formContainer}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Email Address</Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter your email"
-                    placeholderTextColor="#94a3b8"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={loginState === 'idle'}
-                    selectionColor="transparent"
-                    underlineColorAndroid="transparent"
-                  />
+            <View style={isMobileWeb && styles.mobileWebFormWrapper}>
+              {isMobileWeb && (
+                <View style={styles.headerSection}>
+                  <Text style={styles.title}>Login</Text>
                 </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Password</Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={[styles.input, styles.passwordInput]}
-                    placeholder="Enter your password"
-                    placeholderTextColor="#94a3b8"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    editable={loginState === 'idle'}
-                    selectionColor="transparent"
-                    underlineColorAndroid="transparent"
-                  />
-                  <TouchableOpacity 
-                    style={styles.eyeIcon}
-                    onPress={() => setShowPassword(!showPassword)}
-                    activeOpacity={0.6}
-                  >
-                    <Ionicons 
-                      name={showPassword ? "eye-outline" : "eye-off-outline"} 
-                      size={22} 
-                      color="#64748b" 
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <TouchableOpacity 
-                style={styles.rememberMeContainer}
-                onPress={() => setRememberMe(!rememberMe)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                  {rememberMe && (
-                    <Ionicons name="checkmark" size={16} color="#ffffff" />
-                  )}
-                </View>
-                <Text style={styles.rememberMeText}>Remember me</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.continueButton}
-                onPress={handleContinue}
-                disabled={loginState !== 'idle'}
-                activeOpacity={0.85}
-              >
-                {loginState === 'idle' && (
-                  <LinearGradient
-                    colors={['#006dab', '#005a8f']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.gradientButton}
-                  >
-                    <Text style={styles.continueButtonText}>Login</Text>
-                  </LinearGradient>
-                )}
-                
-                {loginState === 'loading' && (
-                  <View style={[styles.gradientButton, styles.loadingButton]}>
-                    <Animated.View 
-                      style={[
-                        styles.spinner,
-                        {
-                          transform: [{
-                            rotate: spinnerAnim.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: ['0deg', '360deg'],
-                            })
-                          }]
-                        }
-                      ]} 
+              )}
+              <View style={styles.formContainer}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Email Address</Text>
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter your email"
+                      placeholderTextColor="#94a3b8"
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      editable={loginState === 'idle'}
+                      selectionColor="transparent"
+                      underlineColorAndroid="transparent"
                     />
                   </View>
-                )}
-                
-                {loginState === 'success' && (
-                  <LinearGradient
-                    colors={['#006dab', '#005a8f']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.gradientButton}
-                  >
-                    <Ionicons name="checkmark" size={32} color="#ffffff" />
-                  </LinearGradient>
-                )}
-              </TouchableOpacity>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Password</Text>
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      style={[styles.input, styles.passwordInput]}
+                      placeholder="Enter your password"
+                      placeholderTextColor="#94a3b8"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      editable={loginState === 'idle'}
+                      selectionColor="transparent"
+                      underlineColorAndroid="transparent"
+                    />
+                    <TouchableOpacity
+                      style={styles.eyeIcon}
+                      onPress={() => setShowPassword(!showPassword)}
+                      activeOpacity={0.6}
+                    >
+                      <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={22} color="#64748b" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.rememberMeContainer}
+                  onPress={() => setRememberMe(!rememberMe)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                    {rememberMe && <Ionicons name="checkmark" size={16} color="#ffffff" />}
+                  </View>
+                  <Text style={styles.rememberMeText}>Remember me</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.continueButton}
+                  onPress={handleContinue}
+                  disabled={loginState !== 'idle'}
+                  activeOpacity={0.85}
+                >
+                  {loginState === 'idle' && (
+                    <LinearGradient colors={['#006dab', '#005a8f']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.gradientButton}>
+                      <Text style={styles.continueButtonText}>Login</Text>
+                    </LinearGradient>
+                  )}
+                  {loginState === 'loading' && (
+                    <View style={[styles.gradientButton, styles.loadingButton]}>
+                      <Animated.View style={[styles.spinner, { transform: [{ rotate: spinnerAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }]} />
+                    </View>
+                  )}
+                  {loginState === 'success' && (
+                    <LinearGradient colors={['#006dab', '#005a8f']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.gradientButton}>
+                      <Ionicons name="checkmark" size={32} color="#ffffff" />
+                    </LinearGradient>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -306,6 +293,10 @@ const styles = StyleSheet.create({
     paddingVertical: isWeb ? 20 : 20,
     paddingTop: isWeb ? 30 : 40,
   },
+  mobileWebScrollContent: {
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
   contentWrapper: {
     maxWidth: 500,
     width: '100%',
@@ -313,9 +304,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: isWeb ? 40 : 24,
     marginTop: isWeb ? 0 : -32,
   },
+  mobileWebContentWrapper: {
+    flex: 1,
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 0,
+    paddingBottom: 80, // This brings the form up from the bottom
+  },
   logoSection: {
     alignItems: 'center',
     marginBottom: isWeb ? -118 : -88,
+  },
+  mobileWebLogoSection: {
+    marginTop: -40,
+    marginBottom: 0,
+  },
+  mobileWebFormWrapper: {
+    marginTop: -80,
   },
   headerSection: {
     marginBottom: isWeb ? 12 : 16,

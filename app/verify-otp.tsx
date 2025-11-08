@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -15,10 +15,17 @@ export default function VerifyOTPScreen() {
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const inputRefs = useRef<Array<TextInput | null>>([]);
 
+  const isMobileWeb = useMemo(() => {
+    if (!isWeb) return false;
+    return /Mobi|Android|iPhone/i.test(navigator.userAgent);
+  }, []);
+
   // Responsive sizing
-  const logoSize = isWeb ? Math.min(screenWidth * 0.5, 350) : Math.min(screenWidth * 0.8, 450);
-  const boxSize = isWeb ? Math.min(screenWidth * 0.065, 55) : Math.min(screenWidth * 0.12, 48);
-  const boxHeight = isWeb ? 48 : 48;
+  const logoSize = isMobileWeb ?
+    Math.min(screenWidth * 0.8, 500) :
+    (isWeb ? Math.min(screenWidth * 0.5, 350) : Math.min(screenWidth * 0.8, 450));
+  const boxSize = isMobileWeb ? 48 : (isWeb ? Math.min(screenWidth * 0.065, 55) : Math.min(screenWidth * 0.12, 48));
+  const boxHeight = 48;
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -123,12 +130,12 @@ export default function VerifyOTPScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView 
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, isMobileWeb && styles.mobileWebScrollContent]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.contentWrapper}>
-            <View style={styles.logoSection}>
+          <View style={[styles.contentWrapper, isMobileWeb && styles.mobileWebContentWrapper]}>
+            <View style={[styles.logoSection, isMobileWeb && styles.mobileWebLogoSection]}>
               <Image 
                 source={require('../assets/logos/logo-icon.svg')}
                 style={{ width: logoSize, height: logoSize }}
@@ -136,14 +143,15 @@ export default function VerifyOTPScreen() {
               />
             </View>
 
-            <View style={styles.headerSection}>
-              <Text style={styles.title}>Verify OTP</Text>
-              <Text style={styles.subtitle}>
-                Enter the 6-digit code sent to your email
-              </Text>
-            </View>
+            <View style={isMobileWeb && styles.mobileWebFormWrapper}>
+              <View style={styles.headerSection}>
+                <Text style={styles.title}>Verify OTP</Text>
+                <Text style={styles.subtitle}>
+                  Enter the 6-digit code sent to your email
+                </Text>
+              </View>
 
-            <View style={styles.otpContainer}>
+              <View style={styles.otpContainer}>
               {otp.map((digit, index) => (
                 <TextInput
                   key={index}
@@ -198,6 +206,7 @@ export default function VerifyOTPScreen() {
               <TouchableOpacity onPress={handleResend} activeOpacity={0.7}>
                 <Text style={styles.resendLink}>Resend OTP</Text>
               </TouchableOpacity>
+            </View>
             </View>
           </View>
         </ScrollView>
@@ -265,6 +274,10 @@ const styles = StyleSheet.create({
     paddingVertical: isWeb ? 30 : 20,
     marginTop: isWeb ? -48 : -128,
   },
+  mobileWebScrollContent: {
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
   contentWrapper: {
     maxWidth: 500,
     width: '100%',
@@ -272,9 +285,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: isWeb ? 40 : 24,
     marginTop: isWeb ? -120 : -30,
   },
+  mobileWebContentWrapper: {
+    flex: 1,
+    justifyContent: 'space-between',
+    marginTop: 0,
+    paddingTop: 0,
+    paddingBottom: 80,
+  },
   logoSection: {
     alignItems: 'center',
     marginBottom: isWeb ? -30 : -30,
+  },
+  mobileWebLogoSection: {
+    marginTop: 30,
+    marginBottom: 0,
+  },
+  mobileWebFormWrapper: {
+    marginTop: 0,
   },
   headerSection: {
     marginBottom: isWeb ? 20 : 20,
