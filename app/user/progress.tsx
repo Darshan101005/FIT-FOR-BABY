@@ -1,4 +1,5 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useTheme } from '@/context/ThemeContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -101,6 +102,7 @@ export default function ProgressScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
+  const { colors } = useTheme();
 
   const [selectedRange, setSelectedRange] = useState('week');
   const [selectedMetric, setSelectedMetric] = useState<'steps' | 'calories' | 'exercise'>('steps');
@@ -530,7 +532,7 @@ export default function ProgressScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {renderHeader()}
 
       <ScrollView

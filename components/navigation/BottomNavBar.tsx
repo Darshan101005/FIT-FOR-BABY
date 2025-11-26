@@ -9,9 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
-
-const PRIMARY = '#006dab';
-const ACCENT = '#98be4e';
+import { useTheme } from '@/context/ThemeContext';
 
 interface TabItem {
   name: string;
@@ -64,6 +62,7 @@ export default function BottomNavBar() {
   const pathname = usePathname();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const { colors } = useTheme();
 
   const isActive = (route: string) => {
     // Check if the current path matches or starts with the route
@@ -86,7 +85,11 @@ export default function BottomNavBar() {
   const activeTabName = getActiveTabName();
 
   return (
-    <View style={[styles.container, isMobile && styles.containerMobile]}>
+    <View style={[
+      styles.container, 
+      isMobile && styles.containerMobile,
+      { backgroundColor: colors.tabBar, borderTopColor: colors.tabBarBorder }
+    ]}>
       <View style={styles.tabBar}>
         {tabs.map((tab) => {
           const active = activeTabName === tab.name;
@@ -98,17 +101,24 @@ export default function BottomNavBar() {
               onPress={() => router.push(tab.route as any)}
               activeOpacity={0.7}
             >
-              <View style={[styles.iconContainer, active && styles.iconContainerActive]}>
+              <View style={[
+                styles.iconContainer, 
+                active && { backgroundColor: colors.primary + '15' }
+              ]}>
                 <Ionicons
                   name={active ? tab.iconFilled : tab.icon}
                   size={active ? 26 : 24}
-                  color={active ? PRIMARY : '#6b7280'}
+                  color={active ? colors.primary : colors.textMuted}
                 />
               </View>
-              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+              <Text style={[
+                styles.tabLabel, 
+                { color: colors.textMuted },
+                active && { color: colors.primary, fontWeight: '600' }
+              ]}>
                 {tab.label}
               </Text>
-              {active && <View style={styles.activeIndicator} />}
+              {active && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
             </TouchableOpacity>
           );
         })}
@@ -123,9 +133,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
     paddingBottom: Platform.OS === 'ios' ? 20 : 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
@@ -155,18 +163,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 2,
   },
-  iconContainerActive: {
-    backgroundColor: `${PRIMARY}10`,
-  },
   tabLabel: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#6b7280',
     marginTop: 2,
-  },
-  tabLabelActive: {
-    color: PRIMARY,
-    fontWeight: '600',
   },
   activeIndicator: {
     position: 'absolute',
@@ -174,6 +174,5 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: PRIMARY,
   },
 });

@@ -14,6 +14,7 @@ import {
   useWindowDimensions
 } from 'react-native';
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useTheme } from '@/context/ThemeContext';
 
 const isWeb = Platform.OS === 'web';
 
@@ -21,6 +22,7 @@ export default function UserHomeScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
+  const { colors } = useTheme();
   
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
@@ -111,21 +113,22 @@ export default function UserHomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {toast.visible && (
         <Animated.View
           style={[
             styles.toast,
+            { backgroundColor: colors.cardBackground },
             toast.type === 'error' ? styles.toastError : 
             toast.type === 'success' ? styles.toastSuccess : styles.toastInfo,
             { transform: [{ translateY: toastAnim }] }
           ]}
         >
           <View style={styles.toastContent}>
-            <Text style={styles.toastIcon}>
+            <Text style={[styles.toastIcon, { color: colors.text }]}>
               {toast.type === 'error' ? '✗' : toast.type === 'success' ? '✓' : 'ℹ'}
             </Text>
-            <Text style={styles.toastText}>{toast.message}</Text>
+            <Text style={[styles.toastText, { color: colors.text }]}>{toast.message}</Text>
           </View>
         </Animated.View>
       )}

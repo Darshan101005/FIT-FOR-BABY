@@ -1,4 +1,5 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useTheme } from '@/context/ThemeContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -157,6 +158,7 @@ export default function MessagesScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const scrollViewRef = useRef<ScrollView>(null);
+  const { colors } = useTheme();
 
   const [view, setView] = useState<'threads' | 'chat' | 'faq'>('threads');
   const [selectedThread, setSelectedThread] = useState<ChatThread | null>(null);
@@ -564,7 +566,7 @@ export default function MessagesScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {renderHeader()}
       
       {view === 'threads' && (

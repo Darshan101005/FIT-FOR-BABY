@@ -14,6 +14,7 @@ import {
   useWindowDimensions
 } from 'react-native';
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useTheme } from '@/context/ThemeContext';
 
 const isWeb = Platform.OS === 'web';
 
@@ -40,10 +41,10 @@ export default function ProfileScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const toastAnim = useRef(new Animated.Value(-100)).current;
+  const { isDarkMode, toggleDarkMode, colors } = useTheme();
 
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const [language, setLanguage] = useState('English');
-  const [darkMode, setDarkMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [dailyReminders, setDailyReminders] = useState(true);
   const [weeklyReports, setWeeklyReports] = useState(true);
@@ -73,8 +74,13 @@ export default function ProfileScreen() {
     }, 1500);
   };
 
+  const handleDarkModeToggle = () => {
+    toggleDarkMode();
+    showToast(isDarkMode ? 'Light mode enabled' : 'Dark mode enabled', 'success');
+  };
+
   const renderHeader = () => (
-    <LinearGradient colors={['#006dab', '#005a8f']} style={styles.header}>
+    <LinearGradient colors={colors.headerBackground as [string, string]} style={styles.header}>
       <View style={styles.headerTop}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -87,11 +93,11 @@ export default function ProfileScreen() {
 
       <View style={styles.profileCard}>
         <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>JD</Text>
+          <View style={[styles.avatar, { backgroundColor: colors.cardBackground }]}>
+            <Text style={[styles.avatarText, { color: colors.primary }]}>JD</Text>
           </View>
-          <TouchableOpacity style={styles.cameraButton}>
-            <Ionicons name="camera" size={16} color="#006dab" />
+          <TouchableOpacity style={[styles.cameraButton, { backgroundColor: colors.cardBackground }]}>
+            <Ionicons name="camera" size={16} color={colors.primary} />
           </TouchableOpacity>
         </View>
         <View style={styles.profileInfo}>
@@ -124,19 +130,19 @@ export default function ProfileScreen() {
   );
 
   const renderQuestionnaireStatus = () => (
-    <View style={styles.questionnaireCard}>
+    <View style={[styles.questionnaireCard, { backgroundColor: colors.cardBackground }]}>
       <View style={styles.questionnaireHeader}>
-        <MaterialCommunityIcons name="clipboard-check" size={24} color="#22c55e" />
+        <MaterialCommunityIcons name="clipboard-check" size={24} color={colors.success} />
         <View style={styles.questionnaireInfo}>
-          <Text style={styles.questionnaireTitle}>Health Questionnaire</Text>
-          <Text style={styles.questionnaireStatus}>Completed on Nov 1, 2024</Text>
+          <Text style={[styles.questionnaireTitle, { color: colors.text }]}>Health Questionnaire</Text>
+          <Text style={[styles.questionnaireStatus, { color: colors.success }]}>Completed on Nov 1, 2024</Text>
         </View>
-        <TouchableOpacity style={styles.viewButton}>
-          <Text style={styles.viewButtonText}>View</Text>
+        <TouchableOpacity style={[styles.viewButton, { backgroundColor: colors.inputBackground }]}>
+          <Text style={[styles.viewButtonText, { color: colors.textSecondary }]}>View</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.questionnaireProgress}>
-        <View style={styles.progressBarFull} />
+      <View style={[styles.questionnaireProgress, { backgroundColor: colors.border }]}>
+        <View style={[styles.progressBarFull, { backgroundColor: colors.success }]} />
       </View>
     </View>
   );
@@ -146,37 +152,37 @@ export default function ProfileScreen() {
     items: { id: string; icon: string; label: string; type: string; value?: any; onPress?: () => void; color?: string }[]
   ) => (
     <View style={styles.settingsSection}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.settingsCard}>
+      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{title}</Text>
+      <View style={[styles.settingsCard, { backgroundColor: colors.cardBackground }]}>
         {items.map((item, index) => (
           <TouchableOpacity 
             key={item.id} 
             style={[
               styles.settingItem,
-              index < items.length - 1 && styles.settingItemBorder,
+              index < items.length - 1 && [styles.settingItemBorder, { borderBottomColor: colors.borderLight }],
             ]}
             onPress={item.onPress}
             disabled={item.type === 'toggle'}
           >
-            <View style={[styles.settingIcon, { backgroundColor: (item.color || '#006dab') + '20' }]}>
-              <Ionicons name={item.icon as any} size={20} color={item.color || '#006dab'} />
+            <View style={[styles.settingIcon, { backgroundColor: (item.color || colors.primary) + '20' }]}>
+              <Ionicons name={item.icon as any} size={20} color={item.color || colors.primary} />
             </View>
-            <Text style={styles.settingLabel}>{item.label}</Text>
+            <Text style={[styles.settingLabel, { color: colors.text }]}>{item.label}</Text>
             {item.type === 'toggle' && (
               <Switch
                 value={item.value}
                 onValueChange={item.onPress}
-                trackColor={{ false: '#e2e8f0', true: '#98be4e' }}
+                trackColor={{ false: colors.border, true: colors.accent }}
                 thumbColor="#ffffff"
               />
             )}
             {item.type === 'link' && (
-              <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             )}
             {item.type === 'select' && (
               <View style={styles.selectValue}>
-                <Text style={styles.selectText}>{item.value}</Text>
-                <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                <Text style={[styles.selectText, { color: colors.textSecondary }]}>{item.value}</Text>
+                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
               </View>
             )}
           </TouchableOpacity>
@@ -187,12 +193,13 @@ export default function ProfileScreen() {
 
   const renderLanguageSelector = () => (
     <View style={styles.languageSection}>
-      <Text style={styles.sectionTitle}>Language / மொழி</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Language / மொழி</Text>
       <View style={styles.languageOptions}>
         <TouchableOpacity 
           style={[
             styles.languageOption,
-            language === 'English' && styles.languageOptionActive,
+            { backgroundColor: colors.cardBackground, borderColor: colors.border },
+            language === 'English' && { borderColor: colors.primary, backgroundColor: isDarkMode ? colors.primaryLight : '#eff6ff' },
           ]}
           onPress={() => {
             setLanguage('English');
@@ -202,17 +209,19 @@ export default function ProfileScreen() {
           <Text style={styles.languageFlag}>🇬🇧</Text>
           <Text style={[
             styles.languageText,
-            language === 'English' && styles.languageTextActive,
+            { color: colors.textSecondary },
+            language === 'English' && { color: colors.primary },
           ]}>English</Text>
           {language === 'English' && (
-            <Ionicons name="checkmark-circle" size={20} color="#006dab" />
+            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
           )}
         </TouchableOpacity>
         
         <TouchableOpacity 
           style={[
             styles.languageOption,
-            language === 'Tamil' && styles.languageOptionActive,
+            { backgroundColor: colors.cardBackground, borderColor: colors.border },
+            language === 'Tamil' && { borderColor: colors.primary, backgroundColor: isDarkMode ? colors.primaryLight : '#eff6ff' },
           ]}
           onPress={() => {
             setLanguage('Tamil');
@@ -222,10 +231,11 @@ export default function ProfileScreen() {
           <Text style={styles.languageFlag}>🇮🇳</Text>
           <Text style={[
             styles.languageText,
-            language === 'Tamil' && styles.languageTextActive,
+            { color: colors.textSecondary },
+            language === 'Tamil' && { color: colors.primary },
           ]}>தமிழ் (Tamil)</Text>
           {language === 'Tamil' && (
-            <Ionicons name="checkmark-circle" size={20} color="#006dab" />
+            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
           )}
         </TouchableOpacity>
       </View>
@@ -233,18 +243,19 @@ export default function ProfileScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {toast.visible && (
         <Animated.View
           style={[
             styles.toast,
+            { backgroundColor: colors.cardBackground },
             toast.type === 'error' ? styles.toastError : styles.toastSuccess,
             { transform: [{ translateY: toastAnim }] },
           ]}
         >
           <View style={styles.toastContent}>
-            <Text style={styles.toastIcon}>{toast.type === 'error' ? '✗' : '✓'}</Text>
-            <Text style={styles.toastText}>{toast.message}</Text>
+            <Text style={[styles.toastIcon, { color: colors.text }]}>{toast.type === 'error' ? '✗' : '✓'}</Text>
+            <Text style={[styles.toastText, { color: colors.text }]}>{toast.message}</Text>
           </View>
         </Animated.View>
       )}
@@ -262,11 +273,11 @@ export default function ProfileScreen() {
           {renderSettingsSection('Appearance', [
             {
               id: 'dark-mode',
-              icon: 'moon',
+              icon: isDarkMode ? 'sunny' : 'moon',
               label: 'Dark Mode',
               type: 'toggle',
-              value: darkMode,
-              onPress: () => setDarkMode(!darkMode),
+              value: isDarkMode,
+              onPress: handleDarkModeToggle,
               color: '#8b5cf6',
             },
           ])}
@@ -417,18 +428,21 @@ export default function ProfileScreen() {
           ])}
 
           {/* Logout Button */}
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <TouchableOpacity 
+            style={[styles.logoutButton, { backgroundColor: isDarkMode ? '#450a0a' : '#fef2f2' }]} 
+            onPress={handleLogout}
+          >
             <Ionicons name="log-out-outline" size={20} color="#ef4444" />
             <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>
 
           {/* Delete Account */}
           <TouchableOpacity style={styles.deleteButton}>
-            <Text style={styles.deleteText}>Delete Account</Text>
+            <Text style={[styles.deleteText, { color: colors.textMuted }]}>Delete Account</Text>
           </TouchableOpacity>
 
           {/* App Version */}
-          <Text style={styles.version}>Fit for Baby v1.0.0</Text>
+          <Text style={[styles.version, { color: colors.textMuted }]}>Fit for Baby v1.0.0</Text>
         </View>
       </ScrollView>
       
@@ -441,7 +455,6 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
   },
   toast: {
     position: 'absolute',
@@ -449,7 +462,6 @@ const styles = StyleSheet.create({
     left: isWeb ? undefined : 16,
     right: isWeb ? 20 : 16,
     zIndex: 1000,
-    backgroundColor: '#ffffff',
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderRadius: 10,
@@ -464,9 +476,9 @@ const styles = StyleSheet.create({
   toastError: { borderLeftColor: '#ef4444' },
   toastSuccess: { borderLeftColor: '#98be4e' },
   toastContent: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  toastIcon: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
-  toastText: { color: '#1e293b', fontSize: 14, fontWeight: '600', flex: 1 },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
+  toastIcon: { fontSize: 18, fontWeight: 'bold' },
+  toastText: { fontSize: 14, fontWeight: '600', flex: 1 },
+  scrollContent: { flexGrow: 1, paddingBottom: isWeb ? 40 : 100 },
   header: {
     paddingTop: isWeb ? 20 : 50,
     paddingBottom: 24,
@@ -512,14 +524,12 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 24,
-    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#006dab',
   },
   cameraButton: {
     position: 'absolute',
@@ -528,7 +538,6 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 10,
-    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -611,32 +620,28 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   questionnaireInfo: { flex: 1, marginLeft: 12 },
-  questionnaireTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
-  questionnaireStatus: { fontSize: 13, color: '#22c55e', marginTop: 2 },
+  questionnaireTitle: { fontSize: 15, fontWeight: '700' },
+  questionnaireStatus: { fontSize: 13, marginTop: 2 },
   viewButton: {
     paddingHorizontal: 14,
     paddingVertical: 6,
-    backgroundColor: '#f1f5f9',
     borderRadius: 8,
   },
-  viewButtonText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
+  viewButtonText: { fontSize: 13, fontWeight: '600' },
   questionnaireProgress: {
     height: 4,
-    backgroundColor: '#e2e8f0',
     borderRadius: 2,
     overflow: 'hidden',
   },
   progressBarFull: {
     height: '100%',
     width: '100%',
-    backgroundColor: '#22c55e',
     borderRadius: 2,
   },
   languageSection: { marginBottom: 24 },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#64748b',
     marginBottom: 12,
     paddingLeft: 4,
     textTransform: 'uppercase',
@@ -650,23 +655,15 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 14,
     gap: 10,
     borderWidth: 2,
-    borderColor: '#e2e8f0',
-  },
-  languageOptionActive: {
-    borderColor: '#006dab',
-    backgroundColor: '#eff6ff',
   },
   languageFlag: { fontSize: 24 },
-  languageText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#64748b' },
-  languageTextActive: { color: '#006dab' },
+  languageText: { flex: 1, fontSize: 14, fontWeight: '600' },
   settingsSection: { marginBottom: 24 },
   settingsCard: {
-    backgroundColor: '#ffffff',
     borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -682,7 +679,6 @@ const styles = StyleSheet.create({
   },
   settingItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
   },
   settingIcon: {
     width: 40,
@@ -696,19 +692,17 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
-    color: '#0f172a',
   },
   selectValue: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  selectText: { fontSize: 14, color: '#64748b' },
+  selectText: { fontSize: 14 },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fef2f2',
     padding: 16,
     borderRadius: 14,
     gap: 8,
@@ -726,7 +720,6 @@ const styles = StyleSheet.create({
   },
   deleteText: {
     fontSize: 14,
-    color: '#94a3b8',
     textDecorationLine: 'underline',
   },
   version: {
