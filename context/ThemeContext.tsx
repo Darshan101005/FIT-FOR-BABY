@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, ReactNode, useContext, useState } from 'react';
 
 export interface ThemeColors {
   // Backgrounds
@@ -160,4 +160,5 @@ export function useTheme() {
   return context;
 }
 
-export { lightTheme, darkTheme };
+export { darkTheme, lightTheme };
+

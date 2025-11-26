@@ -1,20 +1,20 @@
+import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useTheme } from '@/context/ThemeContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
-  Animated,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
-import BottomNavBar from '@/components/navigation/BottomNavBar';
-import { useTheme } from '@/context/ThemeContext';
 
 const isWeb = Platform.OS === 'web';
 
