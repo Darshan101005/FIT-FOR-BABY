@@ -5,6 +5,7 @@ import React, { useRef, useState } from 'react';
 import {
   Animated,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -37,6 +38,45 @@ interface ChatThread {
   type: 'support' | 'counsellor' | 'system';
 }
 
+interface FAQItem {
+  id: string;
+  question: string;
+  answer: string;
+}
+
+const mockFAQs: FAQItem[] = [
+  {
+    id: '1',
+    question: 'How do I sync with my partner?',
+    answer: 'Go to Profile → Partner Settings → Tap "Connect Partner" → Share the generated code with your partner. They enter the code on their device to connect.',
+  },
+  {
+    id: '2',
+    question: 'How do I log my daily food intake?',
+    answer: 'Go to the Home screen and tap "Log Food". You can search for foods, scan barcodes, or add custom meals. All entries are saved to your daily log.',
+  },
+  {
+    id: '3',
+    question: 'How do I set weight goals?',
+    answer: 'Navigate to Profile → Goals → Weight Goal. Enter your target weight and timeline. The app will calculate a safe and healthy plan for you.',
+  },
+  {
+    id: '4',
+    question: 'How do I book an appointment with a counsellor?',
+    answer: 'Go to Appointments from the home screen, select an available slot, choose your preferred counsellor, and confirm your booking.',
+  },
+  {
+    id: '5',
+    question: 'How do I track my walking progress?',
+    answer: 'Your steps are automatically tracked if you allow health permissions. View your progress in the Progress section on the home screen.',
+  },
+  {
+    id: '6',
+    question: 'Can I export my health data?',
+    answer: 'Yes! Go to Profile → Settings → Export Data. You can download your data as a PDF or share it directly with your healthcare provider.',
+  },
+];
+
 const mockThreads: ChatThread[] = [
   {
     id: '1',
@@ -55,15 +95,6 @@ const mockThreads: ChatThread[] = [
     unread: 0,
     avatar: '👩‍⚕️',
     type: 'counsellor',
-  },
-  {
-    id: '3',
-    title: 'Fit for Baby Updates',
-    lastMessage: 'New feature: Couple walking challenges are now live! 🎉',
-    timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    unread: 1,
-    avatar: '📢',
-    type: 'system',
   },
 ];
 
@@ -128,11 +159,20 @@ export default function MessagesScreen() {
   const isMobile = screenWidth < 768;
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const [view, setView] = useState<'threads' | 'chat'>('threads');
+  const [view, setView] = useState<'threads' | 'chat' | 'faq'>('threads');
   const [selectedThread, setSelectedThread] = useState<ChatThread | null>(null);
   const [messages, setMessages] = useState<Message[]>(mockMessages);
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
+
+  const handleCallSupport = () => {
+    Linking.openURL('tel:9884671395');
+  };
+
+  const handleEmailSupport = () => {
+    Linking.openURL('mailto:e0323040@sriher.edu.in');
+  };
 
   const formatTime = (date: Date) => {
     const now = new Date();
@@ -191,13 +231,38 @@ export default function MessagesScreen() {
   };
 
   const handleQuickReply = (reply: string) => {
-    setNewMessage(reply);
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: reply,
+      sender: 'user',
+      timestamp: new Date(),
+      status: 'sent',
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsTyping(true);
+
+    // Simulate support response
+    setTimeout(() => {
+      setIsTyping(false);
+      const supportResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Thank you for your message! Our team will review and respond shortly.",
+        sender: 'support',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, supportResponse]);
+    }, 2000);
+
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
   };
 
   const renderHeader = () => (
     <View style={styles.header}>
       <TouchableOpacity 
-        onPress={() => view === 'chat' ? setView('threads') : router.back()} 
+        onPress={() => (view === 'chat' || view === 'faq') ? setView('threads') : router.back()} 
         style={styles.backButton}
       >
         <Ionicons name="arrow-back" size={24} color="#0f172a" />
@@ -207,6 +272,11 @@ export default function MessagesScreen() {
           <>
             <Text style={styles.headerTitle}>Messages</Text>
             <Text style={styles.headerSubtitle}>Chat with support & counsellors</Text>
+          </>
+        ) : view === 'faq' ? (
+          <>
+            <Text style={styles.headerTitle}>FAQ</Text>
+            <Text style={styles.headerSubtitle}>Frequently Asked Questions</Text>
           </>
         ) : (
           <>
@@ -242,7 +312,7 @@ export default function MessagesScreen() {
               <Text style={styles.faqSubtitle}>Check our FAQ for quick answers</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.faqButton}>
+          <TouchableOpacity style={styles.faqButton} onPress={() => setView('faq')}>
             <Text style={styles.faqButtonText}>View FAQ</Text>
             <Ionicons name="arrow-forward" size={16} color="#006dab" />
           </TouchableOpacity>
@@ -289,25 +359,61 @@ export default function MessagesScreen() {
       <Text style={styles.sectionTitle}>Get Help</Text>
       
       <View style={styles.helpOptions}>
-        <TouchableOpacity style={styles.helpOption}>
+        <TouchableOpacity style={styles.helpOption} onPress={handleCallSupport}>
           <View style={[styles.helpIcon, { backgroundColor: '#dcfce7' }]}>
             <Ionicons name="call" size={24} color="#22c55e" />
           </View>
           <Text style={styles.helpLabel}>Call Support</Text>
+          <Text style={styles.helpDetail}>9884671395</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.helpOption}>
+        <TouchableOpacity style={styles.helpOption} onPress={handleEmailSupport}>
           <View style={[styles.helpIcon, { backgroundColor: '#dbeafe' }]}>
             <Ionicons name="mail" size={24} color="#3b82f6" />
           </View>
           <Text style={styles.helpLabel}>Email Us</Text>
+          <Text style={styles.helpDetail}>e0323040@sriher.edu.in</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.helpOption}>
-          <View style={[styles.helpIcon, { backgroundColor: '#fef3c7' }]}>
-            <Ionicons name="book" size={24} color="#f59e0b" />
+      </View>
+    </View>
+  );
+
+  const renderFAQ = () => (
+    <View style={styles.content}>
+      <Text style={styles.faqPageTitle}>Frequently Asked Questions</Text>
+      <Text style={styles.faqPageSubtitle}>Tap on a question to see the answer</Text>
+      
+      {mockFAQs.map((faq) => (
+        <TouchableOpacity
+          key={faq.id}
+          style={styles.faqItem}
+          onPress={() => setExpandedFAQ(expandedFAQ === faq.id ? null : faq.id)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.faqQuestion}>
+            <Text style={styles.faqQuestionText}>{faq.question}</Text>
+            <Ionicons 
+              name={expandedFAQ === faq.id ? 'chevron-up' : 'chevron-down'} 
+              size={20} 
+              color="#64748b" 
+            />
           </View>
-          <Text style={styles.helpLabel}>User Guide</Text>
+          {expandedFAQ === faq.id && (
+            <View style={styles.faqAnswer}>
+              <Text style={styles.faqAnswerText}>{faq.answer}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      ))}
+      
+      <View style={styles.faqFooter}>
+        <Text style={styles.faqFooterText}>Still have questions?</Text>
+        <TouchableOpacity 
+          style={styles.faqContactButton}
+          onPress={() => setView('threads')}
+        >
+          <Text style={styles.faqContactButtonText}>Chat with Support</Text>
+          <Ionicons name="chatbubble-outline" size={16} color="#fff" />
         </TouchableOpacity>
       </View>
     </View>
@@ -316,14 +422,15 @@ export default function MessagesScreen() {
   const renderChat = () => (
     <KeyboardAvoidingView 
       style={styles.chatContainer}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={100}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <ScrollView
         ref={scrollViewRef}
         style={styles.messagesContainer}
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Date divider */}
         <View style={styles.dateDivider}>
@@ -461,18 +568,28 @@ export default function MessagesScreen() {
     <View style={styles.container}>
       {renderHeader()}
       
-      <ScrollView
-        contentContainerStyle={view === 'threads' ? styles.scrollContent : undefined}
-        style={view === 'chat' ? { flex: 0 } : undefined}
-        showsVerticalScrollIndicator={false}
-      >
-        {view === 'threads' && renderThreadsList()}
-      </ScrollView>
+      {view === 'threads' && (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderThreadsList()}
+        </ScrollView>
+      )}
+      
+      {view === 'faq' && (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderFAQ()}
+        </ScrollView>
+      )}
       
       {view === 'chat' && renderChat()}
       
-      {/* Bottom Navigation */}
-      <BottomNavBar />
+      {/* Bottom Navigation - hide in chat view on mobile for more space */}
+      {view !== 'chat' && <BottomNavBar />}
     </View>
   );
 }
@@ -518,12 +635,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
+  scrollContent: { 
+    flexGrow: 1, 
+    paddingBottom: isWeb ? 40 : 100,
+  },
   content: {
     padding: isWeb ? 40 : 20,
     maxWidth: 700,
     width: '100%',
     alignSelf: 'center',
+    paddingBottom: isWeb ? 20 : 30,
   },
   faqSection: { marginBottom: 24 },
   faqCard: {
@@ -622,15 +743,63 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   helpLabel: { fontSize: 12, fontWeight: '600', color: '#64748b', textAlign: 'center' },
+  helpDetail: { fontSize: 10, color: '#94a3b8', textAlign: 'center', marginTop: 4 },
+  // FAQ Page Styles
+  faqPageTitle: { fontSize: 22, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  faqPageSubtitle: { fontSize: 14, color: '#64748b', marginBottom: 24 },
+  faqItem: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+    overflow: 'hidden',
+  },
+  faqQuestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  faqQuestionText: { fontSize: 15, fontWeight: '600', color: '#0f172a', flex: 1, marginRight: 12 },
+  faqAnswer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 0,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  faqAnswerText: { fontSize: 14, color: '#64748b', lineHeight: 22 },
+  faqFooter: {
+    marginTop: 24,
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  faqFooterText: { fontSize: 14, color: '#64748b', marginBottom: 12 },
+  faqContactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#006dab',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  faqContactButtonText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   chatContainer: {
     flex: 1,
+    backgroundColor: '#f8fafc',
   },
   messagesContainer: {
     flex: 1,
   },
   messagesContent: {
     padding: 16,
-    paddingBottom: 8,
+    paddingBottom: 20,
+    flexGrow: 1,
   },
   dateDivider: {
     flexDirection: 'row',
@@ -740,6 +909,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   quickReply: {
     paddingHorizontal: 14,
@@ -748,6 +919,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    marginRight: 8,
   },
   quickReplyText: {
     fontSize: 13,
@@ -756,13 +928,14 @@ const styles = StyleSheet.create({
   },
   inputArea: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     padding: 12,
-    paddingBottom: isWeb ? 12 : 28,
+    paddingBottom: Platform.OS === 'web' ? 12 : 16,
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    gap: 8,
+    gap: 10,
+    minHeight: 60,
   },
   attachButton: {
     width: 44,
@@ -771,19 +944,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   inputContainer: {
     flex: 1,
     backgroundColor: '#f1f5f9',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    minHeight: 44,
     maxHeight: 100,
+    justifyContent: 'center',
   },
   textInput: {
     fontSize: 16,
     color: '#0f172a',
     maxHeight: 80,
+    outlineStyle: 'none' as any,
+    borderWidth: 0,
   },
   sendButton: {
     borderRadius: 12,
