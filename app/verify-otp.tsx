@@ -72,22 +72,21 @@ export default function VerifyOTPScreen() {
       return;
     }
 
+    // Accept OTP: 111111 (six 1s)
     if (otpValue === '111111') {
       setOtpState('correct');
       showToast('OTP verified successfully!', 'success');
       setTimeout(() => {
-        router.replace('/dashboard');
+        router.replace('/user/home');
       }, 1500);
-    } else if (otpValue === '000000') {
+    } else {
       setOtpState('wrong');
-      showToast('Incorrect OTP', 'error');
+      showToast('Incorrect OTP. Use: 111111', 'error');
       setTimeout(() => {
         setOtpState('idle');
         setOtp(['', '', '', '', '', '']);
         inputRefs.current[0]?.focus();
       }, 1500);
-    } else {
-      showToast('Invalid OTP', 'error');
     }
   };
 

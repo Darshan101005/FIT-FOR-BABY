@@ -80,20 +80,17 @@ export default function LoginScreen() {
       showToast('Invalid email format', 'error');
       return;
     }
-    if (password.length < 8) {
-      showToast('Password must be at least 8 characters', 'error');
-      return;
-    }
     setLoginState('loading');
     setTimeout(() => {
-      const isPasswordCorrect = password === 'admin123';
+      // Accept any email with password "user123"
+      const isPasswordCorrect = password === 'user123';
       if (isPasswordCorrect) {
         setLoginState('success');
         setTimeout(() => {
           router.push('/verify-otp');
         }, 800);
       } else {
-        showToast('Incorrect password', 'error');
+        showToast('Incorrect password. Use: user123', 'error');
         setLoginState('idle');
       }
     }, 1500);
