@@ -12,8 +12,7 @@ import {
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
-  PanResponder,
+  useWindowDimensions
 } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
