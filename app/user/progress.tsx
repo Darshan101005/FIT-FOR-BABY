@@ -86,7 +86,7 @@ const weightHistory: WeightData[] = [
 ];
 
 const goalProgress: GoalProgress[] = [
-  { id: '1', title: 'Daily Steps', current: 8400, target: 10000, unit: 'steps', icon: 'walk', color: '#98be4e' },
+  { id: '1', title: 'Weekly Steps', current: 58900, target: 70000, unit: 'steps', icon: 'walk', color: '#98be4e' },
   { id: '2', title: 'Weekly Exercise', current: 210, target: 270, unit: 'min', icon: 'run-fast', color: '#f59e0b' },
   { id: '3', title: 'Couple Walks', current: 2, target: 3, unit: 'days', icon: 'account-group', color: '#8b5cf6' },
 ];
