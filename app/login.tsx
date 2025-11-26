@@ -82,15 +82,21 @@ export default function LoginScreen() {
     }
     setLoginState('loading');
     setTimeout(() => {
-      // Accept any email with password "user123"
-      const isPasswordCorrect = password === 'user123';
-      if (isPasswordCorrect) {
+      // Check for admin login
+      if (password === 'admin123') {
+        setLoginState('success');
+        setTimeout(() => {
+          router.replace('/admin/home');
+        }, 800);
+      }
+      // Check for user login
+      else if (password === 'user123') {
         setLoginState('success');
         setTimeout(() => {
           router.push('/verify-otp');
         }, 800);
       } else {
-        showToast('Incorrect password. Use: user123', 'error');
+        showToast('Incorrect password. Use: user123 or admin123', 'error');
         setLoginState('idle');
       }
     }, 1500);

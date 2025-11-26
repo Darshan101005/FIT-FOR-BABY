@@ -12,8 +12,6 @@ export default function RootLayout() {
         <Stack.Screen name="landing" />
         <Stack.Screen name="login" />
         <Stack.Screen name="verify-otp" />
-        <Stack.Screen name="admin-login" />
-        <Stack.Screen name="dashboard" />
         <Stack.Screen name="questionnaire" />
         
         {/* User Routes */}

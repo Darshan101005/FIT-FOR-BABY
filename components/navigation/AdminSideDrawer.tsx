@@ -112,7 +112,7 @@ export default function AdminSideDrawer({ isOpen, onClose }: AdminSideDrawerProp
   const handleLogout = () => {
     onClose();
     setTimeout(() => {
-      router.replace('/admin-login');
+      router.replace('/login');
     }, 150);
   };
 
