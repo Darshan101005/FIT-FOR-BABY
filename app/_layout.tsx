@@ -25,6 +25,7 @@ export default function RootLayout() {
           <Stack.Screen name="user/progress" />
           <Stack.Screen name="user/messages" />
           <Stack.Screen name="user/profile" />
+          <Stack.Screen name="user/personal-info" />
           
           {/* Admin Routes */}
           <Stack.Screen name="admin/home" />

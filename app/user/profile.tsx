@@ -348,7 +348,7 @@ export default function ProfileScreen() {
               icon: 'person',
               label: 'Personal Information',
               type: 'link',
-              onPress: () => {},
+              onPress: () => router.push('/user/personal-info' as any),
             },
             {
               id: 'goals',
