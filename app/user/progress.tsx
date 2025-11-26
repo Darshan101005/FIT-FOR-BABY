@@ -1,17 +1,17 @@
+import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
-import BottomNavBar from '@/components/navigation/BottomNavBar';
 
 const isWeb = Platform.OS === 'web';
 
@@ -37,6 +37,7 @@ interface GoalProgress {
   color: string;
 }
 
+// Weekly data
 const weeklyStepsData: WeeklyData[] = [
   { day: 'Mon', steps: 8500, calories: 320, exercise: 45 },
   { day: 'Tue', steps: 6200, calories: 250, exercise: 30 },
@@ -45,6 +46,31 @@ const weeklyStepsData: WeeklyData[] = [
   { day: 'Fri', steps: 9100, calories: 380, exercise: 55 },
   { day: 'Sat', steps: 11500, calories: 480, exercise: 75 },
   { day: 'Sun', steps: 5600, calories: 210, exercise: 25 },
+];
+
+// Monthly data
+const monthlyStepsData: WeeklyData[] = [
+  { day: 'W1', steps: 52000, calories: 2100, exercise: 280 },
+  { day: 'W2', steps: 58000, calories: 2400, exercise: 320 },
+  { day: 'W3', steps: 61000, calories: 2550, exercise: 350 },
+  { day: 'W4', steps: 55000, calories: 2200, exercise: 300 },
+];
+
+// 3 Month data
+const threeMonthData: WeeklyData[] = [
+  { day: 'Sep', steps: 180000, calories: 7500, exercise: 980 },
+  { day: 'Oct', steps: 210000, calories: 8800, exercise: 1150 },
+  { day: 'Nov', steps: 226000, calories: 9250, exercise: 1250 },
+];
+
+// All time data
+const allTimeData: WeeklyData[] = [
+  { day: 'Jun', steps: 120000, calories: 5000, exercise: 650 },
+  { day: 'Jul', steps: 155000, calories: 6500, exercise: 820 },
+  { day: 'Aug', steps: 170000, calories: 7100, exercise: 900 },
+  { day: 'Sep', steps: 180000, calories: 7500, exercise: 980 },
+  { day: 'Oct', steps: 210000, calories: 8800, exercise: 1150 },
+  { day: 'Nov', steps: 226000, calories: 9250, exercise: 1250 },
 ];
 
 const weightHistory: WeightData[] = [
@@ -59,10 +85,9 @@ const weightHistory: WeightData[] = [
 ];
 
 const goalProgress: GoalProgress[] = [
-  { id: '1', title: 'Daily Steps', current: 8400, target: 10000, unit: 'steps', icon: 'walk', color: '#22c55e' },
+  { id: '1', title: 'Daily Steps', current: 8400, target: 10000, unit: 'steps', icon: 'walk', color: '#98be4e' },
   { id: '2', title: 'Weekly Exercise', current: 210, target: 270, unit: 'min', icon: 'run-fast', color: '#f59e0b' },
-  { id: '3', title: 'Weight Loss', current: 5.2, target: 10, unit: 'kg', icon: 'scale-bathroom', color: '#006dab' },
-  { id: '4', title: 'Couple Walks', current: 2, target: 3, unit: 'days', icon: 'account-group', color: '#8b5cf6' },
+  { id: '3', title: 'Couple Walks', current: 2, target: 3, unit: 'days', icon: 'account-group', color: '#8b5cf6' },
 ];
 
 const timeRanges = [
@@ -80,10 +105,28 @@ export default function ProgressScreen() {
   const [selectedRange, setSelectedRange] = useState('week');
   const [selectedMetric, setSelectedMetric] = useState<'steps' | 'calories' | 'exercise'>('steps');
 
-  const totalWeeklySteps = weeklyStepsData.reduce((acc, day) => acc + day.steps, 0);
-  const avgDailySteps = Math.round(totalWeeklySteps / 7);
-  const totalWeeklyCalories = weeklyStepsData.reduce((acc, day) => acc + day.calories, 0);
-  const totalWeeklyExercise = weeklyStepsData.reduce((acc, day) => acc + day.exercise, 0);
+  // Get data based on selected range
+  const getCurrentData = () => {
+    switch (selectedRange) {
+      case 'week':
+        return weeklyStepsData;
+      case 'month':
+        return monthlyStepsData;
+      case '3months':
+        return threeMonthData;
+      case 'all':
+        return allTimeData;
+      default:
+        return weeklyStepsData;
+    }
+  };
+
+  const currentData = getCurrentData();
+
+  const totalSteps = currentData.reduce((acc, day) => acc + day.steps, 0);
+  const avgSteps = Math.round(totalSteps / currentData.length);
+  const totalCalories = currentData.reduce((acc, day) => acc + day.calories, 0);
+  const totalExercise = currentData.reduce((acc, day) => acc + day.exercise, 0);
 
   const startWeight = weightHistory[0].weight;
   const currentWeight = weightHistory[weightHistory.length - 1].weight;
@@ -92,11 +135,11 @@ export default function ProgressScreen() {
   const getMaxValue = () => {
     switch (selectedMetric) {
       case 'steps':
-        return Math.max(...weeklyStepsData.map(d => d.steps));
+        return Math.max(...currentData.map(d => d.steps));
       case 'calories':
-        return Math.max(...weeklyStepsData.map(d => d.calories));
+        return Math.max(...currentData.map(d => d.calories));
       case 'exercise':
-        return Math.max(...weeklyStepsData.map(d => d.exercise));
+        return Math.max(...currentData.map(d => d.exercise));
     }
   };
 
@@ -109,6 +152,15 @@ export default function ProgressScreen() {
       case 'exercise':
         return data.exercise;
     }
+  };
+
+  const formatValue = (value: number) => {
+    if (value >= 1000000) {
+      return (value / 1000000).toFixed(1) + 'M';
+    } else if (value >= 1000) {
+      return (value / 1000).toFixed(1) + 'k';
+    }
+    return value.toString();
   };
 
   const renderHeader = () => (
@@ -162,124 +214,113 @@ export default function ProgressScreen() {
           style={[
             styles.summaryCard,
             selectedMetric === 'steps' && styles.summaryCardActive,
+            selectedMetric === 'steps' && { backgroundColor: '#e8f5d6' },
           ]}
+          activeOpacity={0.8}
           onPress={() => setSelectedMetric('steps')}
         >
-          <LinearGradient
-            colors={selectedMetric === 'steps' ? ['#22c55e', '#16a34a'] : ['#f1f5f9', '#f1f5f9']}
-            style={styles.summaryGradient}
-          >
+          <View style={styles.summaryGradientWrapper}>
             <MaterialCommunityIcons 
               name="walk" 
               size={28} 
-              color={selectedMetric === 'steps' ? '#fff' : '#22c55e'} 
+              color={selectedMetric === 'steps' ? '#98be4e' : '#94a3b8'} 
             />
             <Text style={[
               styles.summaryValue,
-              selectedMetric === 'steps' && styles.summaryValueActive,
+              selectedMetric === 'steps' && { color: '#98be4e' },
             ]}>
-              {avgDailySteps.toLocaleString()}
+              {formatValue(avgSteps)}
             </Text>
             <Text style={[
               styles.summaryLabel,
-              selectedMetric === 'steps' && styles.summaryLabelActive,
+              selectedMetric === 'steps' && { color: '#7ba83c' },
             ]}>
-              Avg Daily Steps
+              Avg Steps
             </Text>
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={[
             styles.summaryCard,
             selectedMetric === 'calories' && styles.summaryCardActive,
+            selectedMetric === 'calories' && { backgroundColor: '#fee2e2' },
           ]}
+          activeOpacity={0.8}
           onPress={() => setSelectedMetric('calories')}
         >
-          <LinearGradient
-            colors={selectedMetric === 'calories' ? ['#ef4444', '#dc2626'] : ['#f1f5f9', '#f1f5f9']}
-            style={styles.summaryGradient}
-          >
+          <View style={styles.summaryGradientWrapper}>
             <MaterialCommunityIcons 
               name="fire" 
               size={28} 
-              color={selectedMetric === 'calories' ? '#fff' : '#ef4444'} 
+              color={selectedMetric === 'calories' ? '#ef4444' : '#94a3b8'} 
             />
             <Text style={[
               styles.summaryValue,
-              selectedMetric === 'calories' && styles.summaryValueActive,
+              selectedMetric === 'calories' && { color: '#ef4444' },
             ]}>
-              {totalWeeklyCalories.toLocaleString()}
+              {formatValue(totalCalories)}
             </Text>
             <Text style={[
               styles.summaryLabel,
-              selectedMetric === 'calories' && styles.summaryLabelActive,
+              selectedMetric === 'calories' && { color: '#dc2626' },
             ]}>
-              Weekly Calories
+              Total Calories
             </Text>
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
-      </View>
 
-      <View style={styles.summaryRow}>
         <TouchableOpacity 
           style={[
             styles.summaryCard,
             selectedMetric === 'exercise' && styles.summaryCardActive,
+            selectedMetric === 'exercise' && { backgroundColor: '#fef3c7' },
           ]}
+          activeOpacity={0.8}
           onPress={() => setSelectedMetric('exercise')}
         >
-          <LinearGradient
-            colors={selectedMetric === 'exercise' ? ['#f59e0b', '#d97706'] : ['#f1f5f9', '#f1f5f9']}
-            style={styles.summaryGradient}
-          >
+          <View style={styles.summaryGradientWrapper}>
             <MaterialCommunityIcons 
               name="run-fast" 
               size={28} 
-              color={selectedMetric === 'exercise' ? '#fff' : '#f59e0b'} 
+              color={selectedMetric === 'exercise' ? '#f59e0b' : '#94a3b8'} 
             />
             <Text style={[
               styles.summaryValue,
-              selectedMetric === 'exercise' && styles.summaryValueActive,
+              selectedMetric === 'exercise' && { color: '#f59e0b' },
             ]}>
-              {totalWeeklyExercise}
+              {formatValue(totalExercise)}
             </Text>
             <Text style={[
               styles.summaryLabel,
-              selectedMetric === 'exercise' && styles.summaryLabelActive,
+              selectedMetric === 'exercise' && { color: '#d97706' },
             ]}>
               Exercise (min)
             </Text>
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
-
-        <View style={styles.summaryCard}>
-          <LinearGradient
-            colors={['#006dab', '#005a8f']}
-            style={styles.summaryGradient}
-          >
-            <MaterialCommunityIcons name="scale-bathroom" size={28} color="#fff" />
-            <Text style={[styles.summaryValue, styles.summaryValueActive]}>
-              -{weightLost.toFixed(1)}
-            </Text>
-            <Text style={[styles.summaryLabel, styles.summaryLabelActive]}>
-              kg Lost
-            </Text>
-          </LinearGradient>
-        </View>
       </View>
     </View>
   );
+
+  const getChartTitle = () => {
+    const metricName = selectedMetric.charAt(0).toUpperCase() + selectedMetric.slice(1);
+    switch (selectedRange) {
+      case 'week': return `Weekly ${metricName}`;
+      case 'month': return `Monthly ${metricName}`;
+      case '3months': return `3-Month ${metricName}`;
+      case 'all': return `All Time ${metricName}`;
+      default: return `Weekly ${metricName}`;
+    }
+  };
 
   const renderWeeklyChart = () => {
     const maxVal = getMaxValue();
 
     return (
       <View style={styles.chartCard}>
-        <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>
-            Weekly {selectedMetric.charAt(0).toUpperCase() + selectedMetric.slice(1)}
-          </Text>
+        <View style={[styles.chartHeader, isMobile && styles.chartHeaderMobile]}>
+          <Text style={styles.chartTitle}>{getChartTitle()}</Text>
           <View style={styles.chartLegend}>
             <View style={[styles.legendDot, { backgroundColor: '#006dab' }]} />
             <Text style={styles.legendText}>
@@ -290,22 +331,21 @@ export default function ProgressScreen() {
         </View>
 
         <View style={styles.chartContainer}>
-          {weeklyStepsData.map((data, index) => {
+          {currentData.map((data, index) => {
             const value = getValue(data);
-            const heightPercent = (value / maxVal) * 100;
-            const isToday = index === new Date().getDay() - 1;
+            const barHeight = (value / maxVal) * 100; // Max height is 100px
+            const isToday = selectedRange === 'week' && index === new Date().getDay() - 1;
 
             return (
               <View key={data.day} style={styles.chartBar}>
-                <Text style={styles.chartValue}>
-                  {selectedMetric === 'steps' 
-                    ? (value / 1000).toFixed(1) + 'k' 
-                    : value}
+                <Text style={[styles.chartValue, isMobile && styles.chartValueMobile]}>
+                  {formatValue(value)}
                 </Text>
                 <View style={styles.chartBarContainer}>
+                  <View style={{ flex: 1 }} />
                   <LinearGradient
                     colors={isToday ? ['#98be4e', '#7ba83c'] : ['#006dab', '#005a8f']}
-                    style={[styles.chartBarFill, { height: `${heightPercent}%` }]}
+                    style={[styles.chartBarFill, { height: barHeight }]}
                   />
                 </View>
                 <Text style={[styles.chartDay, isToday && styles.chartDayActive]}>
@@ -322,75 +362,52 @@ export default function ProgressScreen() {
   const renderWeightChart = () => {
     const maxWeight = Math.max(...weightHistory.map(w => w.weight));
     const minWeight = Math.min(...weightHistory.map(w => w.weight));
-    const range = maxWeight - minWeight || 1;
 
     return (
       <View style={styles.chartCard}>
-        <View style={styles.chartHeader}>
+        <View style={[styles.chartHeader, isMobile && styles.chartHeaderMobile]}>
           <Text style={styles.chartTitle}>Weight Progress</Text>
-          <View style={styles.weightStats}>
-            <View style={styles.weightStat}>
-              <Text style={styles.weightStatLabel}>Start</Text>
-              <Text style={styles.weightStatValue}>{startWeight} kg</Text>
-            </View>
-            <Ionicons name="arrow-forward" size={16} color="#64748b" />
-            <View style={styles.weightStat}>
-              <Text style={styles.weightStatLabel}>Current</Text>
-              <Text style={[styles.weightStatValue, { color: '#22c55e' }]}>
-                {currentWeight} kg
-              </Text>
-            </View>
+          <View style={styles.weightSummary}>
+            <Text style={styles.weightLostText}>
+              {weightLost.toFixed(1)} kg lost
+            </Text>
           </View>
         </View>
 
-        <View style={styles.weightChartContainer}>
-          <View style={styles.weightYAxis}>
-            <Text style={styles.yAxisLabel}>{maxWeight}</Text>
-            <Text style={styles.yAxisLabel}>{((maxWeight + minWeight) / 2).toFixed(1)}</Text>
-            <Text style={styles.yAxisLabel}>{minWeight}</Text>
+        <View style={styles.weightStats}>
+          <View style={styles.weightStat}>
+            <Text style={styles.weightStatLabel}>Start</Text>
+            <Text style={styles.weightStatValue}>{startWeight} kg</Text>
           </View>
-          <View style={styles.weightChartArea}>
-            {/* Grid lines */}
-            <View style={styles.gridLine} />
-            <View style={[styles.gridLine, { top: '50%' }]} />
-            <View style={[styles.gridLine, { top: '100%' }]} />
+          <Ionicons name="arrow-forward" size={16} color="#64748b" />
+          <View style={styles.weightStat}>
+            <Text style={styles.weightStatLabel}>Current</Text>
+            <Text style={[styles.weightStatValue, { color: '#98be4e' }]}>
+              {currentWeight} kg
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.weightBarChart}>
+          {weightHistory.map((point, index) => {
+            // Higher weight = taller bar (actual weight visualization)
+            const range = maxWeight - minWeight || 1;
+            const barHeight = ((point.weight - minWeight) / range) * 60 + 20; // Min 20px, max 80px
+            const isLast = index === weightHistory.length - 1;
             
-            {/* Line chart */}
-            <View style={styles.lineChartContainer}>
-              {weightHistory.map((point, index) => {
-                const yPosition = ((maxWeight - point.weight) / range) * 100;
-                const isLast = index === weightHistory.length - 1;
-                
-                return (
-                  <View 
-                    key={point.date} 
-                    style={[
-                      styles.dataPoint,
-                      { 
-                        bottom: `${100 - yPosition}%`,
-                        left: `${(index / (weightHistory.length - 1)) * 100}%` 
-                      }
-                    ]}
-                  >
-                    <View 
-                      style={[
-                        styles.dataPointDot,
-                        isLast && styles.dataPointDotActive,
-                      ]} 
-                    />
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.weightXAxis}>
-          {weightHistory.map((point, index) => (
-            index % 2 === 0 && (
-              <Text key={point.date} style={styles.xAxisLabel}>{point.date}</Text>
-            )
-          ))}
+            return (
+              <View key={point.date} style={styles.weightBarItem}>
+                <View style={styles.weightBarContainer}>
+                  <View style={{ flex: 1 }} />
+                  <LinearGradient
+                    colors={isLast ? ['#98be4e', '#7ba83c'] : ['#006dab', '#005a8f']}
+                    style={[styles.weightBarFill, { height: barHeight }]}
+                  />
+                </View>
+                <Text style={styles.weightBarLabel}>{point.weight}</Text>
+              </View>
+            );
+          })}
         </View>
       </View>
     );
@@ -450,33 +467,33 @@ export default function ProgressScreen() {
         contentContainerStyle={styles.achievementsScroll}
       >
         <View style={styles.achievementCard}>
-          <LinearGradient colors={['#f59e0b', '#d97706']} style={styles.achievementBadge}>
+          <View style={[styles.achievementBadge, { backgroundColor: '#fef3c7' }]}>
             <Text style={styles.achievementEmoji}>🔥</Text>
-          </LinearGradient>
+          </View>
           <Text style={styles.achievementTitle}>7-Day Streak</Text>
           <Text style={styles.achievementDesc}>Logged activity daily</Text>
         </View>
 
         <View style={styles.achievementCard}>
-          <LinearGradient colors={['#22c55e', '#16a34a']} style={styles.achievementBadge}>
+          <View style={[styles.achievementBadge, { backgroundColor: '#e8f5d6' }]}>
             <Text style={styles.achievementEmoji}>🏃</Text>
-          </LinearGradient>
+          </View>
           <Text style={styles.achievementTitle}>10K Steps</Text>
           <Text style={styles.achievementDesc}>Reached goal 3 times</Text>
         </View>
 
         <View style={styles.achievementCard}>
-          <LinearGradient colors={['#8b5cf6', '#7c3aed']} style={styles.achievementBadge}>
+          <View style={[styles.achievementBadge, { backgroundColor: '#ede9fe' }]}>
             <Text style={styles.achievementEmoji}>👫</Text>
-          </LinearGradient>
+          </View>
           <Text style={styles.achievementTitle}>Partner Goals</Text>
           <Text style={styles.achievementDesc}>4 couple walks done</Text>
         </View>
 
         <View style={styles.achievementCard}>
-          <LinearGradient colors={['#006dab', '#005a8f']} style={styles.achievementBadge}>
+          <View style={[styles.achievementBadge, { backgroundColor: '#dbeafe' }]}>
             <Text style={styles.achievementEmoji}>⚖️</Text>
-          </LinearGradient>
+          </View>
           <Text style={styles.achievementTitle}>5kg Lost</Text>
           <Text style={styles.achievementDesc}>Milestone reached!</Text>
         </View>
@@ -486,10 +503,7 @@ export default function ProgressScreen() {
 
   const renderCoupleProgress = () => (
     <View style={styles.coupleSection}>
-      <LinearGradient
-        colors={['#8b5cf6', '#7c3aed']}
-        style={styles.coupleCard}
-      >
+      <View style={styles.coupleCard}>
         <View style={styles.coupleHeader}>
           <Text style={styles.coupleTitle}>👫 Couple Journey</Text>
           <Text style={styles.coupleSubtitle}>8 weeks together</Text>
@@ -511,7 +525,7 @@ export default function ProgressScreen() {
             <Text style={styles.coupleStatLabel}>Goal Sync</Text>
           </View>
         </View>
-      </LinearGradient>
+      </View>
     </View>
   );
 
@@ -574,7 +588,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
+  scrollContent: { flexGrow: 1, paddingBottom: isWeb ? 40 : 100 },
   content: {
     padding: isWeb ? 40 : 16,
     maxWidth: 800,
@@ -603,13 +617,22 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 16,
     overflow: 'hidden',
+    backgroundColor: '#f8fafc',
   },
   summaryCardActive: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+  },
+  summaryGradientWrapper: {
+    padding: 16,
+    alignItems: 'center',
+    minHeight: 100,
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: 16,
   },
   summaryGradient: {
     padding: 16,
@@ -617,10 +640,8 @@ const styles = StyleSheet.create({
     minHeight: 100,
     justifyContent: 'center',
   },
-  summaryValue: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginTop: 8 },
-  summaryValueActive: { color: '#ffffff' },
-  summaryLabel: { fontSize: 12, color: '#64748b', marginTop: 4 },
-  summaryLabelActive: { color: 'rgba(255,255,255,0.9)' },
+  summaryValue: { fontSize: 22, fontWeight: '800', color: '#94a3b8', marginTop: 8 },
+  summaryLabel: { fontSize: 11, color: '#94a3b8', marginTop: 4, textAlign: 'center' },
   chartCard: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
@@ -637,6 +658,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chartHeaderMobile: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
   },
   chartTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
   chartLegend: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -647,18 +674,20 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     height: 140,
+    paddingTop: 20,
   },
   chartBar: {
     flex: 1,
     alignItems: 'center',
+    height: 120,
   },
-  chartValue: { fontSize: 10, fontWeight: '600', color: '#64748b', marginBottom: 4 },
+  chartValue: { fontSize: 9, fontWeight: '600', color: '#64748b', marginBottom: 4 },
+  chartValueMobile: { fontSize: 8 },
   chartBarContainer: {
-    width: '60%',
-    height: '100%',
+    width: 24,
+    height: 100,
     backgroundColor: '#f1f5f9',
     borderRadius: 6,
-    justifyContent: 'flex-end',
     overflow: 'hidden',
   },
   chartBarFill: {
@@ -667,14 +696,47 @@ const styles = StyleSheet.create({
   },
   chartDay: { fontSize: 12, fontWeight: '600', color: '#64748b', marginTop: 8 },
   chartDayActive: { color: '#98be4e', fontWeight: '800' },
+  weightSummary: {
+    backgroundColor: '#e8f5d6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  weightLostText: { fontSize: 13, fontWeight: '700', color: '#98be4e' },
   weightStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    gap: 16,
+    marginBottom: 20,
   },
   weightStat: { alignItems: 'center' },
-  weightStatLabel: { fontSize: 10, color: '#64748b' },
-  weightStatValue: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  weightStatLabel: { fontSize: 11, color: '#64748b' },
+  weightStatValue: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
+  weightBarChart: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    height: 100,
+    paddingHorizontal: 10,
+  },
+  weightBarItem: {
+    flex: 1,
+    alignItems: 'center',
+    height: 100,
+  },
+  weightBarContainer: {
+    width: 20,
+    height: 80,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  weightBarFill: {
+    width: '100%',
+    borderRadius: 4,
+  },
+  weightBarLabel: { fontSize: 9, color: '#64748b', marginTop: 6 },
   weightChartContainer: {
     flexDirection: 'row',
     height: 120,
@@ -715,13 +777,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#006dab',
   },
   dataPointDotActive: {
-    backgroundColor: '#22c55e',
+    backgroundColor: '#98be4e',
     width: 16,
     height: 16,
     borderRadius: 8,
     borderWidth: 3,
     borderColor: '#ffffff',
-    shadowColor: '#22c55e',
+    shadowColor: '#98be4e',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 4,
@@ -776,46 +838,50 @@ const styles = StyleSheet.create({
   coupleCard: {
     borderRadius: 20,
     padding: 24,
+    backgroundColor: '#ede9fe',
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
   },
   coupleHeader: { marginBottom: 20 },
-  coupleTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff' },
-  coupleSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
+  coupleTitle: { fontSize: 20, fontWeight: '800', color: '#7c3aed' },
+  coupleSubtitle: { fontSize: 14, color: '#8b5cf6', marginTop: 4 },
   coupleStats: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
   },
   coupleStat: { alignItems: 'center' },
-  coupleStatValue: { fontSize: 28, fontWeight: '800', color: '#ffffff' },
-  coupleStatLabel: { fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 4, textAlign: 'center' },
+  coupleStatValue: { fontSize: 28, fontWeight: '800', color: '#7c3aed' },
+  coupleStatLabel: { fontSize: 11, color: '#8b5cf6', marginTop: 4, textAlign: 'center' },
   coupleStatDivider: {
     width: 1,
     height: 40,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: '#c4b5fd',
   },
   achievementsSection: { marginBottom: 24 },
-  achievementsScroll: { gap: 12 },
+  achievementsScroll: { gap: 12, paddingRight: 16 },
   achievementCard: {
-    width: 140,
+    width: 130,
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    padding: 16,
+    padding: 14,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+    marginRight: 12,
   },
   achievementBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  achievementEmoji: { fontSize: 28 },
-  achievementTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
-  achievementDesc: { fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center' },
+  achievementEmoji: { fontSize: 26 },
+  achievementTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
+  achievementDesc: { fontSize: 10, color: '#64748b', marginTop: 4, textAlign: 'center' },
 });
