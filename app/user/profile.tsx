@@ -5,18 +5,72 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
-    Animated,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Animated,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
+
+// Custom Toggle Component for consistent styling across platforms
+const CustomToggle = ({ 
+  value, 
+  onValueChange, 
+  activeColor = '#98be4e' 
+}: { 
+  value: boolean; 
+  onValueChange: () => void; 
+  activeColor?: string;
+}) => {
+  const { colors } = useTheme();
+  
+  return (
+    <TouchableOpacity 
+      style={[
+        toggleStyles.customToggle,
+        { backgroundColor: value ? activeColor : colors.border },
+      ]}
+      onPress={onValueChange}
+      activeOpacity={0.8}
+    >
+      <View 
+        style={[
+          toggleStyles.customToggleThumb,
+          { 
+            backgroundColor: '#ffffff',
+            transform: [{ translateX: value ? 18 : 0 }],
+          },
+        ]} 
+      />
+    </TouchableOpacity>
+  );
+};
+
+// Toggle styles defined separately to avoid circular reference
+const toggleStyles = StyleSheet.create({
+  customToggle: {
+    width: 42,
+    height: 24,
+    borderRadius: 12,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  customToggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+});
 
 interface SettingItem {
   id: string;
@@ -79,16 +133,15 @@ export default function ProfileScreen() {
     showToast(isDarkMode ? 'Light mode enabled' : 'Dark mode enabled', 'success');
   };
 
-  const renderHeader = () => (
+  // Mobile Header with gradient
+  const renderMobileHeader = () => (
     <LinearGradient colors={colors.headerBackground as [string, string]} style={styles.header}>
       <View style={styles.headerTop}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity style={styles.editButton}>
-          <Ionicons name="pencil" size={20} color="#fff" />
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.profileCard}>
@@ -127,6 +180,59 @@ export default function ProfileScreen() {
         </View>
       </View>
     </LinearGradient>
+  );
+
+  // Web/Laptop Header - simple header with profile card as settings item
+  const renderWebHeader = () => (
+    <>
+      <View style={[styles.webHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={[styles.webBackButton, { backgroundColor: colors.cardBackground }]}>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.webHeaderTitle, { color: colors.text }]}>Profile</Text>
+        <View style={{ width: 40 }} />
+      </View>
+    </>
+  );
+
+  // Profile card for web view (inline with settings)
+  const renderWebProfileCard = () => (
+    <View style={[styles.webProfileCard, { backgroundColor: colors.cardBackground }]}>
+      <View style={styles.webProfileRow}>
+        <View style={styles.avatarContainer}>
+          <View style={[styles.avatar, { backgroundColor: colors.primary + '15' }]}>
+            <Text style={[styles.avatarText, { color: colors.primary }]}>JD</Text>
+          </View>
+          <TouchableOpacity style={[styles.cameraButton, { backgroundColor: colors.cardBackground, borderWidth: 1, borderColor: colors.border }]}>
+            <Ionicons name="camera" size={14} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.webProfileInfo}>
+          <Text style={[styles.webProfileName, { color: colors.text }]}>John Doe</Text>
+          <Text style={[styles.webProfileEmail, { color: colors.textSecondary }]}>john.doe@example.com</Text>
+          <View style={[styles.webPartnerBadge, { backgroundColor: '#ef444415' }]}>
+            <Ionicons name="heart" size={12} color="#ef4444" />
+            <Text style={styles.webPartnerText}>Connected with Sarah Doe</Text>
+          </View>
+        </View>
+      </View>
+      <View style={[styles.webStatsRow, { borderTopColor: colors.borderLight }]}>
+        <View style={styles.webStatItem}>
+          <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.daysActive}</Text>
+          <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Days Active</Text>
+        </View>
+        <View style={[styles.webStatDivider, { backgroundColor: colors.borderLight }]} />
+        <View style={styles.webStatItem}>
+          <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.goalsAchieved}</Text>
+          <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Goals Done</Text>
+        </View>
+        <View style={[styles.webStatDivider, { backgroundColor: colors.borderLight }]} />
+        <View style={styles.webStatItem}>
+          <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.currentStreak}🔥</Text>
+          <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Day Streak</Text>
+        </View>
+      </View>
+    </View>
   );
 
   const renderQuestionnaireStatus = () => (
@@ -169,11 +275,10 @@ export default function ProfileScreen() {
             </View>
             <Text style={[styles.settingLabel, { color: colors.text }]}>{item.label}</Text>
             {item.type === 'toggle' && (
-              <Switch
+              <CustomToggle
                 value={item.value}
-                onValueChange={item.onPress}
-                trackColor={{ false: colors.border, true: colors.accent }}
-                thumbColor="#ffffff"
+                onValueChange={item.onPress!}
+                activeColor={colors.accent}
               />
             )}
             {item.type === 'link' && (
@@ -264,9 +369,10 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {renderHeader()}
+        {isMobile ? renderMobileHeader() : renderWebHeader()}
 
-        <View style={styles.content}>
+        <View style={[styles.content, !isMobile && styles.contentWeb]}>
+          {!isMobile && renderWebProfileCard()}
           {renderQuestionnaireStatus()}
           {renderLanguageSelector()}
 
@@ -344,6 +450,22 @@ export default function ProfileScreen() {
 
           {renderSettingsSection('Account', [
             {
+              id: 'switch-profile',
+              icon: 'swap-horizontal',
+              label: 'Switch Profile',
+              type: 'link',
+              onPress: () => router.push('/user/enter-pin?profile=female' as any),
+              color: '#ec4899',
+            },
+            {
+              id: 'manage-pin',
+              icon: 'keypad',
+              label: 'Manage Session PIN',
+              type: 'link',
+              onPress: () => router.push('/user/manage-pin' as any),
+              color: '#f59e0b',
+            },
+            {
               id: 'personal-info',
               icon: 'person',
               label: 'Personal Information',
@@ -351,27 +473,11 @@ export default function ProfileScreen() {
               onPress: () => router.push('/user/personal-info' as any),
             },
             {
-              id: 'goals',
-              icon: 'flag',
-              label: 'My Goals',
+              id: 'device-management',
+              icon: 'phone-portrait-outline',
+              label: 'Device Management',
               type: 'link',
-              onPress: () => {},
-              color: '#22c55e',
-            },
-            {
-              id: 'partner-settings',
-              icon: 'heart',
-              label: 'Partner Settings',
-              type: 'link',
-              onPress: () => {},
-              color: '#ef4444',
-            },
-            {
-              id: 'connected-devices',
-              icon: 'watch',
-              label: 'Connected Devices',
-              type: 'link',
-              onPress: () => {},
+              onPress: () => router.push('/user/device-management' as any),
               color: '#8b5cf6',
             },
           ])}
@@ -382,14 +488,14 @@ export default function ProfileScreen() {
               icon: 'help-circle',
               label: 'Help Center',
               type: 'link',
-              onPress: () => {},
+              onPress: () => router.push('/user/help-center' as any),
             },
             {
               id: 'feedback',
               icon: 'chatbubble-ellipses',
               label: 'Send Feedback',
               type: 'link',
-              onPress: () => {},
+              onPress: () => router.push('/user/feedback' as any),
               color: '#f59e0b',
             },
             {
@@ -397,7 +503,7 @@ export default function ProfileScreen() {
               icon: 'information-circle',
               label: 'About Fit for Baby',
               type: 'link',
-              onPress: () => {},
+              onPress: () => router.push('/user/about' as any),
               color: '#64748b',
             },
           ])}
@@ -407,21 +513,6 @@ export default function ProfileScreen() {
               id: 'export-data',
               icon: 'download',
               label: 'Export My Data',
-              type: 'link',
-              onPress: () => {},
-            },
-            {
-              id: 'privacy',
-              icon: 'shield-checkmark',
-              label: 'Privacy Policy',
-              type: 'link',
-              onPress: () => {},
-              color: '#22c55e',
-            },
-            {
-              id: 'terms',
-              icon: 'document-text',
-              label: 'Terms of Service',
               type: 'link',
               onPress: () => {},
             },
@@ -479,8 +570,9 @@ const styles = StyleSheet.create({
   toastIcon: { fontSize: 18, fontWeight: 'bold' },
   toastText: { fontSize: 14, fontWeight: '600', flex: 1 },
   scrollContent: { flexGrow: 1, paddingBottom: isWeb ? 40 : 100 },
+  // Mobile Header
   header: {
-    paddingTop: isWeb ? 20 : 50,
+    paddingTop: 50,
     paddingBottom: 24,
     paddingHorizontal: 20,
   },
@@ -503,13 +595,92 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
   },
-  editButton: {
+  // Web Header
+  webHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 40,
+    borderBottomWidth: 1,
+  },
+  webBackButton: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  webHeaderTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  // Web Profile Card
+  webProfileCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  webProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  webProfileInfo: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  webProfileName: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  webProfileEmail: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  webPartnerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    gap: 6,
+  },
+  webPartnerText: {
+    fontSize: 12,
+    color: '#ef4444',
+    fontWeight: '500',
+  },
+  webStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+  },
+  webStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  webStatValue: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  webStatLabel: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  webStatDivider: {
+    width: 1,
+    height: 30,
   },
   profileCard: {
     flexDirection: 'row',
@@ -597,11 +768,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.3)',
   },
   content: {
-    padding: isWeb ? 40 : 20,
+    padding: 20,
     maxWidth: 600,
     width: '100%',
     alignSelf: 'center',
     marginTop: -20,
+  },
+  contentWeb: {
+    padding: 40,
+    marginTop: 0,
   },
   questionnaireCard: {
     backgroundColor: '#ffffff',

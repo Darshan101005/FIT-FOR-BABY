@@ -26,6 +26,13 @@ export default function RootLayout() {
           <Stack.Screen name="user/messages" />
           <Stack.Screen name="user/profile" />
           <Stack.Screen name="user/personal-info" />
+          <Stack.Screen name="user/device-management" />
+          <Stack.Screen name="user/partner-settings" />
+          <Stack.Screen name="user/enter-pin" />
+          <Stack.Screen name="user/manage-pin" />
+          <Stack.Screen name="user/help-center" />
+          <Stack.Screen name="user/feedback" />
+          <Stack.Screen name="user/about" />
           
           {/* Admin Routes */}
           <Stack.Screen name="admin/home" />
