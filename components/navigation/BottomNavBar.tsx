@@ -3,12 +3,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
 import React from 'react';
 import {
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 
 interface TabItem {
@@ -28,18 +28,18 @@ const tabs: TabItem[] = [
     route: '/user/home',
   },
   {
-    name: 'logs',
-    label: 'Logs',
-    icon: 'restaurant-outline',
-    iconFilled: 'restaurant',
-    route: '/user/log-food',
-  },
-  {
     name: 'progress',
     label: 'Progress',
     icon: 'stats-chart-outline',
     iconFilled: 'stats-chart',
     route: '/user/progress',
+  },
+  {
+    name: 'appointments',
+    label: 'Appointments',
+    icon: 'calendar-outline',
+    iconFilled: 'calendar',
+    route: '/user/appointments',
   },
   {
     name: 'messages',
@@ -67,18 +67,15 @@ export default function BottomNavBar() {
   const isActive = (route: string) => {
     // Check if the current path matches or starts with the route
     if (pathname === route) return true;
-    // Handle special cases for nested routes
-    if (route === '/user/log-food' && pathname.startsWith('/user/log-')) return true;
     return false;
   };
 
   const getActiveTabName = () => {
-    if (pathname.startsWith('/user/log-')) return 'logs';
     if (pathname === '/user/home') return 'home';
     if (pathname === '/user/progress') return 'progress';
+    if (pathname === '/user/appointments') return 'appointments';
     if (pathname === '/user/messages') return 'messages';
     if (pathname === '/user/profile') return 'profile';
-    if (pathname === '/user/appointments') return 'home';
     return 'home';
   };
 

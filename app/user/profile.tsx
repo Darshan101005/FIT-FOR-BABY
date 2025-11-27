@@ -450,14 +450,6 @@ export default function ProfileScreen() {
 
           {renderSettingsSection('Account', [
             {
-              id: 'appointments',
-              icon: 'calendar',
-              label: 'Appointments',
-              type: 'link',
-              onPress: () => router.push('/user/appointments' as any),
-              color: '#8b5cf6',
-            },
-            {
               id: 'switch-profile',
               icon: 'swap-horizontal',
               label: 'Switch Profile',

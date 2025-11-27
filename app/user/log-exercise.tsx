@@ -22,8 +22,10 @@ interface ExerciseType {
   nameTamil: string;
   icon: string;
   colors: [string, string];
+  iconColor: string;
   caloriesPerMinute: number;
   isCouple?: boolean;
+  requiresSteps?: boolean;
   weeklyTarget?: { minutes: number; days: number };
 }
 
@@ -33,26 +35,28 @@ const exerciseTypes: ExerciseType[] = [
     name: 'Couple Walking',
     nameTamil: 'தம்பதிகள் நடைப்பயிற்சி',
     icon: 'walk',
-    colors: ['#22c55e', '#16a34a'],
+    colors: ['#dcfce7', '#bbf7d0'],
+    iconColor: '#22c55e',
     caloriesPerMinute: 4,
     isCouple: true,
-    weeklyTarget: { minutes: 180, days: 3 },
+    requiresSteps: true,
   },
   {
     id: 'high-knees',
     name: 'High Knees',
     nameTamil: 'ஹை நீஸ்',
     icon: 'run-fast',
-    colors: ['#f59e0b', '#d97706'],
+    colors: ['#fef3c7', '#fde68a'],
+    iconColor: '#f59e0b',
     caloriesPerMinute: 8,
-    weeklyTarget: { minutes: 90, days: 3 },
   },
   {
     id: 'yoga',
     name: 'Yoga/Pranayama',
     nameTamil: 'யோகா/பிராணாயாமா',
     icon: 'meditation',
-    colors: ['#8b5cf6', '#7c3aed'],
+    colors: ['#ede9fe', '#ddd6fe'],
+    iconColor: '#8b5cf6',
     caloriesPerMinute: 3,
   },
   {
@@ -60,7 +64,8 @@ const exerciseTypes: ExerciseType[] = [
     name: 'Strength Training',
     nameTamil: 'பலப்பயிற்சி',
     icon: 'dumbbell',
-    colors: ['#ef4444', '#dc2626'],
+    colors: ['#fee2e2', '#fecaca'],
+    iconColor: '#ef4444',
     caloriesPerMinute: 5,
   },
   {
@@ -68,7 +73,8 @@ const exerciseTypes: ExerciseType[] = [
     name: 'Swimming',
     nameTamil: 'நீச்சல்',
     icon: 'swim',
-    colors: ['#06b6d4', '#0891b2'],
+    colors: ['#cffafe', '#a5f3fc'],
+    iconColor: '#06b6d4',
     caloriesPerMinute: 7,
   },
   {
@@ -76,7 +82,8 @@ const exerciseTypes: ExerciseType[] = [
     name: 'Cycling',
     nameTamil: 'சைக்கிள் ஓட்டுதல்',
     icon: 'bike',
-    colors: ['#3b82f6', '#2563eb'],
+    colors: ['#dbeafe', '#bfdbfe'],
+    iconColor: '#3b82f6',
     caloriesPerMinute: 6,
   },
   {
@@ -84,7 +91,8 @@ const exerciseTypes: ExerciseType[] = [
     name: 'Other Exercise',
     nameTamil: 'பிற உடற்பயிற்சி',
     icon: 'run',
-    colors: ['#64748b', '#475569'],
+    colors: ['#f1f5f9', '#e2e8f0'],
+    iconColor: '#64748b',
     caloriesPerMinute: 5,
   },
 ];
@@ -154,6 +162,10 @@ export default function LogExerciseScreen() {
       showToast('Please enter a valid duration', 'error');
       return;
     }
+    if (selectedExercise?.requiresSteps && (!steps || parseInt(steps) <= 0)) {
+      showToast('Please enter step count for Couple Walking', 'error');
+      return;
+    }
     setStep('summary');
   };
 
@@ -197,17 +209,10 @@ export default function LogExerciseScreen() {
               colors={exercise.colors}
               style={styles.exerciseIconContainer}
             >
-              <MaterialCommunityIcons name={exercise.icon as any} size={32} color="#fff" />
+              <MaterialCommunityIcons name={exercise.icon as any} size={32} color={exercise.iconColor} />
             </LinearGradient>
             <Text style={styles.exerciseLabel}>{exercise.name}</Text>
             <Text style={styles.exerciseLabelTamil}>{exercise.nameTamil}</Text>
-            {exercise.weeklyTarget && (
-              <View style={styles.targetBadge}>
-                <Text style={styles.targetBadgeText}>
-                  {exercise.weeklyTarget.minutes} min/{exercise.weeklyTarget.days}x week
-                </Text>
-              </View>
-            )}
             {exercise.isCouple && (
               <View style={[styles.targetBadge, { backgroundColor: '#fef3c7' }]}>
                 <Text style={[styles.targetBadgeText, { color: '#d97706' }]}>
@@ -231,7 +236,7 @@ export default function LogExerciseScreen() {
             colors={selectedExercise.colors}
             style={styles.selectedIcon}
           >
-            <MaterialCommunityIcons name={selectedExercise.icon as any} size={32} color="#fff" />
+            <MaterialCommunityIcons name={selectedExercise.icon as any} size={32} color={selectedExercise.iconColor} />
           </LinearGradient>
           <View>
             <Text style={styles.selectedName}>{selectedExercise.name}</Text>
@@ -264,7 +269,7 @@ export default function LogExerciseScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.quickDurations}>
-            {[15, 30, 45, 60].map((mins) => (
+            {[10, 15, 30, 45, 60].map((mins) => (
               <TouchableOpacity
                 key={mins}
                 style={[
@@ -295,18 +300,14 @@ export default function LogExerciseScreen() {
                 key={level.id}
                 style={[
                   styles.intensityOption,
-                  intensity === level.id && { 
-                    backgroundColor: level.color + '20', 
-                    borderColor: level.color 
-                  },
+                  intensity === level.id && styles.intensityOptionActive,
                 ]}
                 onPress={() => setIntensity(level.id)}
               >
-                <View style={[styles.intensityDot, { backgroundColor: level.color }]} />
                 <Text
                   style={[
                     styles.intensityText,
-                    intensity === level.id && { color: level.color, fontWeight: '700' },
+                    intensity === level.id && styles.intensityTextActive,
                   ]}
                 >
                   {level.label}
@@ -316,21 +317,24 @@ export default function LogExerciseScreen() {
           </View>
         </View>
 
-        {/* Steps (optional) */}
-        <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Steps (optional)</Text>
-          <View style={styles.stepsInputContainer}>
-            <MaterialCommunityIcons name="shoe-print" size={20} color="#64748b" />
-            <TextInput
-              style={styles.stepsInput}
-              value={steps}
-              onChangeText={setSteps}
-              placeholder="Enter step count"
-              placeholderTextColor="#94a3b8"
-              keyboardType="numeric"
-            />
+        {/* Steps - Mandatory for Couple Walking only */}
+        {selectedExercise.requiresSteps && (
+          <View style={styles.inputSection}>
+            <Text style={styles.inputLabel}>Step Count <Text style={styles.requiredStar}>*</Text></Text>
+            <View style={styles.stepsInputContainer}>
+              <MaterialCommunityIcons name="shoe-print" size={20} color="#64748b" />
+              <TextInput
+                style={styles.stepsInput}
+                value={steps}
+                onChangeText={setSteps}
+                placeholder="Enter step count"
+                placeholderTextColor="#94a3b8"
+                keyboardType="numeric"
+              />
+            </View>
+            <Text style={styles.inputHint}>Required for Couple Walking exercise</Text>
           </View>
-        </View>
+        )}
 
         {/* Partner Participation (for couple exercises) */}
         {selectedExercise.isCouple && (
@@ -345,9 +349,9 @@ export default function LogExerciseScreen() {
                 onPress={() => setPartnerParticipated(true)}
               >
                 <Ionicons
-                  name="checkmark-circle"
+                  name="people"
                   size={24}
-                  color={partnerParticipated ? '#22c55e' : '#94a3b8'}
+                  color={partnerParticipated ? '#0f172a' : '#94a3b8'}
                 />
                 <Text
                   style={[
@@ -366,9 +370,9 @@ export default function LogExerciseScreen() {
                 onPress={() => setPartnerParticipated(false)}
               >
                 <Ionicons
-                  name="close-circle"
+                  name="person"
                   size={24}
-                  color={!partnerParticipated ? '#ef4444' : '#94a3b8'}
+                  color={!partnerParticipated ? '#0f172a' : '#94a3b8'}
                 />
                 <Text
                   style={[
@@ -468,10 +472,10 @@ export default function LogExerciseScreen() {
             colors={selectedExercise.colors}
             style={styles.summaryHeader}
           >
-            <MaterialCommunityIcons name={selectedExercise.icon as any} size={40} color="#fff" />
+            <MaterialCommunityIcons name={selectedExercise.icon as any} size={40} color={selectedExercise.iconColor} />
             <View style={styles.summaryHeaderText}>
-              <Text style={styles.summaryExerciseName}>{selectedExercise.name}</Text>
-              <Text style={styles.summaryDuration}>{duration} minutes • {intensityLabel}</Text>
+              <Text style={[styles.summaryExerciseName, { color: selectedExercise.iconColor }]}>{selectedExercise.name}</Text>
+              <Text style={[styles.summaryDuration, { color: selectedExercise.iconColor, opacity: 0.8 }]}>{duration} minutes • {intensityLabel}</Text>
             </View>
           </LinearGradient>
 
@@ -688,6 +692,8 @@ const styles = StyleSheet.create({
   selectedNameTamil: { fontSize: 14, color: '#64748b', marginTop: 2 },
   inputSection: { marginBottom: 24 },
   inputLabel: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
+  requiredStar: { color: '#ef4444', fontWeight: '700' },
+  inputHint: { fontSize: 12, color: '#64748b', marginTop: 8 },
   durationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -735,8 +741,12 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     gap: 8,
   },
-  intensityDot: { width: 10, height: 10, borderRadius: 5 },
+  intensityOptionActive: {
+    backgroundColor: '#e2e8f0',
+    borderColor: '#64748b',
+  },
   intensityText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
+  intensityTextActive: { color: '#0f172a', fontWeight: '700' },
   stepsInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -766,9 +776,9 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     gap: 8,
   },
-  partnerOptionActive: { backgroundColor: '#f0fdf4', borderColor: '#22c55e' },
+  partnerOptionActive: { backgroundColor: '#e2e8f0', borderColor: '#64748b' },
   partnerOptionText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
-  partnerOptionTextActive: { color: '#22c55e' },
+  partnerOptionTextActive: { color: '#0f172a' },
   exertionContainer: {},
   exertionLabels: {
     flexDirection: 'row',
