@@ -1,9 +1,10 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useApp } from '@/context/AppContext';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
   Animated,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -11,120 +12,57 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
-interface TimeSlot {
+interface DoctorAppointment {
   id: string;
+  date: Date;
   time: string;
-  available: boolean;
+  period: 'AM' | 'PM';
+  doctorName?: string;
+  purpose?: string;
+  createdAt: Date;
 }
 
-interface Counsellor {
+interface NurseRequest {
   id: string;
-  name: string;
-  specialization: string;
-  avatar: string;
-  rating: number;
-  languages: string[];
+  type: 'call' | 'video';
+  phone: string;
+  reason: string;
+  status: 'pending' | 'completed';
+  createdAt: Date;
 }
 
-interface Appointment {
-  id: string;
-  date: string;
-  time: string;
-  counsellor: Counsellor;
-  type: 'video' | 'audio' | 'chat';
-  status: 'upcoming' | 'completed' | 'cancelled';
-  notes?: string;
-}
-
-const counsellors: Counsellor[] = [
-  {
-    id: '1',
-    name: 'Dr. Priya Sharma',
-    specialization: 'Fertility & Nutrition',
-    avatar: '👩‍⚕️',
-    rating: 4.9,
-    languages: ['English', 'Tamil', 'Hindi'],
-  },
-  {
-    id: '2',
-    name: 'Dr. Rajesh Kumar',
-    specialization: 'Lifestyle & Exercise',
-    avatar: '👨‍⚕️',
-    rating: 4.8,
-    languages: ['English', 'Tamil'],
-  },
-  {
-    id: '3',
-    name: 'Mrs. Lakshmi Devi',
-    specialization: 'Diet & Wellness',
-    avatar: '👩‍💼',
-    rating: 4.7,
-    languages: ['Tamil', 'English'],
-  },
-];
-
-const timeSlots: TimeSlot[] = [
-  { id: '1', time: '09:00 AM', available: true },
-  { id: '2', time: '10:00 AM', available: false },
-  { id: '3', time: '11:00 AM', available: true },
-  { id: '4', time: '02:00 PM', available: true },
-  { id: '5', time: '03:00 PM', available: false },
-  { id: '6', time: '04:00 PM', available: true },
-  { id: '7', time: '05:00 PM', available: true },
-];
-
-const mockAppointments: Appointment[] = [
-  {
-    id: '1',
-    date: '2024-11-28',
-    time: '10:00 AM',
-    counsellor: counsellors[0],
-    type: 'video',
-    status: 'upcoming',
-    notes: 'Monthly check-in on diet progress',
-  },
-  {
-    id: '2',
-    date: '2024-11-15',
-    time: '02:00 PM',
-    counsellor: counsellors[1],
-    type: 'audio',
-    status: 'completed',
-    notes: 'Discussed exercise routine modifications',
-  },
-  {
-    id: '3',
-    date: '2024-11-01',
-    time: '11:00 AM',
-    counsellor: counsellors[2],
-    type: 'video',
-    status: 'completed',
-  },
-];
-
-const appointmentTypes = [
-  { id: 'video', icon: 'videocam', label: 'Video Call', color: '#006dab' },
-  { id: 'audio', icon: 'call', label: 'Audio Call', color: '#22c55e' },
-  { id: 'chat', icon: 'chatbubbles', label: 'Chat', color: '#f59e0b' },
-];
+const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const HOURS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+const MINUTES = ['00', '15', '30', '45'];
 
 export default function AppointmentsScreen() {
   const router = useRouter();
-  const { width: screenWidth } = useWindowDimensions();
-  const isMobile = screenWidth < 768;
+  const { user } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'book' | 'upcoming' | 'history'>('book');
-  const [step, setStep] = useState<'counsellor' | 'datetime' | 'confirm'>('counsellor');
-  const [selectedCounsellor, setSelectedCounsellor] = useState<Counsellor | null>(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<'video' | 'audio' | 'chat'>('video');
-  const [notes, setNotes] = useState('');
+  
+  const [selectedHour, setSelectedHour] = useState('10');
+  const [selectedMinute, setSelectedMinute] = useState('00');
+  const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('AM');
+  
+  const [doctorName, setDoctorName] = useState('');
+  const [appointmentPurpose, setAppointmentPurpose] = useState('');
+  
+  const [appointments, setAppointments] = useState<DoctorAppointment[]>([]);
+  
+  const [supportPhone, setSupportPhone] = useState(user?.phone || '9876543210');
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [nurseRequests, setNurseRequests] = useState<NurseRequest[]>([]);
+  
+  const [activeSection, setActiveSection] = useState<'appointments' | 'support'>('appointments');
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
 
@@ -143,465 +81,504 @@ export default function AppointmentsScreen() {
     }, 3000);
   };
 
-  const getNext7Days = () => {
-    const days = [];
-    for (let i = 1; i <= 7; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() + i);
-      days.push(date);
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDay = firstDay.getDay();
+    
+    const days: (number | null)[] = [];
+    
+    for (let i = 0; i < startingDay; i++) {
+      days.push(null);
     }
+    
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(i);
+    }
+    
     return days;
   };
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
+  const goToPreviousMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  };
+
+  const goToNextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+  };
+
+  const isDateSelected = (day: number) => {
+    if (!selectedDate || !day) return false;
+    return (
+      selectedDate.getDate() === day &&
+      selectedDate.getMonth() === currentMonth.getMonth() &&
+      selectedDate.getFullYear() === currentMonth.getFullYear()
+    );
+  };
+
+  const isToday = (day: number) => {
+    const today = new Date();
+    return (
+      today.getDate() === day &&
+      today.getMonth() === currentMonth.getMonth() &&
+      today.getFullYear() === currentMonth.getFullYear()
+    );
+  };
+
+  const isPastDate = (day: number) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+    return checkDate < today;
+  };
+
+  const hasAppointment = (day: number) => {
+    return appointments.some(apt => {
+      const aptDate = new Date(apt.date);
+      return (
+        aptDate.getDate() === day &&
+        aptDate.getMonth() === currentMonth.getMonth() &&
+        aptDate.getFullYear() === currentMonth.getFullYear()
+      );
     });
   };
 
-  const handleSelectCounsellor = (counsellor: Counsellor) => {
-    setSelectedCounsellor(counsellor);
-    setStep('datetime');
+  const handleDateSelect = (day: number) => {
+    if (!day) return;
+    const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+    setSelectedDate(newDate);
   };
 
-  const handleBack = () => {
-    if (step === 'confirm') {
-      setStep('datetime');
-    } else if (step === 'datetime') {
-      setStep('counsellor');
-    } else {
-      router.back();
-    }
+  const formatTime = () => {
+    return selectedHour + ':' + selectedMinute + ' ' + selectedPeriod;
   };
 
-  const handleContinue = () => {
-    if (!selectedDate || !selectedTime) {
-      showToast('Please select date and time', 'error');
+  const handleLogAppointment = () => {
+    if (!selectedDate) {
+      showToast('Please select a date', 'error');
       return;
     }
-    setStep('confirm');
+
+    const newAppointment: DoctorAppointment = {
+      id: Date.now().toString(),
+      date: selectedDate,
+      time: selectedHour + ':' + selectedMinute,
+      period: selectedPeriod,
+      doctorName: doctorName.trim() || undefined,
+      purpose: appointmentPurpose.trim() || undefined,
+      createdAt: new Date(),
+    };
+
+    setAppointments([newAppointment, ...appointments]);
+    showToast('Appointment logged successfully!', 'success');
+    
+    setDoctorName('');
+    setAppointmentPurpose('');
   };
 
-  const handleBookAppointment = () => {
-    showToast('Appointment booked successfully!', 'success');
-    setTimeout(() => {
-      setActiveTab('upcoming');
-      setStep('counsellor');
-      setSelectedCounsellor(null);
-      setSelectedDate(null);
-      setSelectedTime(null);
-      setNotes('');
-    }, 1500);
+  const handleDeleteAppointment = (id: string) => {
+    setAppointments(appointments.filter(apt => apt.id !== id));
+    showToast('Appointment removed', 'success');
+  };
+
+  const handleRequestSupport = (type: 'call' | 'video') => {
+    if (!supportPhone.trim()) {
+      showToast('Please enter your phone number', 'error');
+      return;
+    }
+
+    const newRequest: NurseRequest = {
+      id: Date.now().toString(),
+      type,
+      phone: supportPhone,
+      reason: '',
+      status: 'pending',
+      createdAt: new Date(),
+    };
+
+    setNurseRequests([newRequest, ...nurseRequests]);
+    const msg = type === 'call' ? 'Call' : 'Video call';
+    showToast(msg + ' request sent!', 'success');
   };
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
         <Ionicons name="arrow-back" size={24} color="#0f172a" />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
         <Text style={styles.headerTitle}>Appointments</Text>
-        <Text style={styles.headerSubtitle}>
-          {activeTab === 'book' ? 'Book a counselling session' : 
-           activeTab === 'upcoming' ? 'Your upcoming sessions' : 'Past sessions'}
-        </Text>
       </View>
     </View>
   );
 
-  const renderTabs = () => (
-    <View style={styles.tabs}>
-      {[
-        { id: 'book', label: 'Book New', icon: 'add-circle' },
-        { id: 'upcoming', label: 'Upcoming', icon: 'calendar' },
-        { id: 'history', label: 'History', icon: 'time' },
-      ].map((tab) => (
-        <TouchableOpacity
-          key={tab.id}
-          style={[styles.tab, activeTab === tab.id && styles.tabActive]}
-          onPress={() => {
-            setActiveTab(tab.id as any);
-            setStep('counsellor');
-          }}
-        >
-          <Ionicons
-            name={tab.icon as any}
-            size={18}
-            color={activeTab === tab.id ? '#006dab' : '#64748b'}
-          />
-          <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
-            {tab.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  const renderCounsellorSelection = () => (
-    <View style={styles.content}>
-      <Text style={styles.stepTitle}>Choose a Counsellor</Text>
-      <Text style={styles.stepDescription}>
-        Select a health professional for your consultation
-      </Text>
+  const renderSectionTabs = () => (
+    <View style={styles.sectionTabs}>
+      <TouchableOpacity
+        style={[styles.sectionTab, activeSection === 'appointments' && styles.sectionTabActive]}
+        onPress={() => setActiveSection('appointments')}
+      >
+        <Ionicons 
+          name="calendar-outline" 
+          size={18} 
+          color={activeSection === 'appointments' ? '#006dab' : '#64748b'} 
+        />
+        <Text style={[styles.sectionTabText, activeSection === 'appointments' && styles.sectionTabTextActive]}>
+          Doctor Visit
+        </Text>
+      </TouchableOpacity>
       
-      {counsellors.map((counsellor) => (
-        <TouchableOpacity
-          key={counsellor.id}
-          style={styles.counsellorCard}
-          onPress={() => handleSelectCounsellor(counsellor)}
-          activeOpacity={0.85}
-        >
-          <View style={styles.counsellorAvatar}>
-            <Text style={styles.avatarEmoji}>{counsellor.avatar}</Text>
-          </View>
-          <View style={styles.counsellorInfo}>
-            <Text style={styles.counsellorName}>{counsellor.name}</Text>
-            <Text style={styles.counsellorSpec}>{counsellor.specialization}</Text>
-            <View style={styles.counsellorMeta}>
-              <View style={styles.ratingBadge}>
-                <Ionicons name="star" size={12} color="#f59e0b" />
-                <Text style={styles.ratingText}>{counsellor.rating}</Text>
-              </View>
-              <Text style={styles.languageText}>
-                {counsellor.languages.join(' • ')}
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color="#94a3b8" />
-        </TouchableOpacity>
-      ))}
+      <TouchableOpacity
+        style={[styles.sectionTab, activeSection === 'support' && styles.sectionTabActive]}
+        onPress={() => setActiveSection('support')}
+      >
+        <Ionicons 
+          name="chatbubbles-outline" 
+          size={18} 
+          color={activeSection === 'support' ? '#006dab' : '#64748b'} 
+        />
+        <Text style={[styles.sectionTabText, activeSection === 'support' && styles.sectionTabTextActive]}>
+          Support
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 
-  const renderDateTimeSelection = () => {
-    const next7Days = getNext7Days();
-
+  const renderCalendar = () => {
+    const days = getDaysInMonth(currentMonth);
+    
     return (
-      <View style={styles.content}>
-        <View style={styles.selectedCounsellorBadge}>
-          <Text style={styles.selectedLabel}>Selected Counsellor:</Text>
-          <Text style={styles.selectedValue}>{selectedCounsellor?.name}</Text>
+      <View style={styles.calendarCard}>
+        <View style={styles.monthNavigation}>
+          <TouchableOpacity onPress={goToPreviousMonth} style={styles.monthNavButton}>
+            <Ionicons name="chevron-back" size={20} color="#006dab" />
+          </TouchableOpacity>
+          <Text style={styles.monthTitle}>
+            {MONTH_FULL[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+          </Text>
+          <TouchableOpacity onPress={goToNextMonth} style={styles.monthNavButton}>
+            <Ionicons name="chevron-forward" size={20} color="#006dab" />
+          </TouchableOpacity>
         </View>
 
-        {/* Date Selection */}
-        <Text style={styles.sectionTitle}>Select Date</Text>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.dateScroll}
-          contentContainerStyle={styles.dateScrollContent}
-        >
-          {next7Days.map((date) => {
-            const isSelected = selectedDate?.toDateString() === date.toDateString();
+        <View style={styles.weekdayRow}>
+          {WEEKDAYS.map((day, idx) => (
+            <Text key={idx} style={styles.weekdayText}>{day}</Text>
+          ))}
+        </View>
+
+        <View style={styles.daysGrid}>
+          {days.map((day, index) => {
+            const isPast = day !== null && isPastDate(day);
             return (
               <TouchableOpacity
-                key={date.toISOString()}
-                style={[styles.dateCard, isSelected && styles.dateCardActive]}
-                onPress={() => setSelectedDate(date)}
+                key={index}
+                style={[
+                  styles.dayCell,
+                  day !== null && isDateSelected(day) ? styles.dayCellSelected : null,
+                ]}
+                onPress={() => day !== null && !isPast && handleDateSelect(day)}
+                disabled={day === null || isPast}
               >
-                <Text style={[styles.dateDay, isSelected && styles.dateDayActive]}>
-                  {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                </Text>
-                <Text style={[styles.dateNum, isSelected && styles.dateNumActive]}>
-                  {date.getDate()}
-                </Text>
-                <Text style={[styles.dateMonth, isSelected && styles.dateMonthActive]}>
-                  {date.toLocaleDateString('en-US', { month: 'short' })}
-                </Text>
+                {day !== null && (
+                  <>
+                    <Text style={[
+                      styles.dayText,
+                      isDateSelected(day) ? styles.dayTextSelected : null,
+                      isToday(day) && !isDateSelected(day) ? styles.dayTextToday : null,
+                      isPast ? styles.dayTextPast : null,
+                    ]}>
+                      {day}
+                    </Text>
+                    {isToday(day) && !isDateSelected(day) && (
+                      <View style={styles.todayDot} />
+                    )}
+                    {hasAppointment(day) && !isToday(day) && !isPast && (
+                      <View style={styles.appointmentDot} />
+                    )}
+                  </>
+                )}
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
-
-        {/* Time Selection */}
-        <Text style={styles.sectionTitle}>Select Time</Text>
-        <View style={styles.timeGrid}>
-          {timeSlots.map((slot) => (
-            <TouchableOpacity
-              key={slot.id}
-              style={[
-                styles.timeSlot,
-                !slot.available && styles.timeSlotDisabled,
-                selectedTime === slot.time && styles.timeSlotActive,
-              ]}
-              onPress={() => slot.available && setSelectedTime(slot.time)}
-              disabled={!slot.available}
-            >
-              <Text
-                style={[
-                  styles.timeText,
-                  !slot.available && styles.timeTextDisabled,
-                  selectedTime === slot.time && styles.timeTextActive,
-                ]}
-              >
-                {slot.time}
-              </Text>
-              {!slot.available && (
-                <Text style={styles.unavailableText}>Booked</Text>
-              )}
-            </TouchableOpacity>
-          ))}
         </View>
+      </View>
+    );
+  };
 
-        {/* Appointment Type */}
-        <Text style={styles.sectionTitle}>Consultation Type</Text>
-        <View style={styles.typeOptions}>
-          {appointmentTypes.map((type) => (
-            <TouchableOpacity
-              key={type.id}
-              style={[
-                styles.typeOption,
-                selectedType === type.id && { 
-                  backgroundColor: type.color + '20',
-                  borderColor: type.color 
-                },
-              ]}
-              onPress={() => setSelectedType(type.id as any)}
+  const renderTimePicker = () => (
+    <View style={styles.timeSection}>
+      <Text style={styles.inputLabel}>Time</Text>
+      <TouchableOpacity 
+        style={styles.timeButton}
+        onPress={() => setShowTimePicker(true)}
+      >
+        <Ionicons name="time-outline" size={18} color="#006dab" />
+        <Text style={styles.timeButtonText}>{formatTime()}</Text>
+        <Ionicons name="chevron-down" size={16} color="#94a3b8" />
+      </TouchableOpacity>
+
+      <Modal
+        visible={showTimePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTimePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.timePickerModal}>
+            <View style={styles.timePickerHeader}>
+              <Text style={styles.timePickerTitle}>Select Time</Text>
+              <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                <Ionicons name="close" size={22} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.timePickerContent}>
+              <View style={styles.timeColumn}>
+                <Text style={styles.timeColumnLabel}>Hour</Text>
+                <ScrollView style={styles.timeScrollView} showsVerticalScrollIndicator={false}>
+                  {HOURS.map((hour) => (
+                    <TouchableOpacity
+                      key={hour}
+                      style={[styles.timeOption, selectedHour === hour && styles.timeOptionActive]}
+                      onPress={() => setSelectedHour(hour)}
+                    >
+                      <Text style={[styles.timeOptionText, selectedHour === hour && styles.timeOptionTextActive]}>
+                        {hour}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.timeColumn}>
+                <Text style={styles.timeColumnLabel}>Min</Text>
+                <ScrollView style={styles.timeScrollView} showsVerticalScrollIndicator={false}>
+                  {MINUTES.map((minute) => (
+                    <TouchableOpacity
+                      key={minute}
+                      style={[styles.timeOption, selectedMinute === minute && styles.timeOptionActive]}
+                      onPress={() => setSelectedMinute(minute)}
+                    >
+                      <Text style={[styles.timeOptionText, selectedMinute === minute && styles.timeOptionTextActive]}>
+                        {minute}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.timeColumn}>
+                <Text style={styles.timeColumnLabel}>AM/PM</Text>
+                <View style={styles.periodOptions}>
+                  {(['AM', 'PM'] as const).map((p) => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[styles.periodOption, selectedPeriod === p && styles.periodOptionActive]}
+                      onPress={() => setSelectedPeriod(p)}
+                    >
+                      <Text style={[styles.periodText, selectedPeriod === p && styles.periodTextActive]}>{p}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.timePickerDone}
+              onPress={() => setShowTimePicker(false)}
             >
-              <Ionicons
-                name={type.icon as any}
-                size={24}
-                color={selectedType === type.id ? type.color : '#64748b'}
+              <Text style={styles.timePickerDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+
+  const renderAppointmentForm = () => (
+    <View style={styles.formSection}>
+      {selectedDate && (
+        <View style={styles.selectedDateBadge}>
+          <Text style={styles.selectedDateText}>
+            {selectedDate.getDate()} {MONTH_FULL[selectedDate.getMonth()]}, {selectedDate.getFullYear()}
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.formRow}>
+        {renderTimePicker()}
+        
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Doctor (Optional)</Text>
+          <TextInput
+            style={styles.textInput}
+            value={doctorName}
+            onChangeText={setDoctorName}
+            placeholder="Dr. Name"
+            placeholderTextColor="#94a3b8"
+          />
+        </View>
+      </View>
+
+      <View style={styles.inputGroupFull}>
+        <Text style={styles.inputLabel}>Purpose (Optional)</Text>
+        <TextInput
+          style={styles.textInput}
+          value={appointmentPurpose}
+          onChangeText={setAppointmentPurpose}
+          placeholder="e.g., Regular checkup"
+          placeholderTextColor="#94a3b8"
+        />
+      </View>
+
+      <TouchableOpacity 
+        style={styles.logButton}
+        onPress={handleLogAppointment}
+        activeOpacity={0.85}
+      >
+        <View style={styles.logButtonInner}>
+          <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
+          <Text style={styles.logButtonText}>Log Appointment</Text>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderLoggedAppointments = () => (
+    <View style={styles.loggedSection}>
+      {appointments.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Logged</Text>
+          {appointments.map((apt) => (
+            <View key={apt.id} style={styles.appointmentCard}>
+              <View style={styles.appointmentDateBox}>
+                <Text style={styles.appointmentDayNum}>{new Date(apt.date).getDate()}</Text>
+                <Text style={styles.appointmentMonth}>
+                  {MONTHS[new Date(apt.date).getMonth()]}
+                </Text>
+              </View>
+              <View style={styles.appointmentCardContent}>
+                <Text style={styles.appointmentTime}>{apt.time} {apt.period}</Text>
+                {apt.doctorName && (
+                  <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
+                )}
+                {apt.purpose && (
+                  <Text style={styles.appointmentPurpose}>{apt.purpose}</Text>
+                )}
+              </View>
+              <TouchableOpacity 
+                style={styles.deleteButton}
+                onPress={() => handleDeleteAppointment(apt.id)}
+              >
+                <Ionicons name="close" size={18} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </>
+      )}
+    </View>
+  );
+
+  const renderNursingSupport = () => (
+    <View style={styles.supportSection}>
+      <View style={styles.supportHeader}>
+        <Text style={styles.supportTitle}>Nursing Department Support</Text>
+        <Text style={styles.supportSubtitle}>Our team is here to help</Text>
+      </View>
+
+      <View style={styles.phoneSection}>
+        <Text style={styles.inputLabel}>Contact Number</Text>
+        <View style={styles.phoneRow}>
+          <View style={styles.phoneDisplay}>
+            <Text style={styles.countryCode}>+91</Text>
+            {isEditingPhone ? (
+              <TextInput
+                style={styles.phoneEditInput}
+                value={supportPhone}
+                onChangeText={setSupportPhone}
+                keyboardType="phone-pad"
+                maxLength={10}
+                autoFocus
+                onBlur={() => setIsEditingPhone(false)}
               />
-              <Text
-                style={[
-                  styles.typeLabel,
-                  selectedType === type.id && { color: type.color },
-                ]}
-              >
-                {type.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+            ) : (
+              <Text style={styles.phoneNumber}>{supportPhone}</Text>
+            )}
+          </View>
+          <TouchableOpacity 
+            style={styles.editButton}
+            onPress={() => setIsEditingPhone(true)}
+          >
+            <Ionicons name="pencil-outline" size={16} color="#64748b" />
+          </TouchableOpacity>
         </View>
+      </View>
 
-        <TouchableOpacity
-          style={styles.continueButton}
-          onPress={handleContinue}
+      <View style={styles.supportButtons}>
+        <TouchableOpacity 
+          style={styles.callButton}
+          onPress={() => handleRequestSupport('call')}
           activeOpacity={0.85}
         >
-          <LinearGradient
-            colors={['#006dab', '#005a8f']}
-            style={styles.continueButtonGradient}
-          >
-            <Text style={styles.continueButtonText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={20} color="#fff" />
-          </LinearGradient>
+          <View style={styles.callButtonInner}>
+            <Ionicons name="call-outline" size={20} color="#ffffff" />
+            <Text style={styles.callButtonText}>Request Call</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.videoButton}
+          onPress={() => handleRequestSupport('video')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.videoButtonInner}>
+            <Ionicons name="videocam-outline" size={20} color="#ffffff" />
+            <Text style={styles.videoButtonText}>Request Video Call</Text>
+          </View>
         </TouchableOpacity>
       </View>
-    );
-  };
 
-  const renderConfirmation = () => {
-    const typeInfo = appointmentTypes.find(t => t.id === selectedType);
-
-    return (
-      <View style={styles.content}>
-        <Text style={styles.stepTitle}>Confirm Appointment</Text>
-        <Text style={styles.stepDescription}>
-          Review your booking details
-        </Text>
-
-        <View style={styles.confirmCard}>
-          <View style={styles.confirmSection}>
-            <View style={styles.counsellorConfirm}>
-              <Text style={styles.avatarEmoji}>{selectedCounsellor?.avatar}</Text>
-              <View>
-                <Text style={styles.confirmCounsellorName}>{selectedCounsellor?.name}</Text>
-                <Text style={styles.confirmCounsellorSpec}>{selectedCounsellor?.specialization}</Text>
+      {nurseRequests.length > 0 && (
+        <View style={styles.requestsSection}>
+          <Text style={styles.sectionTitle}>Requests</Text>
+          {nurseRequests.map((req) => (
+            <View key={req.id} style={styles.requestCard}>
+              <View style={[
+                styles.requestIcon,
+                { backgroundColor: req.type === 'call' ? '#dcfce7' : '#e0f2fe' }
+              ]}>
+                <Ionicons 
+                  name={req.type === 'call' ? 'call-outline' : 'videocam-outline'} 
+                  size={16} 
+                  color={req.type === 'call' ? '#22c55e' : '#006dab'} 
+                />
+              </View>
+              <View style={styles.requestContent}>
+                <Text style={styles.requestType}>
+                  {req.type === 'call' ? 'Call Request' : 'Video Call'}
+                </Text>
+                <Text style={styles.requestTime}>
+                  {new Date(req.createdAt).toLocaleString('en-IN', { 
+                    day: 'numeric', 
+                    month: 'short', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </Text>
+              </View>
+              <View style={styles.requestStatusBadge}>
+                <Text style={styles.requestStatusText}>Pending</Text>
               </View>
             </View>
-          </View>
-
-          <View style={styles.confirmDivider} />
-
-          <View style={styles.confirmDetails}>
-            <View style={styles.confirmRow}>
-              <Ionicons name="calendar-outline" size={20} color="#64748b" />
-              <Text style={styles.confirmLabel}>Date</Text>
-              <Text style={styles.confirmValue}>
-                {selectedDate?.toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </Text>
-            </View>
-            <View style={styles.confirmRow}>
-              <Ionicons name="time-outline" size={20} color="#64748b" />
-              <Text style={styles.confirmLabel}>Time</Text>
-              <Text style={styles.confirmValue}>{selectedTime}</Text>
-            </View>
-            <View style={styles.confirmRow}>
-              <Ionicons name={typeInfo?.icon as any} size={20} color={typeInfo?.color} />
-              <Text style={styles.confirmLabel}>Type</Text>
-              <Text style={[styles.confirmValue, { color: typeInfo?.color }]}>
-                {typeInfo?.label}
-              </Text>
-            </View>
-          </View>
+          ))}
         </View>
-
-        {/* Notes */}
-        <View style={styles.notesSection}>
-          <Text style={styles.sectionTitle}>Notes for Counsellor (optional)</Text>
-          <TextInput
-            style={styles.notesInput}
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="Any specific topics you'd like to discuss..."
-            placeholderTextColor="#94a3b8"
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-
-        {/* Info Card */}
-        <View style={styles.infoCard}>
-          <Ionicons name="information-circle" size={20} color="#006dab" />
-          <Text style={styles.infoText}>
-            You'll receive a reminder notification 30 minutes before your appointment.
-            {selectedType === 'video' && ' Make sure you have a stable internet connection.'}
-          </Text>
-        </View>
-
-        <View style={styles.confirmActions}>
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => setStep('datetime')}
-          >
-            <Ionicons name="pencil" size={20} color="#006dab" />
-            <Text style={styles.editButtonText}>Edit</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.bookButton}
-            onPress={handleBookAppointment}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={['#22c55e', '#16a34a']}
-              style={styles.bookButtonGradient}
-            >
-              <Text style={styles.bookButtonText}>Book Appointment</Text>
-              <Ionicons name="checkmark" size={20} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  const renderAppointmentsList = (filter: 'upcoming' | 'completed') => {
-    const appointments = mockAppointments.filter(a => 
-      filter === 'upcoming' ? a.status === 'upcoming' : a.status === 'completed'
-    );
-
-    if (appointments.length === 0) {
-      return (
-        <View style={styles.emptyState}>
-          <MaterialCommunityIcons 
-            name={filter === 'upcoming' ? 'calendar-blank' : 'calendar-check'} 
-            size={64} 
-            color="#cbd5e1" 
-          />
-          <Text style={styles.emptyTitle}>
-            {filter === 'upcoming' ? 'No Upcoming Appointments' : 'No Past Appointments'}
-          </Text>
-          <Text style={styles.emptyText}>
-            {filter === 'upcoming' 
-              ? "You don't have any scheduled appointments. Book a session now!" 
-              : "Your appointment history will appear here."}
-          </Text>
-          {filter === 'upcoming' && (
-            <TouchableOpacity 
-              style={styles.emptyButton}
-              onPress={() => setActiveTab('book')}
-            >
-              <Text style={styles.emptyButtonText}>Book Appointment</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.content}>
-        {appointments.map((appointment) => {
-          const typeInfo = appointmentTypes.find(t => t.id === appointment.type);
-          const isUpcoming = appointment.status === 'upcoming';
-
-          return (
-            <View 
-              key={appointment.id} 
-              style={[
-                styles.appointmentCard,
-                isUpcoming && styles.appointmentCardUpcoming,
-              ]}
-            >
-              <View style={styles.appointmentHeader}>
-                <View style={styles.appointmentDate}>
-                  <Text style={styles.appointmentDateNum}>
-                    {new Date(appointment.date).getDate()}
-                  </Text>
-                  <Text style={styles.appointmentDateMonth}>
-                    {new Date(appointment.date).toLocaleDateString('en-US', { month: 'short' })}
-                  </Text>
-                </View>
-                <View style={styles.appointmentInfo}>
-                  <Text style={styles.appointmentCounsellor}>
-                    {appointment.counsellor.avatar} {appointment.counsellor.name}
-                  </Text>
-                  <Text style={styles.appointmentSpec}>
-                    {appointment.counsellor.specialization}
-                  </Text>
-                  <View style={styles.appointmentMeta}>
-                    <View style={styles.appointmentTime}>
-                      <Ionicons name="time-outline" size={14} color="#64748b" />
-                      <Text style={styles.appointmentTimeText}>{appointment.time}</Text>
-                    </View>
-                    <View style={[styles.typeBadge, { backgroundColor: typeInfo?.color + '20' }]}>
-                      <Ionicons name={typeInfo?.icon as any} size={14} color={typeInfo?.color} />
-                      <Text style={[styles.typeBadgeText, { color: typeInfo?.color }]}>
-                        {typeInfo?.label}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {appointment.notes && (
-                <View style={styles.appointmentNotes}>
-                  <Text style={styles.appointmentNotesLabel}>Notes:</Text>
-                  <Text style={styles.appointmentNotesText}>{appointment.notes}</Text>
-                </View>
-              )}
-
-              {isUpcoming && (
-                <View style={styles.appointmentActions}>
-                  <TouchableOpacity style={styles.rescheduleButton}>
-                    <Ionicons name="calendar-outline" size={18} color="#006dab" />
-                    <Text style={styles.rescheduleText}>Reschedule</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.joinButton}>
-                    <LinearGradient
-                      colors={[typeInfo?.color || '#006dab', '#005a8f']}
-                      style={styles.joinButtonGradient}
-                    >
-                      <Ionicons name={typeInfo?.icon as any} size={18} color="#fff" />
-                      <Text style={styles.joinButtonText}>Join</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          );
-        })}
-      </View>
-    );
-  };
+      )}
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -621,17 +598,23 @@ export default function AppointmentsScreen() {
       )}
 
       {renderHeader()}
-      {renderTabs()}
+      {renderSectionTabs()}
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {activeTab === 'book' && step === 'counsellor' && renderCounsellorSelection()}
-        {activeTab === 'book' && step === 'datetime' && renderDateTimeSelection()}
-        {activeTab === 'book' && step === 'confirm' && renderConfirmation()}
-        {activeTab === 'upcoming' && renderAppointmentsList('upcoming')}
-        {activeTab === 'history' && renderAppointmentsList('completed')}
+        <View style={styles.contentContainer}>
+          {activeSection === 'appointments' ? (
+            <>
+              {renderCalendar()}
+              {renderAppointmentForm()}
+              {renderLoggedAppointments()}
+            </>
+          ) : (
+            renderNursingSupport()
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -645,55 +628,53 @@ const styles = StyleSheet.create({
   toast: {
     position: 'absolute',
     top: 0,
-    left: isWeb ? undefined : 16,
-    right: isWeb ? 20 : 16,
+    left: 16,
+    right: 16,
     zIndex: 1000,
     backgroundColor: '#ffffff',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    maxWidth: isWeb ? 320 : undefined,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
     borderLeftWidth: 4,
   },
   toastError: { borderLeftColor: '#ef4444' },
   toastSuccess: { borderLeftColor: '#98be4e' },
-  toastContent: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  toastIcon: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
-  toastText: { color: '#1e293b', fontSize: 14, fontWeight: '600', flex: 1 },
+  toastContent: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  toastIcon: { fontSize: 16, fontWeight: 'bold', color: '#1e293b' },
+  toastText: { color: '#1e293b', fontSize: 14, fontWeight: '500', flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    paddingTop: isWeb ? 20 : 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
+    paddingTop: isWeb ? 16 : 50,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#f1f5f9',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerCenter: { flex: 1, marginLeft: 16 },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  headerSubtitle: { fontSize: 14, color: '#64748b', marginTop: 2 },
-  tabs: {
+  headerCenter: { flex: 1, marginLeft: 12 },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  sectionTabs: {
     flexDirection: 'row',
     backgroundColor: '#ffffff',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
   },
-  tab: {
+  sectionTab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -703,343 +684,499 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     gap: 6,
   },
-  tabActive: {
-    backgroundColor: '#eff6ff',
-    borderWidth: 2,
-    borderColor: '#006dab',
+  sectionTabActive: {
+    backgroundColor: '#e0f2fe',
   },
-  tabText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  tabTextActive: { color: '#006dab' },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
-  content: {
-    padding: isWeb ? 40 : 20,
-    maxWidth: 700,
-    width: '100%',
+  sectionTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  sectionTabTextActive: {
+    color: '#006dab',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 30,
+  },
+  contentContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    maxWidth: 500,
     alignSelf: 'center',
+    width: '100%',
   },
-  stepTitle: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
-  stepDescription: { fontSize: 16, color: '#64748b', marginBottom: 24 },
-  counsellorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  // Calendar
+  calendarCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
-  counsellorAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
+  monthNavigation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  monthNavButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
   },
-  avatarEmoji: { fontSize: 32 },
-  counsellorInfo: { flex: 1 },
-  counsellorName: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
-  counsellorSpec: { fontSize: 14, color: '#64748b', marginTop: 2 },
-  counsellorMeta: {
+  monthTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  weekdayRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 8,
+    marginBottom: 8,
   },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+  weekdayText: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94a3b8',
   },
-  ratingText: { fontSize: 12, fontWeight: '700', color: '#92400e' },
-  languageText: { fontSize: 12, color: '#64748b' },
-  selectedCounsellorBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eff6ff',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 24,
-    gap: 8,
-  },
-  selectedLabel: { fontSize: 13, color: '#64748b' },
-  selectedValue: { fontSize: 14, fontWeight: '700', color: '#006dab' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12, marginTop: 8 },
-  dateScroll: { marginHorizontal: -20, marginBottom: 24 },
-  dateScrollContent: { paddingHorizontal: 20, gap: 10 },
-  dateCard: {
-    width: 70,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-  },
-  dateCardActive: {
-    backgroundColor: '#006dab',
-    borderColor: '#006dab',
-  },
-  dateDay: { fontSize: 12, fontWeight: '600', color: '#64748b' },
-  dateDayActive: { color: 'rgba(255,255,255,0.8)' },
-  dateNum: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginVertical: 4 },
-  dateNumActive: { color: '#ffffff' },
-  dateMonth: { fontSize: 12, fontWeight: '600', color: '#64748b' },
-  dateMonthActive: { color: 'rgba(255,255,255,0.8)' },
-  timeGrid: {
+  daysGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 24,
   },
-  timeSlot: {
-    flex: 1,
-    minWidth: 90,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-  },
-  timeSlotDisabled: {
-    backgroundColor: '#f1f5f9',
-    borderColor: '#f1f5f9',
-  },
-  timeSlotActive: {
-    backgroundColor: '#006dab',
-    borderColor: '#006dab',
-  },
-  timeText: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  timeTextDisabled: { color: '#94a3b8' },
-  timeTextActive: { color: '#ffffff' },
-  unavailableText: { fontSize: 10, color: '#94a3b8', marginTop: 2 },
-  typeOptions: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  typeOption: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    gap: 8,
-  },
-  typeLabel: { fontSize: 12, fontWeight: '700', color: '#64748b' },
-  continueButton: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    shadowColor: '#006dab',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  continueButtonGradient: {
-    flexDirection: 'row',
+  dayCell: {
+    width: '14.28%',
+    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
+    position: 'relative',
   },
-  continueButtonText: { fontSize: 16, fontWeight: '700', color: '#ffffff' },
-  confirmCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+  dayCellSelected: {
+    backgroundColor: '#006dab',
+    borderRadius: 10,
   },
-  confirmSection: { padding: 20 },
-  counsellorConfirm: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
+  dayText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#334155',
   },
-  confirmCounsellorName: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
-  confirmCounsellorSpec: { fontSize: 14, color: '#64748b', marginTop: 2 },
-  confirmDivider: { height: 1, backgroundColor: '#e2e8f0' },
-  confirmDetails: { padding: 20, gap: 16 },
-  confirmRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  dayTextSelected: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  dayTextToday: {
+    color: '#006dab',
+    fontWeight: '700',
+  },
+  dayTextPast: {
+    color: '#cbd5e1',
+  },
+  todayDot: {
+    position: 'absolute',
+    bottom: 4,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#98be4e',
+  },
+  appointmentDot: {
+    position: 'absolute',
+    bottom: 4,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#006dab',
+  },
+  // Form
+  formSection: {
+    marginTop: 16,
     gap: 12,
   },
-  confirmLabel: { flex: 1, fontSize: 14, color: '#64748b' },
-  confirmValue: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  notesSection: { marginBottom: 16 },
-  notesInput: {
+  selectedDateBadge: {
+    backgroundColor: '#e0f2fe',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  selectedDateText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#006dab',
+  },
+  formRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  timeSection: {
+    flex: 1,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    marginBottom: 6,
+  },
+  timeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
     borderColor: '#e2e8f0',
-    fontSize: 16,
+    gap: 8,
+  },
+  timeButtonText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
     color: '#0f172a',
-    minHeight: 80,
-    textAlignVertical: 'top',
   },
-  infoCard: {
-    flexDirection: 'row',
-    backgroundColor: '#eff6ff',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-    marginBottom: 24,
-  },
-  infoText: { flex: 1, fontSize: 13, color: '#1e40af', lineHeight: 20 },
-  confirmActions: { flexDirection: 'row', gap: 12 },
-  editButton: {
+  inputGroup: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 14,
+  },
+  inputGroupFull: {
+    width: '100%',
+  },
+  textInput: {
     backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#006dab',
-    gap: 8,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    fontSize: 14,
+    color: '#0f172a',
   },
-  editButtonText: { fontSize: 16, fontWeight: '700', color: '#006dab' },
-  bookButton: {
-    flex: 2,
-    borderRadius: 14,
+  logButton: {
+    marginTop: 4,
+    borderRadius: 10,
     overflow: 'hidden',
-    shadowColor: '#22c55e',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  bookButtonGradient: {
+  logButtonInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
     gap: 8,
-  },
-  bookButtonText: { fontSize: 16, fontWeight: '700', color: '#ffffff' },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-    paddingTop: 80,
-  },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#0f172a', marginTop: 24 },
-  emptyText: { fontSize: 14, color: '#64748b', textAlign: 'center', marginTop: 8 },
-  emptyButton: {
-    marginTop: 24,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
     backgroundColor: '#006dab',
-    borderRadius: 10,
   },
-  emptyButtonText: { fontSize: 14, fontWeight: '700', color: '#ffffff' },
-  appointmentCard: {
+  logButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  timePickerModal: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    width: '100%',
+    maxWidth: 320,
   },
-  appointmentCardUpcoming: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#006dab',
-  },
-  appointmentHeader: {
+  timePickerHeader: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  appointmentDate: {
-    width: 50,
+  timePickerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  timePickerContent: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  timeColumn: {
+    flex: 1,
+  },
+  timeColumnLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  timeScrollView: {
+    maxHeight: 150,
+  },
+  timeOption: {
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginBottom: 4,
+    alignItems: 'center',
+  },
+  timeOptionActive: {
+    backgroundColor: '#006dab',
+  },
+  timeOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  timeOptionTextActive: {
+    color: '#ffffff',
+  },
+  periodOptions: {
+    gap: 6,
+  },
+  periodOption: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  periodOptionActive: {
+    backgroundColor: '#006dab',
+  },
+  periodText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  periodTextActive: {
+    color: '#ffffff',
+  },
+  timePickerDone: {
+    marginTop: 16,
+    backgroundColor: '#006dab',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  timePickerDoneText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  // Logged appointments
+  loggedSection: {
+    marginTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748b',
+    marginBottom: 10,
+  },
+  appointmentCard: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  appointmentDateBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#e0f2fe',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 10,
-    padding: 8,
+    marginRight: 12,
   },
-  appointmentDateNum: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
-  appointmentDateMonth: { fontSize: 12, color: '#64748b', textTransform: 'uppercase' },
-  appointmentInfo: { flex: 1 },
-  appointmentCounsellor: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
-  appointmentSpec: { fontSize: 13, color: '#64748b', marginTop: 2 },
-  appointmentMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 8,
+  appointmentDayNum: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#006dab',
+  },
+  appointmentMonth: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#0284c7',
+    textTransform: 'uppercase',
+  },
+  appointmentCardContent: {
+    flex: 1,
   },
   appointmentTime: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  appointmentDoctor: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  appointmentPurpose: {
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+  deleteButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Nursing support
+  supportSection: {
+    gap: 16,
+  },
+  supportHeader: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+  },
+  supportTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  supportSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 4,
+  },
+  phoneSection: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 14,
+  },
+  phoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 10,
   },
-  appointmentTimeText: { fontSize: 13, color: '#64748b' },
-  typeBadge: {
+  phoneDisplay: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
+    gap: 6,
   },
-  typeBadgeText: { fontSize: 12, fontWeight: '600' },
-  appointmentNotes: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+  countryCode: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#64748b',
   },
-  appointmentNotesLabel: { fontSize: 12, color: '#64748b', marginBottom: 4 },
-  appointmentNotesText: { fontSize: 14, color: '#0f172a' },
-  appointmentActions: {
+  phoneNumber: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  phoneEditInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0f172a',
+    padding: 0,
+  },
+  editButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  supportButtons: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 16,
   },
-  rescheduleButton: {
+  callButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
-    gap: 6,
-  },
-  rescheduleText: { fontSize: 14, fontWeight: '600', color: '#006dab' },
-  joinButton: {
-    flex: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     overflow: 'hidden',
   },
-  joinButtonGradient: {
+  callButtonInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    gap: 6,
+    paddingVertical: 14,
+    gap: 8,
+    backgroundColor: '#006dab',
   },
-  joinButtonText: { fontSize: 14, fontWeight: '700', color: '#ffffff' },
+  callButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  videoButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  videoButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+    backgroundColor: '#006dab',
+  },
+  videoButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  requestsSection: {
+    marginTop: 4,
+  },
+  requestCard: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  requestIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  requestContent: {
+    flex: 1,
+  },
+  requestType: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  requestTime: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  requestStatusBadge: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 5,
+  },
+  requestStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#92400e',
+  },
 });
