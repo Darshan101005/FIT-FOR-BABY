@@ -30,8 +30,8 @@ const tabs: TabItem[] = [
   {
     name: 'logs',
     label: 'Logs',
-    icon: 'journal-outline',
-    iconFilled: 'journal',
+    icon: 'restaurant-outline',
+    iconFilled: 'restaurant',
     route: '/user/log-food',
   },
   {
