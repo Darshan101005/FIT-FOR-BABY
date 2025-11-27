@@ -2,16 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -394,7 +394,12 @@ export default function AdminCommunicationScreen() {
               </View>
               <View style={styles.threadPreview}>
                 <Text style={styles.threadCoupleId}>{thread.coupleId}</Text>
-                <View style={[styles.threadStatus, styles[`status${thread.status}` as keyof typeof styles]]}>
+                <View style={[
+                  styles.threadStatus, 
+                  thread.status === 'active' ? styles.statusactive : 
+                  thread.status === 'pending' ? styles.statuspending : 
+                  styles.statusresolved
+                ]}>
                   <Text style={styles.threadStatusText}>
                     {thread.status.charAt(0).toUpperCase() + thread.status.slice(1)}
                   </Text>
@@ -549,7 +554,12 @@ export default function AdminCommunicationScreen() {
                 <Ionicons name="megaphone" size={20} color={COLORS.primary} />
                 <Text style={styles.broadcastTitle}>{broadcast.title}</Text>
               </View>
-              <View style={[styles.audienceBadge, styles[`audience${broadcast.targetAudience}` as keyof typeof styles]]}>
+              <View style={[
+                styles.audienceBadge, 
+                broadcast.targetAudience === 'all' ? styles.audienceall :
+                broadcast.targetAudience === 'study' ? styles.audiencestudy :
+                styles.audiencecontrol
+              ]}>
                 <Text style={styles.audienceBadgeText}>
                   {broadcast.targetAudience === 'all' ? 'All Users' :
                    broadcast.targetAudience === 'study' ? 'Study Group' : 'Control Group'}

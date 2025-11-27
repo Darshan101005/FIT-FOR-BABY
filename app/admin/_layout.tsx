@@ -3,16 +3,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Animated,
-    Image,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Animated,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 // Fit for Baby Color Palette
@@ -161,18 +161,11 @@ export default function AdminLayout() {
     ]}>
       {/* Logo Header */}
       <View style={styles.sidebarHeader}>
-        <LinearGradient
-          colors={[COLORS.primary, COLORS.primaryLight]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.logoGradient}
-        >
-          <Image
-            source={require('../../assets/images/favicon.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </LinearGradient>
+        <Image
+          source={require('../../assets/logos/logo-icon-alt.svg')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         {!sidebarCollapsed && (
           <View style={styles.logoText}>
             <Text style={styles.appName}>Fit for Baby</Text>
@@ -251,7 +244,7 @@ export default function AdminLayout() {
         >
           <View style={styles.drawerHeaderContent}>
             <Image
-              source={require('../../assets/images/favicon.png')}
+              source={require('../../assets/logos/logo-icon-alt.svg')}
               style={styles.drawerLogo}
               resizeMode="contain"
             />
@@ -308,7 +301,7 @@ export default function AdminLayout() {
       </TouchableOpacity>
       <View style={styles.mobileHeaderCenter}>
         <Image
-          source={require('../../assets/images/favicon.png')}
+          source={require('../../assets/logos/logo-icon-alt.svg')}
           style={styles.mobileHeaderLogo}
           resizeMode="contain"
         />
@@ -383,6 +376,7 @@ export default function AdminLayout() {
           <Stack.Screen name="tasks" />
           <Stack.Screen name="monitoring" />
           <Stack.Screen name="communication" />
+          <Stack.Screen name="user-dashboard" />
         </Stack>
 
         {/* Mobile Bottom Navigation */}
@@ -418,16 +412,9 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.borderLight,
     gap: 12,
   },
-  logoGradient: {
+  logo: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logo: {
-    width: 28,
-    height: 28,
   },
   logoText: {
     flex: 1,

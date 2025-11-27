@@ -288,7 +288,7 @@ export default function AdminHomeScreen() {
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
           <Image 
-            source={require('../../assets/logos/logo-icon-alt.svg')} 
+            source={require('../../assets/images/favicon.png')} 
             style={{ width: 24, height: 24 }} 
           />
           <Text style={styles.sectionTitle}>Logs Not Completed</Text>

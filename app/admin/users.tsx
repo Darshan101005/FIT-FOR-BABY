@@ -2,16 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -41,6 +41,10 @@ interface CoupleUser {
   name: string;
   email: string;
   phone: string;
+  age: number;
+  weight: number;
+  height: number;
+  bmi: number;
   status: 'active' | 'inactive' | 'pending';
   lastActive: string;
   forceReset: boolean;
@@ -62,40 +66,40 @@ const mockCouples: Couple[] = [
     coupleId: 'C_001',
     enrollmentDate: '2024-10-01',
     status: 'active',
-    male: { id: 'C_001_M', name: 'John Doe', email: 'john@example.com', phone: '+91 98765 43210', status: 'active', lastActive: '2024-11-25', forceReset: false },
-    female: { id: 'C_001_F', name: 'Sarah Doe', email: 'sarah@example.com', phone: '+91 98765 43211', status: 'active', lastActive: '2024-11-25', forceReset: false },
+    male: { id: 'C_001_M', name: 'John Doe', email: 'john@example.com', phone: '+91 98765 43210', age: 32, weight: 75, height: 175, bmi: 24.5, status: 'active', lastActive: '2024-11-25', forceReset: false },
+    female: { id: 'C_001_F', name: 'Sarah Doe', email: 'sarah@example.com', phone: '+91 98765 43211', age: 28, weight: 58, height: 162, bmi: 22.1, status: 'active', lastActive: '2024-11-25', forceReset: false },
   },
   {
     id: '2',
     coupleId: 'C_002',
     enrollmentDate: '2024-10-15',
     status: 'active',
-    male: { id: 'C_002_M', name: 'Raj Kumar', email: 'raj@example.com', phone: '+91 98765 43212', status: 'active', lastActive: '2024-11-24', forceReset: false },
-    female: { id: 'C_002_F', name: 'Priya Kumar', email: 'priya@example.com', phone: '+91 98765 43213', status: 'inactive', lastActive: '2024-11-10', forceReset: false },
+    male: { id: 'C_002_M', name: 'Raj Kumar', email: 'raj@example.com', phone: '+91 98765 43212', age: 30, weight: 70, height: 170, bmi: 24.2, status: 'active', lastActive: '2024-11-24', forceReset: false },
+    female: { id: 'C_002_F', name: 'Priya Kumar', email: 'priya@example.com', phone: '+91 98765 43213', age: 27, weight: 55, height: 158, bmi: 22.0, status: 'inactive', lastActive: '2024-11-10', forceReset: false },
   },
   {
     id: '3',
     coupleId: 'C_003',
     enrollmentDate: '2024-11-01',
     status: 'active',
-    male: { id: 'C_003_M', name: 'Anand M', email: 'anand@example.com', phone: '+91 98765 43214', status: 'pending', lastActive: '2024-11-20', forceReset: true },
-    female: { id: 'C_003_F', name: 'Meena S', email: 'meena@example.com', phone: '+91 98765 43215', status: 'pending', lastActive: '2024-11-22', forceReset: true },
+    male: { id: 'C_003_M', name: 'Anand M', email: 'anand@example.com', phone: '+91 98765 43214', age: 35, weight: 80, height: 178, bmi: 25.2, status: 'pending', lastActive: '2024-11-20', forceReset: true },
+    female: { id: 'C_003_F', name: 'Meena S', email: 'meena@example.com', phone: '+91 98765 43215', age: 31, weight: 62, height: 160, bmi: 24.2, status: 'pending', lastActive: '2024-11-22', forceReset: true },
   },
   {
     id: '4',
     coupleId: 'C_004',
     enrollmentDate: '2024-11-10',
     status: 'active',
-    male: { id: 'C_004_M', name: 'Vikram S', email: 'vikram@example.com', phone: '+91 98765 43216', status: 'active', lastActive: '2024-11-26', forceReset: false },
-    female: { id: 'C_004_F', name: 'Lakshmi V', email: 'lakshmi@example.com', phone: '+91 98765 43217', status: 'active', lastActive: '2024-11-26', forceReset: false },
+    male: { id: 'C_004_M', name: 'Vikram S', email: 'vikram@example.com', phone: '+91 98765 43216', age: 29, weight: 68, height: 172, bmi: 23.0, status: 'active', lastActive: '2024-11-26', forceReset: false },
+    female: { id: 'C_004_F', name: 'Lakshmi V', email: 'lakshmi@example.com', phone: '+91 98765 43217', age: 26, weight: 52, height: 155, bmi: 21.6, status: 'active', lastActive: '2024-11-26', forceReset: false },
   },
   {
     id: '5',
     coupleId: 'C_005',
     enrollmentDate: '2024-11-15',
     status: 'inactive',
-    male: { id: 'C_005_M', name: 'Suresh R', email: 'suresh@example.com', phone: '+91 98765 43218', status: 'inactive', lastActive: '2024-11-05', forceReset: false },
-    female: { id: 'C_005_F', name: 'Geetha R', email: 'geetha@example.com', phone: '+91 98765 43219', status: 'inactive', lastActive: '2024-11-05', forceReset: false },
+    male: { id: 'C_005_M', name: 'Suresh R', email: 'suresh@example.com', phone: '+91 98765 43218', age: 33, weight: 82, height: 180, bmi: 25.3, status: 'inactive', lastActive: '2024-11-05', forceReset: false },
+    female: { id: 'C_005_F', name: 'Geetha R', email: 'geetha@example.com', phone: '+91 98765 43219', age: 30, weight: 60, height: 165, bmi: 22.0, status: 'inactive', lastActive: '2024-11-05', forceReset: false },
   },
 ];
 
@@ -130,9 +134,11 @@ export default function AdminUsersScreen() {
     maleName: '',
     maleEmail: '',
     malePhone: '',
+    maleAge: '',
     femaleName: '',
     femaleEmail: '',
     femalePhone: '',
+    femaleAge: '',
   });
 
   // Check for action param to open enrollment modal
@@ -186,9 +192,9 @@ export default function AdminUsersScreen() {
     if (enrollStep === 1) {
       setEnrollStep(2);
     } else {
-      // Validate and submit
-      if (!enrollForm.maleName || !enrollForm.maleEmail || !enrollForm.femaleName || !enrollForm.femaleEmail) {
-        showToast('Please fill all required fields', 'error');
+      // Validate and submit - phone and age are mandatory, email is optional
+      if (!enrollForm.maleName || !enrollForm.malePhone || !enrollForm.maleAge || !enrollForm.femaleName || !enrollForm.femalePhone || !enrollForm.femaleAge) {
+        showToast('Please fill all required fields (Name, Phone, Age)', 'error');
         return;
       }
       // Submit enrollment
@@ -201,9 +207,11 @@ export default function AdminUsersScreen() {
         maleName: '',
         maleEmail: '',
         malePhone: '',
+        maleAge: '',
         femaleName: '',
         femaleEmail: '',
         femalePhone: '',
+        femaleAge: '',
       });
     }
   };
@@ -346,12 +354,35 @@ export default function AdminUsersScreen() {
                   <Text style={styles.userDetailText}>{couple.male.name}</Text>
                 </View>
                 <View style={styles.userDetailRow}>
-                  <Ionicons name="mail" size={14} color={COLORS.textMuted} />
-                  <Text style={styles.userDetailText}>{couple.male.email}</Text>
+                  <Ionicons name="calendar" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.userDetailText}>Age: {couple.male.age} years</Text>
                 </View>
                 <View style={styles.userDetailRow}>
                   <Ionicons name="call" size={14} color={COLORS.textMuted} />
                   <Text style={styles.userDetailText}>{couple.male.phone}</Text>
+                </View>
+                {couple.male.email && (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="mail" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>{couple.male.email}</Text>
+                  </View>
+                )}
+                <View style={styles.healthMetricsRow}>
+                  <View style={styles.healthMetric}>
+                    <Ionicons name="fitness" size={14} color={COLORS.primary} />
+                    <Text style={styles.healthMetricLabel}>Weight</Text>
+                    <Text style={styles.healthMetricValue}>{couple.male.weight} kg</Text>
+                  </View>
+                  <View style={styles.healthMetric}>
+                    <Ionicons name="resize-outline" size={14} color={COLORS.accent} />
+                    <Text style={styles.healthMetricLabel}>Height</Text>
+                    <Text style={styles.healthMetricValue}>{couple.male.height} cm</Text>
+                  </View>
+                  <View style={styles.healthMetric}>
+                    <Ionicons name="body" size={14} color={COLORS.info} />
+                    <Text style={styles.healthMetricLabel}>BMI</Text>
+                    <Text style={styles.healthMetricValue}>{couple.male.bmi}</Text>
+                  </View>
                 </View>
                 <View style={styles.userDetailRow}>
                   <Ionicons name="time" size={14} color={COLORS.textMuted} />
@@ -404,12 +435,35 @@ export default function AdminUsersScreen() {
                   <Text style={styles.userDetailText}>{couple.female.name}</Text>
                 </View>
                 <View style={styles.userDetailRow}>
-                  <Ionicons name="mail" size={14} color={COLORS.textMuted} />
-                  <Text style={styles.userDetailText}>{couple.female.email}</Text>
+                  <Ionicons name="calendar" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.userDetailText}>Age: {couple.female.age} years</Text>
                 </View>
                 <View style={styles.userDetailRow}>
                   <Ionicons name="call" size={14} color={COLORS.textMuted} />
                   <Text style={styles.userDetailText}>{couple.female.phone}</Text>
+                </View>
+                {couple.female.email && (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="mail" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>{couple.female.email}</Text>
+                  </View>
+                )}
+                <View style={styles.healthMetricsRow}>
+                  <View style={styles.healthMetric}>
+                    <Ionicons name="fitness" size={14} color={COLORS.primary} />
+                    <Text style={styles.healthMetricLabel}>Weight</Text>
+                    <Text style={styles.healthMetricValue}>{couple.female.weight} kg</Text>
+                  </View>
+                  <View style={styles.healthMetric}>
+                    <Ionicons name="resize-outline" size={14} color={COLORS.accent} />
+                    <Text style={styles.healthMetricLabel}>Height</Text>
+                    <Text style={styles.healthMetricValue}>{couple.female.height} cm</Text>
+                  </View>
+                  <View style={styles.healthMetric}>
+                    <Ionicons name="body" size={14} color={COLORS.info} />
+                    <Text style={styles.healthMetricLabel}>BMI</Text>
+                    <Text style={styles.healthMetricValue}>{couple.female.bmi}</Text>
+                  </View>
                 </View>
                 <View style={styles.userDetailRow}>
                   <Ionicons name="time" size={14} color={COLORS.textMuted} />
@@ -533,19 +587,19 @@ export default function AdminUsersScreen() {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Email *</Text>
+                    <Text style={styles.inputLabel}>Age *</Text>
                     <TextInput
                       style={styles.input}
-                      value={enrollForm.maleEmail}
-                      onChangeText={(text) => setEnrollForm({ ...enrollForm, maleEmail: text })}
-                      placeholder="Enter email address"
+                      value={enrollForm.maleAge}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, maleAge: text })}
+                      placeholder="Enter age"
                       placeholderTextColor={COLORS.textMuted}
-                      keyboardType="email-address"
+                      keyboardType="numeric"
                     />
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Phone Number</Text>
+                    <Text style={styles.inputLabel}>Phone Number *</Text>
                     <TextInput
                       style={styles.input}
                       value={enrollForm.malePhone}
@@ -553,6 +607,18 @@ export default function AdminUsersScreen() {
                       placeholder="Enter phone number"
                       placeholderTextColor={COLORS.textMuted}
                       keyboardType="phone-pad"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Email (Optional)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.maleEmail}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, maleEmail: text })}
+                      placeholder="Enter email address"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="email-address"
                     />
                   </View>
 
@@ -586,19 +652,19 @@ export default function AdminUsersScreen() {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Email *</Text>
+                    <Text style={styles.inputLabel}>Age *</Text>
                     <TextInput
                       style={styles.input}
-                      value={enrollForm.femaleEmail}
-                      onChangeText={(text) => setEnrollForm({ ...enrollForm, femaleEmail: text })}
-                      placeholder="Enter email address"
+                      value={enrollForm.femaleAge}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, femaleAge: text })}
+                      placeholder="Enter age"
                       placeholderTextColor={COLORS.textMuted}
-                      keyboardType="email-address"
+                      keyboardType="numeric"
                     />
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Phone Number</Text>
+                    <Text style={styles.inputLabel}>Phone Number *</Text>
                     <TextInput
                       style={styles.input}
                       value={enrollForm.femalePhone}
@@ -606,6 +672,18 @@ export default function AdminUsersScreen() {
                       placeholder="Enter phone number"
                       placeholderTextColor={COLORS.textMuted}
                       keyboardType="phone-pad"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Email (Optional)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.femaleEmail}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, femaleEmail: text })}
+                      placeholder="Enter email address"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="email-address"
                     />
                   </View>
 
@@ -928,6 +1006,30 @@ const styles = StyleSheet.create({
   userDetailText: {
     fontSize: 13,
     color: COLORS.textSecondary,
+  },
+  healthMetricsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  healthMetric: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    gap: 4,
+  },
+  healthMetricLabel: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+  healthMetricValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
   },
   userActions: {
     flexDirection: 'row',

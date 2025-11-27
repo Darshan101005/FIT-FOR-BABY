@@ -2,15 +2,15 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -271,9 +271,8 @@ export default function AdminMonitoringScreen() {
   };
 
   const handleCoupleClick = (log: DailyLog) => {
-    setSelectedCouple(log);
-    setShowDetailModal(true);
-    setShowPastLogs(false);
+    // Navigate to couple dashboard showing both husband and wife details
+    router.push(`/admin/user-dashboard?coupleId=${log.coupleId}` as any);
   };
 
   // Filter logs based on search and filters
@@ -734,6 +733,19 @@ export default function AdminMonitoringScreen() {
                       </View>
                     </View>
                   </View>
+                  
+                  {/* View Couple Dashboard Button */}
+                  <TouchableOpacity 
+                    style={styles.viewCoupleDashboardButton}
+                    onPress={() => {
+                      setShowDetailModal(false);
+                      router.push(`/admin/user-dashboard?coupleId=${selectedCouple.coupleId}` as any);
+                    }}
+                  >
+                    <Ionicons name="analytics-outline" size={18} color="#fff" />
+                    <Text style={styles.viewCoupleDashboardText}>View Couple Dashboard</Text>
+                  </TouchableOpacity>
+                  
                   <View style={styles.enrollmentInfo}>
                     <Ionicons name="calendar" size={16} color={COLORS.textMuted} />
                     <Text style={styles.enrollmentText}>Enrolled: {coupleDetails.enrollmentDate}</Text>
@@ -1493,6 +1505,38 @@ const styles = StyleSheet.create({
   infoStatusText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  viewDashboardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: COLORS.primary + '10',
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  viewDashboardText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  viewCoupleDashboardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+  },
+  viewCoupleDashboardText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
   logStatusSection: {
     marginBottom: 20,

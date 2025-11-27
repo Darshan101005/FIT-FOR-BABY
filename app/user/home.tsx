@@ -402,7 +402,7 @@ export default function UserHomeScreen() {
             </View>
 
             {/* Calories Burnt */}
-            <View style={[styles.activityCard, styles.activityCardFull, { backgroundColor: colors.cardBackground }]}>
+            <View style={[styles.activityCard, { backgroundColor: colors.cardBackground }]}>
               <View style={[styles.activityIconContainer, { backgroundColor: isDarkMode ? '#2d1f1f' : '#fee2e2' }]}>
                 <Ionicons name="flame" size={24} color="#ef4444" />
               </View>
@@ -414,6 +414,22 @@ export default function UserHomeScreen() {
                 <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>Calories Burnt</Text>
               </View>
             </View>
+
+            {/* Diet Recommendations */}
+            <TouchableOpacity 
+              style={[styles.activityCard, { backgroundColor: colors.cardBackground }]}
+              onPress={() => router.push('/user/diet-plan' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.activityIconContainer, { backgroundColor: isDarkMode ? '#2d2a1a' : '#fef3c7' }]}>
+                <MaterialCommunityIcons name="food-variant" size={24} color="#f59e0b" />
+              </View>
+              <View style={styles.activityInfo}>
+                <Text style={[styles.activityValue, { color: colors.text }]}>View</Text>
+                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>Diet Plan</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} style={styles.activityArrow} />
+            </TouchableOpacity>
           </View>
 
           {/* Today's Tip Card */}
@@ -915,5 +931,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 10,
+  },
+  activityArrow: {
+    marginLeft: 'auto',
   },
 });
