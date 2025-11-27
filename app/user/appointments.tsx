@@ -12,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -44,6 +45,8 @@ const MINUTES = ['00', '15', '30', '45'];
 export default function AppointmentsScreen() {
   const router = useRouter();
   const { user } = useApp();
+  const { width: screenWidth } = useWindowDimensions();
+  const isMobile = screenWidth < 768;
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -273,35 +276,38 @@ export default function AppointmentsScreen() {
         <View style={styles.daysGrid}>
           {days.map((day, index) => {
             const isPast = day !== null && isPastDate(day);
+            const isSelected = day !== null && isDateSelected(day);
             return (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.dayCell,
-                  day !== null && isDateSelected(day) ? styles.dayCellSelected : null,
-                ]}
-                onPress={() => day !== null && !isPast && handleDateSelect(day)}
-                disabled={day === null || isPast}
-              >
-                {day !== null && (
-                  <>
-                    <Text style={[
-                      styles.dayText,
-                      isDateSelected(day) ? styles.dayTextSelected : null,
-                      isToday(day) && !isDateSelected(day) ? styles.dayTextToday : null,
-                      isPast ? styles.dayTextPast : null,
-                    ]}>
-                      {day}
-                    </Text>
-                    {isToday(day) && !isDateSelected(day) && (
-                      <View style={styles.todayDot} />
-                    )}
-                    {hasAppointment(day) && !isToday(day) && !isPast && (
-                      <View style={styles.appointmentDot} />
-                    )}
-                  </>
-                )}
-              </TouchableOpacity>
+              <View key={index} style={[styles.dayCell, isMobile && styles.dayCellMobile]}>
+                <TouchableOpacity
+                  style={[
+                    styles.dayCellInner,
+                    isMobile && styles.dayCellInnerMobile,
+                    isSelected ? styles.dayCellSelected : null,
+                  ]}
+                  onPress={() => day !== null && !isPast && handleDateSelect(day)}
+                  disabled={day === null || isPast}
+                >
+                  {day !== null && (
+                    <View style={styles.dayCellContent}>
+                      <Text style={[
+                        styles.dayText,
+                        isSelected ? styles.dayTextSelected : null,
+                        isToday(day) && !isSelected ? styles.dayTextToday : null,
+                        isPast ? styles.dayTextPast : null,
+                      ]}>
+                        {day}
+                      </Text>
+                      {isToday(day) && !isSelected && (
+                        <View style={styles.todayDot} />
+                      )}
+                      {hasAppointment(day) && !isToday(day) && !isPast && (
+                        <View style={styles.appointmentDot} />
+                      )}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
             );
           })}
         </View>
@@ -756,11 +762,29 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
+  },
+  dayCellMobile: {
+    aspectRatio: undefined,
+    paddingVertical: 8,
+  },
+  dayCellInner: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+  },
+  dayCellInnerMobile: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+  },
+  dayCellContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dayCellSelected: {
     backgroundColor: '#006dab',
-    borderRadius: 10,
   },
   dayText: {
     fontSize: 14,
@@ -779,20 +803,18 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
   },
   todayDot: {
-    position: 'absolute',
-    bottom: 4,
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: '#98be4e',
+    marginTop: 2,
   },
   appointmentDot: {
-    position: 'absolute',
-    bottom: 4,
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: '#006dab',
+    marginTop: 2,
   },
   // Form
   formSection: {

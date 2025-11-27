@@ -14,6 +14,7 @@ import {
 interface TabItem {
   name: string;
   label: string;
+  mobileLabel?: string;
   icon: keyof typeof Ionicons.glyphMap;
   iconFilled: keyof typeof Ionicons.glyphMap;
   route: string;
@@ -37,6 +38,7 @@ const tabs: TabItem[] = [
   {
     name: 'appointments',
     label: 'Appointments',
+    mobileLabel: 'Schedule',
     icon: 'calendar-outline',
     iconFilled: 'calendar',
     route: '/user/appointments',
@@ -113,7 +115,7 @@ export default function BottomNavBar() {
                 { color: colors.textMuted },
                 active && { color: colors.primary, fontWeight: '600' }
               ]}>
-                {tab.label}
+                {isMobile && tab.mobileLabel ? tab.mobileLabel : tab.label}
               </Text>
               {active && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
             </TouchableOpacity>

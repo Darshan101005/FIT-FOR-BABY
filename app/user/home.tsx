@@ -22,11 +22,16 @@ const STEPS_STORAGE_KEY = '@fitforbaby_steps_today';
 const isWeb = Platform.OS === 'web';
 
 // Generate dates for selector (3 days before, today, 3 days after)
-const generateDates = () => {
+const generateDates = (isMobile: boolean = false) => {
   const dates = [];
   const today = new Date();
   
-  for (let i = -3; i <= 3; i++) {
+  // For mobile: show 3 past days + today (4 boxes total)
+  // For laptop: show 3 past + today + 3 future (7 boxes)
+  const startOffset = -3;
+  const endOffset = isMobile ? 0 : 3;
+  
+  for (let i = startOffset; i <= endOffset; i++) {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     dates.push({
@@ -52,7 +57,8 @@ export default function UserHomeScreen() {
   const [todayStepsFromStorage, setTodayStepsFromStorage] = useState(0);
   const sidebarAnim = useRef(new Animated.Value(300)).current;
   
-  const dates = generateDates();
+  const dates = generateDates(isMobile);
+  const todayIndex = isMobile ? 3 : 3; // Today is always at index 3
 
   // Load steps from AsyncStorage when screen comes into focus
   useFocusEffect(
