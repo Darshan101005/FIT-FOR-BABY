@@ -1,95 +1,146 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
-interface User {
+// Fit for Baby Color Palette
+const COLORS = {
+  primary: '#006dab',
+  primaryDark: '#005a8f',
+  primaryLight: '#0088d4',
+  accent: '#98be4e',
+  accentDark: '#7da33e',
+  success: '#22c55e',
+  warning: '#f59e0b',
+  error: '#ef4444',
+  info: '#3b82f6',
+  background: '#f8fafc',
+  surface: '#ffffff',
+  textPrimary: '#0f172a',
+  textSecondary: '#64748b',
+  textMuted: '#94a3b8',
+  border: '#e2e8f0',
+  borderLight: '#f1f5f9',
+};
+
+interface CoupleUser {
   id: string;
   name: string;
   email: string;
   phone: string;
-  gender: 'male' | 'female';
-  partner?: { id: string; name: string };
   status: 'active' | 'inactive' | 'pending';
-  joinDate: string;
   lastActive: string;
-  questionnaire: number;
-  weight: { current: number; start: number; target: number };
-  steps: { avg: number; target: number };
-  bmi: number;
-  appointments: number;
+  forceReset: boolean;
 }
 
-const mockUsers: User[] = [
+interface Couple {
+  id: string;
+  coupleId: string;
+  enrollmentDate: string;
+  status: 'active' | 'inactive';
+  male: CoupleUser;
+  female: CoupleUser;
+}
+
+// Mock couples data
+const mockCouples: Couple[] = [
   {
-    id: '1', name: 'John Doe', email: 'john@example.com', phone: '+91 98765 43210',
-    gender: 'male', partner: { id: '2', name: 'Sarah Doe' }, status: 'active',
-    joinDate: '2024-10-01', lastActive: '2024-11-25', questionnaire: 100,
-    weight: { current: 85, start: 92, target: 80 }, steps: { avg: 8500, target: 10000 },
-    bmi: 27.8, appointments: 4,
+    id: '1',
+    coupleId: 'C_001',
+    enrollmentDate: '2024-10-01',
+    status: 'active',
+    male: { id: 'C_001_M', name: 'John Doe', email: 'john@example.com', phone: '+91 98765 43210', status: 'active', lastActive: '2024-11-25', forceReset: false },
+    female: { id: 'C_001_F', name: 'Sarah Doe', email: 'sarah@example.com', phone: '+91 98765 43211', status: 'active', lastActive: '2024-11-25', forceReset: false },
   },
   {
-    id: '2', name: 'Sarah Doe', email: 'sarah@example.com', phone: '+91 98765 43211',
-    gender: 'female', partner: { id: '1', name: 'John Doe' }, status: 'active',
-    joinDate: '2024-10-01', lastActive: '2024-11-25', questionnaire: 100,
-    weight: { current: 78, start: 85, target: 70 }, steps: { avg: 9200, target: 10000 },
-    bmi: 28.4, appointments: 5,
+    id: '2',
+    coupleId: 'C_002',
+    enrollmentDate: '2024-10-15',
+    status: 'active',
+    male: { id: 'C_002_M', name: 'Raj Kumar', email: 'raj@example.com', phone: '+91 98765 43212', status: 'active', lastActive: '2024-11-24', forceReset: false },
+    female: { id: 'C_002_F', name: 'Priya Kumar', email: 'priya@example.com', phone: '+91 98765 43213', status: 'inactive', lastActive: '2024-11-10', forceReset: false },
   },
   {
-    id: '3', name: 'Raj Kumar', email: 'raj@example.com', phone: '+91 98765 43212',
-    gender: 'male', partner: { id: '4', name: 'Priya Kumar' }, status: 'active',
-    joinDate: '2024-10-15', lastActive: '2024-11-24', questionnaire: 100,
-    weight: { current: 95, start: 100, target: 85 }, steps: { avg: 6500, target: 10000 },
-    bmi: 32.1, appointments: 3,
+    id: '3',
+    coupleId: 'C_003',
+    enrollmentDate: '2024-11-01',
+    status: 'active',
+    male: { id: 'C_003_M', name: 'Anand M', email: 'anand@example.com', phone: '+91 98765 43214', status: 'pending', lastActive: '2024-11-20', forceReset: true },
+    female: { id: 'C_003_F', name: 'Meena S', email: 'meena@example.com', phone: '+91 98765 43215', status: 'pending', lastActive: '2024-11-22', forceReset: true },
   },
   {
-    id: '4', name: 'Priya Kumar', email: 'priya@example.com', phone: '+91 98765 43213',
-    gender: 'female', partner: { id: '3', name: 'Raj Kumar' }, status: 'inactive',
-    joinDate: '2024-10-15', lastActive: '2024-11-10', questionnaire: 75,
-    weight: { current: 72, start: 75, target: 65 }, steps: { avg: 4200, target: 10000 },
-    bmi: 26.8, appointments: 2,
+    id: '4',
+    coupleId: 'C_004',
+    enrollmentDate: '2024-11-10',
+    status: 'active',
+    male: { id: 'C_004_M', name: 'Vikram S', email: 'vikram@example.com', phone: '+91 98765 43216', status: 'active', lastActive: '2024-11-26', forceReset: false },
+    female: { id: 'C_004_F', name: 'Lakshmi V', email: 'lakshmi@example.com', phone: '+91 98765 43217', status: 'active', lastActive: '2024-11-26', forceReset: false },
   },
   {
-    id: '5', name: 'Anand M', email: 'anand@example.com', phone: '+91 98765 43214',
-    gender: 'male', status: 'pending',
-    joinDate: '2024-11-20', lastActive: '2024-11-20', questionnaire: 25,
-    weight: { current: 88, start: 88, target: 75 }, steps: { avg: 0, target: 10000 },
-    bmi: 29.3, appointments: 0,
-  },
-  {
-    id: '6', name: 'Meena S', email: 'meena@example.com', phone: '+91 98765 43215',
-    gender: 'female', status: 'pending',
-    joinDate: '2024-11-22', lastActive: '2024-11-22', questionnaire: 50,
-    weight: { current: 68, start: 68, target: 58 }, steps: { avg: 0, target: 10000 },
-    bmi: 25.4, appointments: 0,
+    id: '5',
+    coupleId: 'C_005',
+    enrollmentDate: '2024-11-15',
+    status: 'inactive',
+    male: { id: 'C_005_M', name: 'Suresh R', email: 'suresh@example.com', phone: '+91 98765 43218', status: 'inactive', lastActive: '2024-11-05', forceReset: false },
+    female: { id: 'C_005_F', name: 'Geetha R', email: 'geetha@example.com', phone: '+91 98765 43219', status: 'inactive', lastActive: '2024-11-05', forceReset: false },
   },
 ];
 
+// Generate next couple ID
+const generateNextCoupleId = () => {
+  const maxId = mockCouples.reduce((max, couple) => {
+    const num = parseInt(couple.coupleId.split('_')[1]);
+    return num > max ? num : max;
+  }, 0);
+  return `C_${String(maxId + 1).padStart(3, '0')}`;
+};
+
 export default function AdminUsersScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const toastAnim = useRef(new Animated.Value(-100)).current;
 
+  // State
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'pending'>('all');
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [expandedCouples, setExpandedCouples] = useState<string[]>([]);
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [enrollStep, setEnrollStep] = useState<1 | 2>(1);
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
+
+  // Enrollment form state
+  const [enrollForm, setEnrollForm] = useState({
+    coupleId: generateNextCoupleId(),
+    enrollmentDate: new Date().toISOString().split('T')[0],
+    maleName: '',
+    maleEmail: '',
+    malePhone: '',
+    femaleName: '',
+    femaleEmail: '',
+    femalePhone: '',
+  });
+
+  // Check for action param to open enrollment modal
+  useEffect(() => {
+    if (params.action === 'enroll') {
+      setShowEnrollModal(true);
+    }
+  }, [params.action]);
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -100,475 +151,1075 @@ export default function AdminUsersScreen() {
     }, 2500);
   };
 
-  const filteredUsers = mockUsers.filter((user) => {
-    const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          user.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || user.status === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return '#22c55e';
-      case 'inactive': return '#f59e0b';
-      case 'pending': return '#64748b';
-      default: return '#64748b';
-    }
-  };
-
-  const handleSendReminder = (user: User) => {
-    setModalVisible(false);
-    showToast(`Reminder sent to ${user.name}`, 'success');
-  };
-
-  const handlePairUsers = () => {
-    showToast('User pairing feature coming soon', 'success');
-  };
-
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <Ionicons name="arrow-back" size={24} color="#0f172a" />
-      </TouchableOpacity>
-      <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>User Management</Text>
-        <Text style={styles.headerSubtitle}>{mockUsers.length} total users</Text>
-      </View>
-      <TouchableOpacity style={styles.addButton}>
-        <Ionicons name="add" size={24} color="#fff" />
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderStats = () => (
-    <View style={styles.statsRow}>
-      <View style={[styles.statCard, { backgroundColor: '#dcfce7' }]}>
-        <Text style={[styles.statValue, { color: '#16a34a' }]}>
-          {mockUsers.filter(u => u.status === 'active').length}
-        </Text>
-        <Text style={styles.statLabel}>Active</Text>
-      </View>
-      <View style={[styles.statCard, { backgroundColor: '#fef3c7' }]}>
-        <Text style={[styles.statValue, { color: '#d97706' }]}>
-          {mockUsers.filter(u => u.status === 'inactive').length}
-        </Text>
-        <Text style={styles.statLabel}>Inactive</Text>
-      </View>
-      <View style={[styles.statCard, { backgroundColor: '#f1f5f9' }]}>
-        <Text style={[styles.statValue, { color: '#64748b' }]}>
-          {mockUsers.filter(u => u.status === 'pending').length}
-        </Text>
-        <Text style={styles.statLabel}>Pending</Text>
-      </View>
-      <View style={[styles.statCard, { backgroundColor: '#fee2e2' }]}>
-        <Text style={[styles.statValue, { color: '#ef4444' }]}>
-          {mockUsers.filter(u => !u.partner).length}
-        </Text>
-        <Text style={styles.statLabel}>Unpaired</Text>
-      </View>
-    </View>
-  );
-
-  const renderSearch = () => (
-    <View style={styles.searchSection}>
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color="#64748b" />
-        <TextInput
-          style={styles.searchInput}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search by name or email..."
-          placeholderTextColor="#94a3b8"
-        />
-        {searchQuery && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#94a3b8" />
-          </TouchableOpacity>
-        )}
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-        {(['all', 'active', 'inactive', 'pending'] as const).map((status) => (
-          <TouchableOpacity
-            key={status}
-            style={[styles.filterChip, filterStatus === status && styles.filterChipActive]}
-            onPress={() => setFilterStatus(status)}
-          >
-            <Text style={[styles.filterChipText, filterStatus === status && styles.filterChipTextActive]}>
-              {status === 'all' ? 'All Users' : status.charAt(0).toUpperCase() + status.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
-
-  const renderUserCard = (user: User) => (
-    <TouchableOpacity
-      key={user.id}
-      style={styles.userCard}
-      onPress={() => { setSelectedUser(user); setModalVisible(true); }}
-    >
-      <View style={styles.userCardHeader}>
-        <View style={styles.userAvatar}>
-          <Text style={styles.userAvatarText}>
-            {user.name.split(' ').map(n => n[0]).join('')}
-          </Text>
-          <View style={[styles.statusDot, { backgroundColor: getStatusColor(user.status) }]} />
-        </View>
-        <View style={styles.userMainInfo}>
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
-          {user.partner ? (
-            <View style={styles.partnerTag}>
-              <Ionicons name="heart" size={12} color="#ef4444" />
-              <Text style={styles.partnerText}>{user.partner.name}</Text>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.pairButton} onPress={handlePairUsers}>
-              <Ionicons name="link" size={12} color="#006dab" />
-              <Text style={styles.pairButtonText}>Pair User</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(user.status) + '20' }]}>
-          <Text style={[styles.statusText, { color: getStatusColor(user.status) }]}>
-            {user.status}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.userMetrics}>
-        <View style={styles.metricItem}>
-          <MaterialCommunityIcons name="scale-bathroom" size={16} color="#64748b" />
-          <Text style={styles.metricValue}>{user.weight.current} kg</Text>
-          <Text style={[styles.metricChange, { color: '#22c55e' }]}>
-            -{(user.weight.start - user.weight.current).toFixed(1)}
-          </Text>
-        </View>
-        <View style={styles.metricItem}>
-          <MaterialCommunityIcons name="walk" size={16} color="#64748b" />
-          <Text style={styles.metricValue}>{(user.steps.avg / 1000).toFixed(1)}k</Text>
-          <Text style={styles.metricLabel}>avg</Text>
-        </View>
-        <View style={styles.metricItem}>
-          <MaterialCommunityIcons name="clipboard-check" size={16} color="#64748b" />
-          <Text style={styles.metricValue}>{user.questionnaire}%</Text>
-        </View>
-        <View style={styles.metricItem}>
-          <MaterialCommunityIcons name="calendar-check" size={16} color="#64748b" />
-          <Text style={styles.metricValue}>{user.appointments}</Text>
-        </View>
-      </View>
-
-      <View style={styles.userCardFooter}>
-        <Text style={styles.lastActive}>
-          Last active: {new Date(user.lastActive).toLocaleDateString()}
-        </Text>
-        <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderUserModal = () => {
-    if (!selectedUser) return null;
-
-    return (
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>User Details</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalClose}>
-                <Ionicons name="close" size={24} color="#64748b" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.modalProfile}>
-                <View style={styles.modalAvatar}>
-                  <Text style={styles.modalAvatarText}>
-                    {selectedUser.name.split(' ').map(n => n[0]).join('')}
-                  </Text>
-                </View>
-                <Text style={styles.modalName}>{selectedUser.name}</Text>
-                <Text style={styles.modalEmail}>{selectedUser.email}</Text>
-                <View style={[styles.statusBadgeLarge, { backgroundColor: getStatusColor(selectedUser.status) + '20' }]}>
-                  <Text style={[styles.statusTextLarge, { color: getStatusColor(selectedUser.status) }]}>
-                    {selectedUser.status}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>Contact Info</Text>
-                <View style={styles.modalRow}>
-                  <Ionicons name="mail-outline" size={18} color="#64748b" />
-                  <Text style={styles.modalRowText}>{selectedUser.email}</Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Ionicons name="call-outline" size={18} color="#64748b" />
-                  <Text style={styles.modalRowText}>{selectedUser.phone}</Text>
-                </View>
-              </View>
-
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>Health Metrics</Text>
-                <View style={styles.metricsGrid}>
-                  <View style={styles.metricBox}>
-                    <Text style={styles.metricBoxValue}>{selectedUser.weight.current}</Text>
-                    <Text style={styles.metricBoxLabel}>Current (kg)</Text>
-                  </View>
-                  <View style={styles.metricBox}>
-                    <Text style={styles.metricBoxValue}>{selectedUser.weight.target}</Text>
-                    <Text style={styles.metricBoxLabel}>Target (kg)</Text>
-                  </View>
-                  <View style={styles.metricBox}>
-                    <Text style={[styles.metricBoxValue, { color: '#22c55e' }]}>
-                      -{(selectedUser.weight.start - selectedUser.weight.current).toFixed(1)}
-                    </Text>
-                    <Text style={styles.metricBoxLabel}>Lost (kg)</Text>
-                  </View>
-                  <View style={styles.metricBox}>
-                    <Text style={styles.metricBoxValue}>{selectedUser.bmi}</Text>
-                    <Text style={styles.metricBoxLabel}>BMI</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>Progress</Text>
-                <View style={styles.progressItem}>
-                  <Text style={styles.progressLabel}>Questionnaire</Text>
-                  <View style={styles.progressBar}>
-                    <View style={[styles.progressFill, { width: `${selectedUser.questionnaire}%` }]} />
-                  </View>
-                  <Text style={styles.progressValue}>{selectedUser.questionnaire}%</Text>
-                </View>
-                <View style={styles.progressItem}>
-                  <Text style={styles.progressLabel}>Steps Goal</Text>
-                  <View style={styles.progressBar}>
-                    <View style={[styles.progressFill, { width: `${Math.min((selectedUser.steps.avg / selectedUser.steps.target) * 100, 100)}%`, backgroundColor: '#f59e0b' }]} />
-                  </View>
-                  <Text style={styles.progressValue}>{Math.round((selectedUser.steps.avg / selectedUser.steps.target) * 100)}%</Text>
-                </View>
-              </View>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Ionicons name="chatbubble-outline" size={20} color="#006dab" />
-                  <Text style={styles.actionButtonText}>Message</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton} onPress={() => handleSendReminder(selectedUser)}>
-                  <Ionicons name="notifications-outline" size={20} color="#f59e0b" />
-                  <Text style={styles.actionButtonText}>Remind</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Ionicons name="flag-outline" size={20} color="#22c55e" />
-                  <Text style={styles.actionButtonText}>Set Goals</Text>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity style={styles.viewFullButton}>
-                <LinearGradient colors={['#006dab', '#005a8f']} style={styles.viewFullGradient}>
-                  <Text style={styles.viewFullText}>View Full Profile</Text>
-                  <Ionicons name="arrow-forward" size={18} color="#fff" />
-                </LinearGradient>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+  const toggleCoupleExpand = (coupleId: string) => {
+    setExpandedCouples(prev =>
+      prev.includes(coupleId)
+        ? prev.filter(id => id !== coupleId)
+        : [...prev, coupleId]
     );
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return COLORS.success;
+      case 'inactive': return COLORS.warning;
+      case 'pending': return COLORS.textMuted;
+      default: return COLORS.textMuted;
+    }
+  };
+
+  const filteredCouples = mockCouples.filter(couple => {
+    const matchesSearch = 
+      couple.coupleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      couple.male.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      couple.female.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      couple.male.phone.includes(searchQuery);
+    
+    const matchesStatus = filterStatus === 'all' || 
+      couple.male.status === filterStatus || 
+      couple.female.status === filterStatus;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const handleEnrollSubmit = () => {
+    if (enrollStep === 1) {
+      setEnrollStep(2);
+    } else {
+      // Validate and submit
+      if (!enrollForm.maleName || !enrollForm.maleEmail || !enrollForm.femaleName || !enrollForm.femaleEmail) {
+        showToast('Please fill all required fields', 'error');
+        return;
+      }
+      // Submit enrollment
+      showToast(`Couple ${enrollForm.coupleId} enrolled successfully!`, 'success');
+      setShowEnrollModal(false);
+      setEnrollStep(1);
+      setEnrollForm({
+        ...enrollForm,
+        coupleId: generateNextCoupleId(),
+        maleName: '',
+        maleEmail: '',
+        malePhone: '',
+        femaleName: '',
+        femaleEmail: '',
+        femalePhone: '',
+      });
+    }
+  };
+
+  const handleUserAction = (action: 'edit' | 'reset' | 'toggle', userId: string) => {
+    switch (action) {
+      case 'edit':
+        showToast(`Edit profile for ${userId}`, 'success');
+        break;
+      case 'reset':
+        showToast(`Password reset email sent to ${userId}`, 'success');
+        break;
+      case 'toggle':
+        showToast(`Status toggled for ${userId}`, 'success');
+        break;
+    }
+  };
+
+  // Header with search
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <View style={styles.headerTop}>
+        <View>
+          <Text style={styles.headerTitle}>User Management</Text>
+          <Text style={styles.headerSubtitle}>{mockCouples.length} couples enrolled</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => setShowEnrollModal(true)}
+        >
+          <Ionicons name="add" size={20} color="#fff" />
+          <Text style={styles.addButtonText}>Add New Couple</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color={COLORS.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by Name, Couple ID, or Phone..."
+            placeholderTextColor={COLORS.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery !== '' && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Filters */}
+      <View style={styles.filtersContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.filterGroup}>
+            <Text style={styles.filterLabel}>Status:</Text>
+            {(['all', 'active', 'inactive', 'pending'] as const).map(status => (
+              <TouchableOpacity
+                key={status}
+                style={[styles.filterChip, filterStatus === status && styles.filterChipActive]}
+                onPress={() => setFilterStatus(status)}
+              >
+                <Text style={[styles.filterChipText, filterStatus === status && styles.filterChipTextActive]}>
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+        </ScrollView>
+      </View>
+    </View>
+  );
+
+  // Couple Row (Expandable)
+  const renderCoupleRow = (couple: Couple) => {
+    const isExpanded = expandedCouples.includes(couple.id);
+
+    return (
+      <View key={couple.id} style={styles.coupleContainer}>
+        {/* Couple Header Row */}
+        <TouchableOpacity
+          style={styles.coupleRow}
+          onPress={() => toggleCoupleExpand(couple.id)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.coupleAvatars}>
+            <View style={[styles.avatar, { backgroundColor: COLORS.primary }]}>
+              <Ionicons name="male" size={16} color="#fff" />
+            </View>
+            <View style={[styles.avatar, { backgroundColor: COLORS.accent, marginLeft: -12 }]}>
+              <Ionicons name="female" size={16} color="#fff" />
+            </View>
+          </View>
+
+          <View style={styles.coupleInfo}>
+            <View style={styles.coupleIdRow}>
+              <Text style={styles.coupleId}>{couple.coupleId}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(couple.status) + '20' }]}>
+                <Text style={[styles.statusText, { color: getStatusColor(couple.status) }]}>
+                  {couple.status}
+                </Text>
+              </View>
+
+            </View>
+            <Text style={styles.coupleNames}>
+              {couple.male.name} & {couple.female.name}
+            </Text>
+            <Text style={styles.enrollmentDate}>Enrolled: {couple.enrollmentDate}</Text>
+          </View>
+
+          <Ionicons
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color={COLORS.textMuted}
+          />
+        </TouchableOpacity>
+
+        {/* Expanded User Details */}
+        {isExpanded && (
+          <View style={styles.expandedContent}>
+            {/* Male User */}
+            <View style={styles.userCard}>
+              <View style={styles.userCardHeader}>
+                <View style={[styles.genderIcon, { backgroundColor: COLORS.primary + '15' }]}>
+                  <Ionicons name="male" size={18} color={COLORS.primary} />
+                </View>
+                <View style={styles.userIdContainer}>
+                  <Text style={styles.userId}>{couple.male.id}</Text>
+                  <View style={[styles.miniStatusBadge, { backgroundColor: getStatusColor(couple.male.status) }]} />
+                </View>
+              </View>
+              
+              <View style={styles.userDetails}>
+                <View style={styles.userDetailRow}>
+                  <Ionicons name="person" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.userDetailText}>{couple.male.name}</Text>
+                </View>
+                <View style={styles.userDetailRow}>
+                  <Ionicons name="mail" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.userDetailText}>{couple.male.email}</Text>
+                </View>
+                <View style={styles.userDetailRow}>
+                  <Ionicons name="call" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.userDetailText}>{couple.male.phone}</Text>
+                </View>
+                <View style={styles.userDetailRow}>
+                  <Ionicons name="time" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.userDetailText}>Last active: {couple.male.lastActive}</Text>
+                </View>
+              </View>
+
+              <View style={styles.userActions}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUserAction('edit', couple.male.id)}
+                >
+                  <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.primary }]}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUserAction('reset', couple.male.id)}
+                >
+                  <Ionicons name="key-outline" size={16} color={COLORS.warning} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.warning }]}>Reset Password</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUserAction('toggle', couple.male.id)}
+                >
+                  <Ionicons name={couple.male.status === 'active' ? 'pause-circle-outline' : 'play-circle-outline'} size={16} color={couple.male.status === 'active' ? COLORS.error : COLORS.success} />
+                  <Text style={[styles.actionButtonText, { color: couple.male.status === 'active' ? COLORS.error : COLORS.success }]}>
+                    {couple.male.status === 'active' ? 'Deactivate' : 'Activate'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Female User */}
+            <View style={styles.userCard}>
+              <View style={styles.userCardHeader}>
+                <View style={[styles.genderIcon, { backgroundColor: COLORS.accent + '20' }]}>
+                  <Ionicons name="female" size={18} color={COLORS.accentDark} />
+                </View>
+                <View style={styles.userIdContainer}>
+                  <Text style={styles.userId}>{couple.female.id}</Text>
+                  <View style={[styles.miniStatusBadge, { backgroundColor: getStatusColor(couple.female.status) }]} />
+                </View>
+              </View>
+              
+              <View style={styles.userDetails}>
+                <View style={styles.userDetailRow}>
+                  <Ionicons name="person" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.userDetailText}>{couple.female.name}</Text>
+                </View>
+                <View style={styles.userDetailRow}>
+                  <Ionicons name="mail" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.userDetailText}>{couple.female.email}</Text>
+                </View>
+                <View style={styles.userDetailRow}>
+                  <Ionicons name="call" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.userDetailText}>{couple.female.phone}</Text>
+                </View>
+                <View style={styles.userDetailRow}>
+                  <Ionicons name="time" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.userDetailText}>Last active: {couple.female.lastActive}</Text>
+                </View>
+              </View>
+
+              <View style={styles.userActions}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUserAction('edit', couple.female.id)}
+                >
+                  <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.primary }]}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUserAction('reset', couple.female.id)}
+                >
+                  <Ionicons name="key-outline" size={16} color={COLORS.warning} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.warning }]}>Reset Password</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUserAction('toggle', couple.female.id)}
+                >
+                  <Ionicons name={couple.female.status === 'active' ? 'pause-circle-outline' : 'play-circle-outline'} size={16} color={couple.female.status === 'active' ? COLORS.error : COLORS.success} />
+                  <Text style={[styles.actionButtonText, { color: couple.female.status === 'active' ? COLORS.error : COLORS.success }]}>
+                    {couple.female.status === 'active' ? 'Deactivate' : 'Activate'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  // Enrollment Modal
+  const renderEnrollmentModal = () => (
+    <Modal
+      visible={showEnrollModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowEnrollModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, isMobile && styles.modalContentMobile]}>
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <View>
+              <Text style={styles.modalTitle}>Enroll New Couple</Text>
+              <Text style={styles.modalSubtitle}>Step {enrollStep} of 2</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowEnrollModal(false)}>
+              <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Progress Indicator */}
+          <View style={styles.progressContainer}>
+            <View style={[styles.progressStep, styles.progressStepActive]}>
+              <Text style={styles.progressStepText}>1</Text>
+            </View>
+            <View style={[styles.progressLine, enrollStep === 2 && styles.progressLineActive]} />
+            <View style={[styles.progressStep, enrollStep === 2 && styles.progressStepActive]}>
+              <Text style={[styles.progressStepText, enrollStep !== 2 && styles.progressStepTextInactive]}>2</Text>
+            </View>
+          </View>
+
+          <ScrollView style={styles.modalBody}>
+            {enrollStep === 1 ? (
+              // Step 1: Couple Profile
+              <View style={styles.formSection}>
+                <Text style={styles.formSectionTitle}>Couple Profile</Text>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Couple ID</Text>
+                  <View style={styles.readOnlyInput}>
+                    <Text style={styles.readOnlyText}>{enrollForm.coupleId}</Text>
+                    <Text style={styles.autoGenLabel}>Auto-generated</Text>
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Enrollment Date</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={enrollForm.enrollmentDate}
+                    onChangeText={(text) => setEnrollForm({ ...enrollForm, enrollmentDate: text })}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={COLORS.textMuted}
+                  />
+                </View>
+              </View>
+            ) : (
+              // Step 2: Individual Accounts
+              <View style={styles.formSection}>
+                {/* Male Account */}
+                <View style={styles.accountSection}>
+                  <View style={styles.accountHeader}>
+                    <View style={[styles.genderIcon, { backgroundColor: COLORS.primary + '15' }]}>
+                      <Ionicons name="male" size={18} color={COLORS.primary} />
+                    </View>
+                    <View>
+                      <Text style={styles.accountTitle}>Male Account</Text>
+                      <Text style={styles.accountId}>{enrollForm.coupleId}_M</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Full Name *</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.maleName}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, maleName: text })}
+                      placeholder="Enter full name"
+                      placeholderTextColor={COLORS.textMuted}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Email *</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.maleEmail}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, maleEmail: text })}
+                      placeholder="Enter email address"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="email-address"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Phone Number</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.malePhone}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, malePhone: text })}
+                      placeholder="Enter phone number"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+
+                  <View style={styles.passwordNote}>
+                    <Ionicons name="information-circle" size={16} color={COLORS.info} />
+                    <Text style={styles.passwordNoteText}>Temporary password will be auto-generated with Force Reset enabled</Text>
+                  </View>
+                </View>
+
+                {/* Female Account */}
+                <View style={styles.accountSection}>
+                  <View style={styles.accountHeader}>
+                    <View style={[styles.genderIcon, { backgroundColor: COLORS.accent + '20' }]}>
+                      <Ionicons name="female" size={18} color={COLORS.accentDark} />
+                    </View>
+                    <View>
+                      <Text style={styles.accountTitle}>Female Account</Text>
+                      <Text style={styles.accountId}>{enrollForm.coupleId}_F</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Full Name *</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.femaleName}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, femaleName: text })}
+                      placeholder="Enter full name"
+                      placeholderTextColor={COLORS.textMuted}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Email *</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.femaleEmail}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, femaleEmail: text })}
+                      placeholder="Enter email address"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="email-address"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Phone Number</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.femalePhone}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, femalePhone: text })}
+                      placeholder="Enter phone number"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+
+                  <View style={styles.passwordNote}>
+                    <Ionicons name="information-circle" size={16} color={COLORS.info} />
+                    <Text style={styles.passwordNoteText}>Temporary password will be auto-generated with Force Reset enabled</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Modal Footer */}
+          <View style={styles.modalFooter}>
+            {enrollStep === 2 && (
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => setEnrollStep(1)}
+              >
+                <Ionicons name="arrow-back" size={18} color={COLORS.textSecondary} />
+                <Text style={styles.backButtonText}>Back</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleEnrollSubmit}
+            >
+              <Text style={styles.submitButtonText}>
+                {enrollStep === 1 ? 'Continue' : 'Enroll Couple'}
+              </Text>
+              <Ionicons name={enrollStep === 1 ? 'arrow-forward' : 'checkmark'} size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Toast Component
+  const renderToast = () => (
+    <Animated.View
+      style={[
+        styles.toast,
+        { transform: [{ translateY: toastAnim }] },
+        toast.type === 'error' ? styles.toastError : styles.toastSuccess,
+      ]}
+    >
+      <Ionicons
+        name={toast.type === 'error' ? 'alert-circle' : 'checkmark-circle'}
+        size={20}
+        color="#fff"
+      />
+      <Text style={styles.toastText}>{toast.message}</Text>
+    </Animated.View>
+  );
+
   return (
     <View style={styles.container}>
-      {toast.visible && (
-        <Animated.View style={[styles.toast, toast.type === 'error' ? styles.toastError : styles.toastSuccess, { transform: [{ translateY: toastAnim }] }]}>
-          <View style={styles.toastContent}>
-            <Text style={styles.toastIcon}>{toast.type === 'error' ? '✗' : '✓'}</Text>
-            <Text style={styles.toastText}>{toast.message}</Text>
-          </View>
-        </Animated.View>
-      )}
-
       {renderHeader()}
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.content}>
-          {renderStats()}
-          {renderSearch()}
-
-          <Text style={styles.resultCount}>
-            Showing {filteredUsers.length} of {mockUsers.length} users
-          </Text>
-
-          {filteredUsers.map(renderUserCard)}
+      
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.content, !isMobile && styles.contentDesktop]}>
+          {filteredCouples.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="people-outline" size={64} color={COLORS.textMuted} />
+              <Text style={styles.emptyTitle}>No couples found</Text>
+              <Text style={styles.emptySubtitle}>Try adjusting your search or filters</Text>
+            </View>
+          ) : (
+            filteredCouples.map(renderCoupleRow)
+          )}
         </View>
       </ScrollView>
 
-      {renderUserModal()}
+      {renderEnrollmentModal()}
+      {toast.visible && renderToast()}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  toast: {
-    position: 'absolute', top: 0, left: isWeb ? undefined : 16, right: isWeb ? 20 : 16, zIndex: 1000,
-    backgroundColor: '#ffffff', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12,
-    elevation: 8, maxWidth: isWeb ? 320 : undefined, borderLeftWidth: 4,
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
   },
-  toastError: { borderLeftColor: '#ef4444' },
-  toastSuccess: { borderLeftColor: '#98be4e' },
-  toastContent: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  toastIcon: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
-  toastText: { color: '#1e293b', fontSize: 14, fontWeight: '600', flex: 1 },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 100,
+  },
+  scrollContentDesktop: {
+    paddingBottom: 40,
+  },
+  content: {
+    padding: 16,
+  },
+  contentDesktop: {
+    padding: 24,
+    maxWidth: 1200,
+    alignSelf: 'center',
+    width: '100%',
+  },
+
+  // Header Styles
   header: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff',
-    paddingTop: isWeb ? 20 : 50, paddingBottom: 16, paddingHorizontal: 20,
-    borderBottomWidth: 1, borderBottomColor: '#e2e8f0',
+    backgroundColor: COLORS.surface,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  backButton: {
-    width: 40, height: 40, borderRadius: 12, backgroundColor: '#f1f5f9',
-    alignItems: 'center', justifyContent: 'center',
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  headerCenter: { flex: 1, marginLeft: 16 },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  headerSubtitle: { fontSize: 13, color: '#64748b', marginTop: 2 },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
   addButton: {
-    width: 40, height: 40, borderRadius: 12, backgroundColor: '#006dab',
-    alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
   },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
-  content: { padding: isWeb ? 40 : 16, maxWidth: 900, width: '100%', alignSelf: 'center' },
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  statCard: {
-    flex: 1, padding: 14, borderRadius: 12, alignItems: 'center',
+  addButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
-  statValue: { fontSize: 24, fontWeight: '800' },
-  statLabel: { fontSize: 11, color: '#64748b', marginTop: 4 },
-  searchSection: { marginBottom: 20 },
+  searchContainer: {
+    marginBottom: 12,
+  },
   searchBar: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff',
-    borderRadius: 12, paddingHorizontal: 16, marginBottom: 12,
-    borderWidth: 1, borderColor: '#e2e8f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    gap: 10,
   },
-  searchInput: { flex: 1, paddingVertical: 14, marginLeft: 12, fontSize: 16, color: '#0f172a' },
-  filterScroll: { marginHorizontal: -16 },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  filtersContainer: {
+    marginTop: 4,
+  },
+  filterGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginRight: 4,
+  },
   filterChip: {
-    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: '#ffffff', marginHorizontal: 4,
-    borderWidth: 1, borderColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: COLORS.borderLight,
   },
-  filterChipActive: { backgroundColor: '#006dab', borderColor: '#006dab' },
-  filterChipText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  filterChipTextActive: { color: '#ffffff' },
-  resultCount: { fontSize: 13, color: '#64748b', marginBottom: 16 },
+  filterChipActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  filterChipTextActive: {
+    color: '#fff',
+  },
+  filterDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 12,
+  },
+
+  // Couple Row Styles
+  coupleContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    marginBottom: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  coupleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 14,
+  },
+  coupleAvatars: {
+    flexDirection: 'row',
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.surface,
+  },
+  coupleInfo: {
+    flex: 1,
+  },
+  coupleIdRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  coupleId: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  groupBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  groupText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  coupleNames: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  enrollmentDate: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+
+  // Expanded Content Styles
+  expandedContent: {
+    padding: 16,
+    paddingTop: 0,
+    gap: 12,
+  },
   userCard: {
-    backgroundColor: '#ffffff', borderRadius: 16, padding: 16, marginBottom: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04,
-    shadowRadius: 6, elevation: 1,
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 12,
+    padding: 14,
   },
-  userCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  userAvatar: {
-    width: 50, height: 50, borderRadius: 14, backgroundColor: '#f1f5f9',
-    alignItems: 'center', justifyContent: 'center', marginRight: 14, position: 'relative',
+  userCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
   },
-  userAvatarText: { fontSize: 16, fontWeight: '700', color: '#64748b' },
-  statusDot: {
-    position: 'absolute', bottom: 2, right: 2, width: 12, height: 12,
-    borderRadius: 6, borderWidth: 2, borderColor: '#ffffff',
+  genderIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  userMainInfo: { flex: 1 },
-  userName: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
-  userEmail: { fontSize: 13, color: '#64748b', marginTop: 2 },
-  partnerTag: {
-    flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4,
-    backgroundColor: '#fef2f2', paddingHorizontal: 8, paddingVertical: 2,
-    borderRadius: 6, alignSelf: 'flex-start',
+  userIdContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  partnerText: { fontSize: 11, color: '#ef4444', fontWeight: '600' },
-  pairButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4,
-    backgroundColor: '#eff6ff', paddingHorizontal: 8, paddingVertical: 2,
-    borderRadius: 6, alignSelf: 'flex-start',
+  userId: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
   },
-  pairButtonText: { fontSize: 11, color: '#006dab', fontWeight: '600' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  statusText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
-  userMetrics: {
-    flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12,
-    borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#f1f5f9',
+  miniStatusBadge: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  metricItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metricValue: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  metricChange: { fontSize: 12, fontWeight: '600' },
-  metricLabel: { fontSize: 11, color: '#94a3b8' },
-  userCardFooter: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginTop: 12,
+  userDetails: {
+    gap: 8,
+    marginBottom: 14,
   },
-  lastActive: { fontSize: 12, color: '#94a3b8' },
+  userDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  userDetailText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  userActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Modal Styles
   modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
-    backgroundColor: '#ffffff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 20, maxHeight: '85%',
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '90%',
+  },
+  modalContentMobile: {
+    maxHeight: '95%',
   },
   modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
-  modalClose: {
-    width: 36, height: 36, borderRadius: 10, backgroundColor: '#f1f5f9',
-    alignItems: 'center', justifyContent: 'center',
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
   },
-  modalProfile: { alignItems: 'center', marginBottom: 24 },
-  modalAvatar: {
-    width: 80, height: 80, borderRadius: 24, backgroundColor: '#006dab',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+  modalSubtitle: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
-  modalAvatarText: { fontSize: 28, fontWeight: '700', color: '#ffffff' },
-  modalName: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  modalEmail: { fontSize: 14, color: '#64748b', marginTop: 4 },
-  statusBadgeLarge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, marginTop: 12 },
-  statusTextLarge: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
-  modalSection: { marginBottom: 20 },
-  modalSectionTitle: { fontSize: 14, fontWeight: '700', color: '#64748b', marginBottom: 12 },
-  modalRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
-  modalRowText: { fontSize: 15, color: '#0f172a' },
-  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  metricBox: {
-    flex: 1, minWidth: '45%', backgroundColor: '#f8fafc', borderRadius: 12, padding: 14, alignItems: 'center',
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
   },
-  metricBoxValue: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
-  metricBoxLabel: { fontSize: 12, color: '#64748b', marginTop: 4 },
-  progressItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
-  progressLabel: { width: 100, fontSize: 13, color: '#64748b' },
-  progressBar: {
-    flex: 1, height: 8, backgroundColor: '#e2e8f0', borderRadius: 4, overflow: 'hidden',
+  progressStep: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  progressFill: { height: '100%', backgroundColor: '#22c55e', borderRadius: 4 },
-  progressValue: { width: 40, fontSize: 13, fontWeight: '600', color: '#0f172a', textAlign: 'right' },
-  modalActions: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  actionButton: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#f8fafc', padding: 12, borderRadius: 12, gap: 6,
+  progressStepActive: {
+    backgroundColor: COLORS.primary,
   },
-  actionButtonText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  viewFullButton: { borderRadius: 12, overflow: 'hidden' },
-  viewFullGradient: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 14, gap: 8,
+  progressStepText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
   },
-  viewFullText: { fontSize: 15, fontWeight: '700', color: '#ffffff' },
+  progressStepTextInactive: {
+    color: COLORS.textMuted,
+  },
+  progressLine: {
+    width: 60,
+    height: 3,
+    backgroundColor: COLORS.borderLight,
+    marginHorizontal: 8,
+  },
+  progressLineActive: {
+    backgroundColor: COLORS.primary,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  formSection: {
+    gap: 16,
+  },
+  formSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  inputGroup: {
+    marginBottom: 4,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  readOnlyInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  readOnlyText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  autoGenLabel: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  radioGroup: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  radioOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: COLORS.borderLight,
+    gap: 10,
+  },
+  radioOptionActive: {
+    backgroundColor: COLORS.primary + '15',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  radioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: COLORS.textMuted,
+  },
+  radioCircleActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
+  },
+  radioText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  radioTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  accountSection: {
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+  },
+  accountHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  accountTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  accountId: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  passwordNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.info + '10',
+    padding: 12,
+    borderRadius: 10,
+    gap: 8,
+    marginTop: 8,
+  },
+  passwordNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.info,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    gap: 12,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.borderLight,
+    gap: 6,
+  },
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  submitButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+
+  // Empty State
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+
+  // Toast
+  toast: {
+    position: 'absolute',
+    top: 0,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  toastSuccess: {
+    backgroundColor: COLORS.success,
+  },
+  toastError: {
+    backgroundColor: COLORS.error,
+  },
+  toastText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#fff',
+  },
 });

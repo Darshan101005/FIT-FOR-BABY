@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -71,7 +72,7 @@ export default function LoginScreen() {
     }, 3000);
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!email || !password) {
       showToast('Enter email and password', 'error');
       return;
@@ -81,22 +82,46 @@ export default function LoginScreen() {
       return;
     }
     setLoginState('loading');
-    setTimeout(() => {
-      // Check for admin login
-      if (password === 'admin123') {
-        setLoginState('success');
-        setTimeout(() => {
-          router.replace('/admin/home');
-        }, 800);
-      }
-      // Check for user login
-      else if (password === 'user123') {
-        setLoginState('success');
-        setTimeout(() => {
-          router.push('/verify-otp');
-        }, 800);
-      } else {
-        showToast('Incorrect password. Use: user123 or admin123', 'error');
+    
+    // Simulate network delay
+    setTimeout(async () => {
+      try {
+        // Check for super admin login
+        if (password === 'superadmin123') {
+          await AsyncStorage.setItem('isSuperAdmin', 'true');
+          await AsyncStorage.setItem('userRole', 'superadmin');
+          setLoginState('success');
+          showToast('Welcome Super Admin!', 'success');
+          setTimeout(() => {
+            router.replace('/admin/home');
+          }, 800);
+        }
+        // Check for admin login
+        else if (password === 'admin123') {
+          await AsyncStorage.setItem('isSuperAdmin', 'false');
+          await AsyncStorage.setItem('userRole', 'admin');
+          setLoginState('success');
+          showToast('Welcome Admin!', 'success');
+          setTimeout(() => {
+            router.replace('/admin/home');
+          }, 800);
+        }
+        // Check for user login
+        else if (password === 'user123') {
+          await AsyncStorage.setItem('isSuperAdmin', 'false');
+          await AsyncStorage.setItem('userRole', 'user');
+          setLoginState('success');
+          showToast('OTP sent to your phone', 'success');
+          setTimeout(() => {
+            router.push('/verify-otp');
+          }, 800);
+        } else {
+          showToast('Incorrect password', 'error');
+          setLoginState('idle');
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        showToast('Login failed. Please try again.', 'error');
         setLoginState('idle');
       }
     }, 1500);

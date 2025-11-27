@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -31,15 +32,23 @@ export default function AdminLogin() {
 
     setLoading(true);
 
-    // Demo/Mock login - accept admin123 password
-    setTimeout(() => {
-      if (password === 'admin123') {
+    // Demo/Mock login - accept admin123 or superadmin123 password
+    setTimeout(async () => {
+      if (password === 'superadmin123') {
+        // Super Admin login
+        await AsyncStorage.setItem('isSuperAdmin', 'true');
+        setLoading(false);
+        Alert.alert('Success', 'Welcome Super Admin!');
+        router.replace('/admin/home');
+      } else if (password === 'admin123') {
+        // Regular Admin login
+        await AsyncStorage.setItem('isSuperAdmin', 'false');
         setLoading(false);
         Alert.alert('Success', 'Welcome Admin!');
         router.replace('/admin/home');
       } else {
         setLoading(false);
-        Alert.alert('Login Failed', 'Incorrect password. Use: admin123');
+        Alert.alert('Login Failed', 'Incorrect password.');
       }
     }, 1000);
   };

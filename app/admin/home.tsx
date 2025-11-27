@@ -1,13 +1,14 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions
@@ -15,365 +16,357 @@ import {
 
 const isWeb = Platform.OS === 'web';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  partner?: string;
-  status: 'active' | 'inactive' | 'pending';
-  joinDate: string;
-  lastActive: string;
-  questionnaire: number;
-  weight: { current: number; start: number; target: number };
-  steps: { avg: number; target: number };
-}
+// Fit for Baby Color Palette
+const COLORS = {
+  primary: '#006dab',
+  primaryDark: '#005a8f',
+  primaryLight: '#0088d4',
+  accent: '#98be4e',
+  accentDark: '#7da33e',
+  success: '#22c55e',
+  warning: '#f59e0b',
+  error: '#ef4444',
+  info: '#3b82f6',
+  background: '#f8fafc',
+  surface: '#ffffff',
+  textPrimary: '#0f172a',
+  textSecondary: '#64748b',
+  textMuted: '#94a3b8',
+  border: '#e2e8f0',
+  borderLight: '#f1f5f9',
+};
 
-const mockUsers: User[] = [
-  {
-    id: '1',
-    name: 'John Doe',
-    email: 'john@example.com',
-    partner: 'Sarah Doe',
-    status: 'active',
-    joinDate: '2024-10-01',
-    lastActive: '2024-11-25',
-    questionnaire: 100,
-    weight: { current: 85, start: 92, target: 80 },
-    steps: { avg: 8500, target: 10000 },
-  },
-  {
-    id: '2',
-    name: 'Sarah Doe',
-    email: 'sarah@example.com',
-    partner: 'John Doe',
-    status: 'active',
-    joinDate: '2024-10-01',
-    lastActive: '2024-11-25',
-    questionnaire: 100,
-    weight: { current: 78, start: 85, target: 70 },
-    steps: { avg: 9200, target: 10000 },
-  },
-  {
-    id: '3',
-    name: 'Raj Kumar',
-    email: 'raj@example.com',
-    partner: 'Priya Kumar',
-    status: 'active',
-    joinDate: '2024-10-15',
-    lastActive: '2024-11-24',
-    questionnaire: 100,
-    weight: { current: 95, start: 100, target: 85 },
-    steps: { avg: 6500, target: 10000 },
-  },
-  {
-    id: '4',
-    name: 'Priya Kumar',
-    email: 'priya@example.com',
-    partner: 'Raj Kumar',
-    status: 'inactive',
-    joinDate: '2024-10-15',
-    lastActive: '2024-11-10',
-    questionnaire: 75,
-    weight: { current: 72, start: 75, target: 65 },
-    steps: { avg: 4200, target: 10000 },
-  },
-  {
-    id: '5',
-    name: 'Anand M',
-    email: 'anand@example.com',
-    status: 'pending',
-    joinDate: '2024-11-20',
-    lastActive: '2024-11-20',
-    questionnaire: 25,
-    weight: { current: 88, start: 88, target: 75 },
-    steps: { avg: 0, target: 10000 },
-  },
+// Mock data for dashboard
+const dashboardData = {
+  totalCouples: 62,
+  totalUsers: 124,
+  studyGroup: 35,
+  controlGroup: 27,
+  todayCompliance: 78,
+  logsNotCompletedCount: 8,
+};
+
+// Mock logs not completed couples data
+const logsNotCompletedCouples = [
+  { id: 'C_012', maleName: 'Raj Kumar', femaleName: 'Priya Kumar', lastLog: '3 days ago', reason: 'No diet log' },
+  { id: 'C_008', maleName: 'Vikram S', femaleName: 'Lakshmi V', lastLog: '4 days ago', reason: 'Missing steps' },
+  { id: 'C_023', maleName: 'Anand M', femaleName: 'Meena S', lastLog: '2 days ago', reason: 'Incomplete exercise' },
+  { id: 'C_015', maleName: 'Suresh R', femaleName: 'Geetha R', lastLog: '5 days ago', reason: 'No weight update' },
 ];
 
-const dashboardStats = {
-  totalUsers: 124,
-  activeUsers: 98,
-  avgWeightLoss: 4.2,
-  avgStepsPerDay: 7850,
-  appointmentsToday: 8,
-  pendingQuestionnaires: 12,
-};
+// Quick Action Cards Data
+const quickActions = [
+  {
+    id: 'add-users',
+    title: 'Add New Users',
+    subtitle: 'Enroll new couple',
+    icon: 'person-add',
+    iconFamily: 'Ionicons',
+    colors: ['#006dab', '#0088d4'] as [string, string],
+    route: '/admin/users?action=enroll',
+  },
+  {
+    id: 'view-users',
+    title: 'View Existing Users',
+    subtitle: 'Manage user profiles',
+    icon: 'people',
+    iconFamily: 'Ionicons',
+    colors: ['#98be4e', '#7da33e'] as [string, string],
+    route: '/admin/users',
+  },
+  {
+    id: 'upload-task',
+    title: 'Upload Daily Task',
+    subtitle: 'Set goals & content',
+    icon: 'cloud-upload',
+    iconFamily: 'Ionicons',
+    colors: ['#f59e0b', '#d97706'] as [string, string],
+    route: '/admin/tasks',
+  },
+  {
+    id: 'task-status',
+    title: 'Task Completion',
+    subtitle: 'View compliance status',
+    icon: 'checkmark-done-circle',
+    iconFamily: 'Ionicons',
+    colors: ['#8b5cf6', '#7c3aed'] as [string, string],
+    route: '/admin/monitoring',
+  },
+];
 
 export default function AdminHomeScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
+  const isTablet = screenWidth >= 768 && screenWidth < 1024;
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'pending'>('all');
+  useEffect(() => {
+    checkSuperAdminStatus();
+  }, []);
 
-  const filteredUsers = mockUsers.filter((user) => {
-    const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          user.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || user.status === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return '#22c55e';
-      case 'inactive': return '#f59e0b';
-      case 'pending': return '#64748b';
-      default: return '#64748b';
+  const checkSuperAdminStatus = async () => {
+    try {
+      const superAdminFlag = await AsyncStorage.getItem('isSuperAdmin');
+      setIsSuperAdmin(superAdminFlag === 'true');
+    } catch (error) {
+      console.error('Error checking super admin status:', error);
     }
   };
 
+  const handleQuickAction = (route: string) => {
+    router.push(route as any);
+  };
+
+  // Header Section
   const renderHeader = () => (
     <View style={styles.header}>
-      <View style={styles.headerLeft}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#0f172a" />
-        </TouchableOpacity>
-        <View>
-          <Text style={styles.headerTitle}>Admin Dashboard</Text>
-          <Text style={styles.headerSubtitle}>Manage users & monitor progress</Text>
-        </View>
+      <View>
+        <Text style={styles.greeting}>Welcome back,</Text>
+        <Text style={styles.userName}>{isSuperAdmin ? 'Super Admin' : 'Nursing Researcher'}</Text>
       </View>
       <View style={styles.headerRight}>
-        <TouchableOpacity style={styles.headerButton}>
-          <Ionicons name="notifications-outline" size={22} color="#0f172a" />
-          <View style={styles.notificationBadge}>
-            <Text style={styles.badgeText}>3</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.adminAvatar}>
-          <Text style={styles.adminAvatarText}>AD</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const renderStatCards = () => (
-    <View style={styles.statsContainer}>
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <LinearGradient colors={['#006dab', '#005a8f']} style={styles.statGradient}>
-            <MaterialCommunityIcons name="account-group" size={28} color="#fff" />
-            <Text style={styles.statValue}>{dashboardStats.totalUsers}</Text>
-            <Text style={styles.statLabel}>Total Users</Text>
-          </LinearGradient>
-        </View>
-        <View style={styles.statCard}>
-          <LinearGradient colors={['#22c55e', '#16a34a']} style={styles.statGradient}>
-            <MaterialCommunityIcons name="account-check" size={28} color="#fff" />
-            <Text style={styles.statValue}>{dashboardStats.activeUsers}</Text>
-            <Text style={styles.statLabel}>Active Users</Text>
-          </LinearGradient>
-        </View>
-      </View>
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <LinearGradient colors={['#f59e0b', '#d97706']} style={styles.statGradient}>
-            <MaterialCommunityIcons name="scale-bathroom" size={28} color="#fff" />
-            <Text style={styles.statValue}>{dashboardStats.avgWeightLoss} kg</Text>
-            <Text style={styles.statLabel}>Avg Weight Loss</Text>
-          </LinearGradient>
-        </View>
-        <View style={styles.statCard}>
-          <LinearGradient colors={['#8b5cf6', '#7c3aed']} style={styles.statGradient}>
-            <MaterialCommunityIcons name="walk" size={28} color="#fff" />
-            <Text style={styles.statValue}>{(dashboardStats.avgStepsPerDay / 1000).toFixed(1)}k</Text>
-            <Text style={styles.statLabel}>Avg Steps/Day</Text>
-          </LinearGradient>
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderQuickActions = () => (
-    <View style={styles.quickActionsSection}>
-      <Text style={styles.sectionTitle}>Quick Actions</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActionsScroll}>
-        <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/admin/users' as any)}>
-          <View style={[styles.quickActionIcon, { backgroundColor: '#dbeafe' }]}>
-            <Ionicons name="people" size={24} color="#3b82f6" />
-          </View>
-          <Text style={styles.quickActionLabel}>Manage Users</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/admin/goals' as any)}>
-          <View style={[styles.quickActionIcon, { backgroundColor: '#dcfce7' }]}>
-            <Ionicons name="flag" size={24} color="#22c55e" />
-          </View>
-          <Text style={styles.quickActionLabel}>Set Goals</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/admin/reports' as any)}>
-          <View style={[styles.quickActionIcon, { backgroundColor: '#fef3c7' }]}>
-            <Ionicons name="stats-chart" size={24} color="#f59e0b" />
-          </View>
-          <Text style={styles.quickActionLabel}>View Reports</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickAction}>
-          <View style={[styles.quickActionIcon, { backgroundColor: '#ede9fe' }]}>
-            <Ionicons name="download" size={24} color="#8b5cf6" />
-          </View>
-          <Text style={styles.quickActionLabel}>Export Data</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickAction}>
-          <View style={[styles.quickActionIcon, { backgroundColor: '#fee2e2' }]}>
-            <Ionicons name="calendar" size={24} color="#ef4444" />
-          </View>
-          <Text style={styles.quickActionLabel}>Appointments</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
-  );
-
-  const renderSearchAndFilter = () => (
-    <View style={styles.searchSection}>
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color="#64748b" />
-        <TextInput
-          style={styles.searchInput}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search users..."
-          placeholderTextColor="#94a3b8"
-        />
-        {searchQuery && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#94a3b8" />
+        {isSuperAdmin && (
+          <TouchableOpacity 
+            style={styles.superAdminButton}
+            onPress={() => router.push('/admin/manage-admins' as any)}
+          >
+            <Ionicons name="shield-checkmark" size={18} color="#fff" />
+            {!isMobile && <Text style={styles.superAdminButtonText}>Manage Admins</Text>}
           </TouchableOpacity>
         )}
+        <TouchableOpacity style={styles.headerButton}>
+          <Ionicons name="search" size={22} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerButton}>
+          <Ionicons name="notifications-outline" size={22} color={COLORS.textSecondary} />
+          <View style={styles.notificationDot} />
+        </TouchableOpacity>
       </View>
-      <View style={styles.filterTabs}>
-        {(['all', 'active', 'inactive', 'pending'] as const).map((status) => (
+    </View>
+  );
+
+  // Quick Actions Section (4 prominent cards)
+  const renderQuickActions = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Quick Actions</Text>
+      <View style={[styles.quickActionsGrid, isMobile && styles.quickActionsGridMobile]}>
+        {quickActions.map((action) => (
           <TouchableOpacity
-            key={status}
-            style={[styles.filterTab, filterStatus === status && styles.filterTabActive]}
-            onPress={() => setFilterStatus(status)}
+            key={action.id}
+            style={[styles.quickActionCard, isMobile && styles.quickActionCardMobile]}
+            onPress={() => handleQuickAction(action.route)}
+            activeOpacity={0.85}
           >
-            <Text style={[styles.filterTabText, filterStatus === status && styles.filterTabTextActive]}>
-              {status.charAt(0).toUpperCase() + status.slice(1)}
-            </Text>
+            <LinearGradient
+              colors={action.colors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.quickActionGradient}
+            >
+              <View style={styles.quickActionIcon}>
+                <Ionicons name={action.icon as any} size={28} color="#fff" />
+              </View>
+              <View style={styles.quickActionContent}>
+                <Text style={styles.quickActionTitle}>{action.title}</Text>
+                <Text style={styles.quickActionSubtitle}>{action.subtitle}</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={20} color="rgba(255,255,255,0.8)" />
+            </LinearGradient>
           </TouchableOpacity>
         ))}
       </View>
     </View>
   );
 
-  const renderUsersList = () => (
-    <View style={styles.usersSection}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Users ({filteredUsers.length})</Text>
-        <TouchableOpacity style={styles.viewAllButton} onPress={() => router.push('/admin/users' as any)}>
-          <Text style={styles.viewAllText}>View All</Text>
-          <Ionicons name="arrow-forward" size={16} color="#006dab" />
-        </TouchableOpacity>
+  // Stats Overview Section
+  const renderStatsOverview = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Study Overview</Text>
+      <View style={[styles.statsGrid, isMobile && styles.statsGridMobile]}>
+        <View style={styles.statCard}>
+          <View style={[styles.statIconBg, { backgroundColor: COLORS.primary + '15' }]}>
+            <MaterialCommunityIcons name="account-group" size={24} color={COLORS.primary} />
+          </View>
+          <Text style={styles.statValue}>{dashboardData.totalCouples}</Text>
+          <Text style={styles.statLabel}>Total Couples</Text>
+          <Text style={styles.statSubLabel}>{dashboardData.totalUsers} Users</Text>
+        </View>
+        
+        <View style={styles.statCard}>
+          <View style={[styles.statIconBg, { backgroundColor: COLORS.accent + '25' }]}>
+            <MaterialCommunityIcons name="flask" size={24} color={COLORS.accentDark} />
+          </View>
+          <Text style={styles.statValue}>{dashboardData.studyGroup}</Text>
+          <Text style={styles.statLabel}>Study Group</Text>
+          <Text style={styles.statSubLabel}>{dashboardData.controlGroup} Control</Text>
+        </View>
+        
+        <View style={styles.statCard}>
+          <View style={[styles.statIconBg, { backgroundColor: COLORS.success + '15' }]}>
+            <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
+          </View>
+          <Text style={styles.statValue}>{dashboardData.todayCompliance}%</Text>
+          <Text style={styles.statLabel}>Today's Compliance</Text>
+          <Text style={styles.statSubLabel}>Logs completed</Text>
+        </View>
+        
+        <View style={styles.statCard}>
+          <View style={[styles.statIconBg, { backgroundColor: COLORS.error + '15' }]}>
+            <Ionicons name="alert-circle" size={24} color={COLORS.error} />
+          </View>
+          <Text style={styles.statValue}>{dashboardData.logsNotCompletedCount}</Text>
+          <Text style={styles.statLabel}>Logs Pending</Text>
+          <Text style={styles.statSubLabel}>Need attention</Text>
+        </View>
       </View>
-
-      {filteredUsers.map((user) => (
-        <TouchableOpacity key={user.id} style={styles.userCard}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.userAvatarText}>
-              {user.name.split(' ').map(n => n[0]).join('')}
-            </Text>
-            <View style={[styles.statusDot, { backgroundColor: getStatusColor(user.status) }]} />
-          </View>
-          <View style={styles.userInfo}>
-            <View style={styles.userHeader}>
-              <Text style={styles.userName}>{user.name}</Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(user.status) + '20' }]}>
-                <Text style={[styles.statusText, { color: getStatusColor(user.status) }]}>
-                  {user.status}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.userEmail}>{user.email}</Text>
-            {user.partner && (
-              <View style={styles.partnerBadge}>
-                <Ionicons name="heart" size={12} color="#ef4444" />
-                <Text style={styles.partnerName}>Paired with {user.partner}</Text>
-              </View>
-            )}
-            <View style={styles.userStats}>
-              <View style={styles.userStat}>
-                <MaterialCommunityIcons name="scale-bathroom" size={14} color="#64748b" />
-                <Text style={styles.userStatText}>
-                  -{(user.weight.start - user.weight.current).toFixed(1)} kg
-                </Text>
-              </View>
-              <View style={styles.userStat}>
-                <MaterialCommunityIcons name="walk" size={14} color="#64748b" />
-                <Text style={styles.userStatText}>
-                  {(user.steps.avg / 1000).toFixed(1)}k avg
-                </Text>
-              </View>
-              <View style={styles.userStat}>
-                <MaterialCommunityIcons name="clipboard-check" size={14} color="#64748b" />
-                <Text style={styles.userStatText}>{user.questionnaire}%</Text>
-              </View>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-        </TouchableOpacity>
-      ))}
     </View>
   );
 
-  const renderAlerts = () => (
-    <View style={styles.alertsSection}>
-      <Text style={styles.sectionTitle}>Alerts & Notifications</Text>
+  // Today's Compliance Snapshot
+  const renderComplianceSnapshot = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Today's Compliance Snapshot</Text>
+        <TouchableOpacity onPress={() => router.push('/admin/monitoring' as any)}>
+          <Text style={styles.viewAllLink}>View All</Text>
+        </TouchableOpacity>
+      </View>
       
-      <View style={styles.alertCard}>
-        <View style={[styles.alertIcon, { backgroundColor: '#fee2e2' }]}>
-          <Ionicons name="warning" size={20} color="#ef4444" />
+      <View style={styles.complianceCard}>
+        <View style={styles.complianceChart}>
+          {/* Simple Donut Chart Representation */}
+          <View style={styles.donutContainer}>
+            <View style={styles.donutOuter}>
+              <View style={[
+                styles.donutProgress,
+                { 
+                  borderTopColor: COLORS.success,
+                  borderRightColor: COLORS.success,
+                  borderBottomColor: dashboardData.todayCompliance > 75 ? COLORS.success : COLORS.borderLight,
+                  borderLeftColor: dashboardData.todayCompliance > 50 ? COLORS.success : COLORS.borderLight,
+                  transform: [{ rotate: '45deg' }],
+                }
+              ]} />
+              <View style={styles.donutInner}>
+                <Text style={styles.donutValue}>{dashboardData.todayCompliance}%</Text>
+                <Text style={styles.donutLabel}>Complete</Text>
+              </View>
+            </View>
+          </View>
         </View>
-        <View style={styles.alertContent}>
-          <Text style={styles.alertTitle}>12 users haven't logged in 7+ days</Text>
-          <Text style={styles.alertTime}>Requires attention</Text>
+        
+        <View style={styles.complianceBreakdown}>
+          <View style={styles.complianceItem}>
+            <View style={[styles.complianceIndicator, { backgroundColor: COLORS.success }]} />
+            <Text style={styles.complianceItemLabel}>Steps Logged</Text>
+            <Text style={styles.complianceItemValue}>85%</Text>
+          </View>
+          <View style={styles.complianceItem}>
+            <View style={[styles.complianceIndicator, { backgroundColor: COLORS.info }]} />
+            <Text style={styles.complianceItemLabel}>Diet Logged</Text>
+            <Text style={styles.complianceItemValue}>72%</Text>
+          </View>
+          <View style={styles.complianceItem}>
+            <View style={[styles.complianceIndicator, { backgroundColor: COLORS.warning }]} />
+            <Text style={styles.complianceItemLabel}>Exercise Done</Text>
+            <Text style={styles.complianceItemValue}>68%</Text>
+          </View>
+          <View style={styles.complianceItem}>
+            <View style={[styles.complianceIndicator, { backgroundColor: COLORS.accent }]} />
+            <Text style={styles.complianceItemLabel}>Weight Updated</Text>
+            <Text style={styles.complianceItemValue}>45%</Text>
+          </View>
         </View>
-        <TouchableOpacity style={styles.alertAction}>
-          <Text style={styles.alertActionText}>View</Text>
-        </TouchableOpacity>
       </View>
+    </View>
+  );
 
-      <View style={styles.alertCard}>
-        <View style={[styles.alertIcon, { backgroundColor: '#fef3c7' }]}>
-          <Ionicons name="document-text" size={20} color="#f59e0b" />
+  // Logs Not Completed Section
+  const renderLogsNotCompleted = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionTitleRow}>
+          <Image 
+            source={require('../../assets/logos/logo-icon-alt.svg')} 
+            style={{ width: 24, height: 24 }} 
+          />
+          <Text style={styles.sectionTitle}>Logs Not Completed</Text>
+          <View style={styles.alertBadge}>
+            <Text style={styles.alertBadgeText}>{logsNotCompletedCouples.length}</Text>
+          </View>
         </View>
-        <View style={styles.alertContent}>
-          <Text style={styles.alertTitle}>{dashboardStats.pendingQuestionnaires} pending questionnaires</Text>
-          <Text style={styles.alertTime}>Users need reminders</Text>
-        </View>
-        <TouchableOpacity style={styles.alertAction}>
-          <Text style={styles.alertActionText}>Send</Text>
+        <TouchableOpacity onPress={() => router.push('/admin/users?filter=logs-pending' as any)}>
+          <Text style={styles.viewAllLink}>View All</Text>
         </TouchableOpacity>
       </View>
-
-      <View style={styles.alertCard}>
-        <View style={[styles.alertIcon, { backgroundColor: '#dbeafe' }]}>
-          <Ionicons name="calendar" size={20} color="#3b82f6" />
-        </View>
-        <View style={styles.alertContent}>
-          <Text style={styles.alertTitle}>{dashboardStats.appointmentsToday} appointments today</Text>
-          <Text style={styles.alertTime}>Next at 10:00 AM</Text>
-        </View>
-        <TouchableOpacity style={styles.alertAction}>
-          <Text style={styles.alertActionText}>View</Text>
-        </TouchableOpacity>
+      
+      <View style={styles.alertsContainer}>
+        {logsNotCompletedCouples.map((couple, index) => (
+          <TouchableOpacity
+            key={couple.id}
+            style={[
+              styles.alertCard,
+              index === logsNotCompletedCouples.length - 1 && styles.alertCardLast,
+            ]}
+            onPress={() => router.push(`/admin/users?couple=${couple.id}` as any)}
+          >
+            <View style={styles.alertLeft}>
+              <View style={styles.coupleAvatars}>
+                <View style={[styles.avatarSmall, { backgroundColor: COLORS.primary }]}>
+                  <Ionicons name="male" size={14} color="#fff" />
+                </View>
+                <View style={[styles.avatarSmall, { backgroundColor: COLORS.accent, marginLeft: -8 }]}>
+                  <Ionicons name="female" size={14} color="#fff" />
+                </View>
+              </View>
+              <View style={styles.alertInfo}>
+                <Text style={styles.alertCoupleId}>{couple.id}</Text>
+                <Text style={styles.alertNames} numberOfLines={1}>
+                  {couple.maleName} & {couple.femaleName}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.alertRight}>
+              <View style={styles.alertReasonBadge}>
+                <Text style={styles.alertReasonText}>{couple.reason}</Text>
+              </View>
+              <Text style={styles.alertTime}>{couple.lastLog}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+          </TouchableOpacity>
+        ))}
       </View>
+      
+      <TouchableOpacity style={styles.sendReminderButton}>
+        <Ionicons name="notifications" size={18} color="#fff" />
+        <Text style={styles.sendReminderText}>Send Reminder to All Pending</Text>
+      </TouchableOpacity>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      {renderHeader()}
-
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          !isMobile && styles.scrollContentDesktop,
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.content}>
-          {renderStatCards()}
+        <View style={[styles.content, !isMobile && styles.contentDesktop]}>
+          {renderHeader()}
           {renderQuickActions()}
-          {renderSearchAndFilter()}
-          {renderUsersList()}
-          {renderAlerts()}
+          {renderStatsOverview()}
+          
+          <View style={[styles.twoColumnSection, isMobile && styles.twoColumnSectionMobile]}>
+            <View style={[styles.columnLeft, isMobile && styles.columnFullWidth]}>
+              {renderComplianceSnapshot()}
+            </View>
+            <View style={[styles.columnRight, isMobile && styles.columnFullWidth]}>
+              {renderLogsNotCompleted()}
+            </View>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -383,80 +376,129 @@ export default function AdminHomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.background,
   },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 100,
+  },
+  scrollContentDesktop: {
+    paddingBottom: 40,
+  },
+  content: {
+    padding: 16,
+  },
+  contentDesktop: {
+    padding: 32,
+    maxWidth: 1400,
+    alignSelf: 'center',
+    width: '100%',
+  },
+
+  // Header Styles
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
-    paddingTop: isWeb ? 20 : 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  headerLeft: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    marginBottom: 24,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-    justifyContent: 'center',
+  greeting: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
   },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  headerSubtitle: { fontSize: 13, color: '#64748b', marginTop: 2 },
+  userName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginTop: 4,
+  },
   headerRight: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
+    alignItems: 'center',
+  },
+  superAdminButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  superAdminButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
   },
   headerButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  notificationBadge: {
+  notificationDot: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: '#ef4444',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    top: 10,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.error,
+  },
+
+  // Section Styles
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 16,
   },
-  badgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
-  adminAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#006dab',
+  sectionTitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
   },
-  adminAvatarText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
-  content: {
-    padding: isWeb ? 40 : 16,
-    maxWidth: 1200,
-    width: '100%',
-    alignSelf: 'center',
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
   },
-  statsContainer: { gap: 12, marginBottom: 24 },
-  statsRow: { flexDirection: 'row', gap: 12 },
-  statCard: {
+  viewAllLink: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+
+  // Quick Actions Styles
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 16,
+  },
+  quickActionsGridMobile: {
+    gap: 12,
+  },
+  quickActionCard: {
     flex: 1,
+    minWidth: 280,
     borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -464,173 +506,285 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    backgroundColor: 'transparent',
   },
-  statGradient: {
-    padding: 16,
-    alignItems: 'center',
+  quickActionCardMobile: {
+    minWidth: '100%',
   },
-  statValue: { fontSize: 28, fontWeight: '800', color: '#fff', marginTop: 8 },
-  statLabel: { fontSize: 12, color: 'rgba(255,255,255,0.9)', marginTop: 4 },
-  quickActionsSection: { marginBottom: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 16 },
-  quickActionsScroll: { marginHorizontal: -16 },
-  quickAction: {
+  quickActionGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 8,
-    width: 80,
+    padding: 20,
+    gap: 16,
+    flex: 1,
+    minHeight: 90,
   },
   quickActionIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
   },
-  quickActionLabel: { fontSize: 12, fontWeight: '600', color: '#64748b', textAlign: 'center' },
-  searchSection: { marginBottom: 24 },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  searchInput: {
+  quickActionContent: {
     flex: 1,
-    paddingVertical: 14,
-    marginLeft: 12,
+  },
+  quickActionTitle: {
     fontSize: 16,
-    color: '#0f172a',
+    fontWeight: '700',
+    color: '#fff',
   },
-  filterTabs: {
+  quickActionSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+
+  // Stats Styles
+  statsGrid: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 16,
   },
-  filterTab: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+  statsGridMobile: {
+    gap: 10,
   },
-  filterTabActive: {
-    backgroundColor: '#006dab',
-  },
-  filterTabText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  filterTabTextActive: { color: '#ffffff' },
-  usersSection: { marginBottom: 24 },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  viewAllText: { fontSize: 14, fontWeight: '600', color: '#006dab' },
-  userCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
+  statCard: {
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 1,
   },
-  userAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: '#f1f5f9',
+  statIconBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
-    position: 'relative',
+    marginBottom: 12,
   },
-  userAvatarText: { fontSize: 16, fontWeight: '700', color: '#64748b' },
-  statusDot: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#ffffff',
+  statValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
   },
-  userInfo: { flex: 1 },
-  userHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 2,
-  },
-  userName: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  userEmail: { fontSize: 13, color: '#64748b' },
-  partnerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  statLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
     marginTop: 4,
   },
-  partnerName: { fontSize: 11, color: '#94a3b8' },
-  userStats: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
+  statSubLabel: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
-  userStat: {
+
+  // Two Column Layout
+  twoColumnSection: {
+    flexDirection: 'row',
+    gap: 24,
+  },
+  twoColumnSectionMobile: {
+    flexDirection: 'column',
+  },
+  columnLeft: {
+    flex: 1,
+  },
+  columnRight: {
+    flex: 1,
+  },
+  columnFullWidth: {
+    flex: 'none' as any,
+    width: '100%',
+  },
+
+  // Compliance Snapshot Styles
+  complianceCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  complianceChart: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  donutContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  donutOuter: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  donutProgress: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 12,
+    borderColor: COLORS.borderLight,
+  },
+  donutInner: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  donutValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.success,
+  },
+  donutLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  complianceBreakdown: {
+    gap: 12,
+  },
+  complianceItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
   },
-  userStatText: { fontSize: 12, color: '#64748b' },
-  alertsSection: { marginBottom: 24 },
+  complianceIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 10,
+  },
+  complianceItemLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  complianceItemValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+
+  // At Risk Alerts Styles
+  alertBadge: {
+    backgroundColor: COLORS.error,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  alertBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  alertsContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
   alertCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
   },
-  alertIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  alertCardLast: {
+    borderBottomWidth: 0,
+  },
+  alertLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  coupleAvatars: {
+    flexDirection: 'row',
+  },
+  avatarSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    borderWidth: 2,
+    borderColor: COLORS.surface,
   },
-  alertContent: { flex: 1 },
-  alertTitle: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
-  alertTime: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  alertAction: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 8,
+  alertInfo: {
+    flex: 1,
   },
-  alertActionText: { fontSize: 13, fontWeight: '600', color: '#006dab' },
+  alertCoupleId: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  alertNames: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  alertRight: {
+    alignItems: 'flex-end',
+    marginRight: 8,
+  },
+  alertReasonBadge: {
+    backgroundColor: COLORS.error + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  alertReasonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.error,
+  },
+  alertTime: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 4,
+  },
+  sendReminderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 16,
+    gap: 8,
+  },
+  sendReminderText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
 });
