@@ -1,20 +1,21 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Linking,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -282,7 +283,21 @@ export default function MessagesScreen() {
         ) : (
           <>
             <View style={styles.chatHeaderInfo}>
-              <Text style={styles.avatarEmoji}>{selectedThread?.avatar}</Text>
+              {selectedThread?.type === 'counsellor' ? (
+                <Image 
+                  source={require('../../assets/images/nurse.png')} 
+                  style={styles.headerNurseImage}
+                  contentFit="cover"
+                />
+              ) : selectedThread?.type === 'support' ? (
+                <Image 
+                  source={require('../../assets/images/supporter.png')} 
+                  style={styles.headerNurseImage}
+                  contentFit="cover"
+                />
+              ) : (
+                <Text style={styles.avatarEmoji}>{selectedThread?.avatar}</Text>
+              )}
               <View>
                 <Text style={styles.headerTitle}>{selectedThread?.title}</Text>
                 <Text style={styles.onlineStatus}>
@@ -331,7 +346,21 @@ export default function MessagesScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.threadAvatar}>
-            <Text style={styles.avatarEmoji}>{thread.avatar}</Text>
+            {thread.type === 'counsellor' ? (
+              <Image 
+                source={require('../../assets/images/nurse.png')} 
+                style={styles.nurseAvatarImage}
+                contentFit="cover"
+              />
+            ) : thread.type === 'support' ? (
+              <Image 
+                source={require('../../assets/images/supporter.png')} 
+                style={styles.nurseAvatarImage}
+                contentFit="cover"
+              />
+            ) : (
+              <Text style={styles.avatarEmoji}>{thread.avatar}</Text>
+            )}
             {thread.unread > 0 && (
               <View style={styles.unreadBadge}>
                 <Text style={styles.unreadText}>{thread.unread}</Text>
@@ -695,6 +724,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
     position: 'relative',
+  },
+  nurseAvatarImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+  },
+  headerNurseImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    marginRight: 10,
   },
   unreadBadge: {
     position: 'absolute',
