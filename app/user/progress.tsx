@@ -1,17 +1,18 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -477,16 +478,24 @@ export default function ProgressScreen() {
         </View>
 
         <View style={styles.achievementCard}>
-          <View style={[styles.achievementBadge, { backgroundColor: '#e8f5d6' }]}>
-            <Text style={styles.achievementEmoji}>🏃</Text>
+          <View style={[styles.achievementBadge, { backgroundColor: '#e8f5d6', overflow: 'hidden' }]}>
+            <Image 
+              source={require('../../assets/images/run_male.jpg')} 
+              style={styles.coupleAchievementImage}
+              contentFit="cover"
+            />
           </View>
           <Text style={styles.achievementTitle}>10K Steps</Text>
           <Text style={styles.achievementDesc}>Reached goal 3 times</Text>
         </View>
 
         <View style={styles.achievementCard}>
-          <View style={[styles.achievementBadge, { backgroundColor: '#ede9fe' }]}>
-            <Text style={styles.achievementEmoji}>👫</Text>
+          <View style={[styles.achievementBadge, { backgroundColor: '#ede9fe', overflow: 'hidden' }]}>
+            <Image 
+              source={require('../../assets/images/couple.jpg')} 
+              style={styles.coupleAchievementImage}
+              contentFit="cover"
+            />
           </View>
           <Text style={styles.achievementTitle}>Partner Goals</Text>
           <Text style={styles.achievementDesc}>4 couple walks done</Text>
@@ -507,7 +516,14 @@ export default function ProgressScreen() {
     <View style={styles.coupleSection}>
       <View style={styles.coupleCard}>
         <View style={styles.coupleHeader}>
-          <Text style={styles.coupleTitle}>👫 Couple Journey</Text>
+          <View style={styles.coupleTitleRow}>
+            <Image 
+              source={require('../../assets/images/couple.jpg')} 
+              style={styles.coupleJourneyImage}
+              contentFit="cover"
+            />
+            <Text style={styles.coupleTitle}>Couple Journey</Text>
+          </View>
           <Text style={styles.coupleSubtitle}>8 weeks together</Text>
         </View>
         
@@ -845,6 +861,16 @@ const styles = StyleSheet.create({
     borderColor: '#ddd6fe',
   },
   coupleHeader: { marginBottom: 20 },
+  coupleTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  coupleJourneyImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
   coupleTitle: { fontSize: 20, fontWeight: '800', color: '#7c3aed' },
   coupleSubtitle: { fontSize: 14, color: '#8b5cf6', marginTop: 4 },
   coupleStats: {
@@ -884,6 +910,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   achievementEmoji: { fontSize: 26 },
+  coupleAchievementImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+  },
   achievementTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
   achievementDesc: { fontSize: 10, color: '#64748b', marginTop: 4, textAlign: 'center' },
 });

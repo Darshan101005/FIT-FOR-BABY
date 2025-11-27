@@ -1,9 +1,10 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   Animated,
   Platform,
@@ -12,10 +13,11 @@ import {
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
-  PanResponder,
+  useWindowDimensions
 } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
+
+const STEPS_STORAGE_KEY = '@fitforbaby_steps_today';
 
 const isWeb = Platform.OS === 'web';
 
@@ -47,9 +49,33 @@ export default function UserHomeScreen() {
   
   const [selectedDateIndex, setSelectedDateIndex] = useState(3); // Today is at index 3
   const [notificationSidebarVisible, setNotificationSidebarVisible] = useState(false);
+  const [todayStepsFromStorage, setTodayStepsFromStorage] = useState(0);
   const sidebarAnim = useRef(new Animated.Value(300)).current;
   
   const dates = generateDates();
+
+  // Load steps from AsyncStorage when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadStepsFromStorage = async () => {
+        try {
+          const savedData = await AsyncStorage.getItem(STEPS_STORAGE_KEY);
+          if (savedData) {
+            const parsed = JSON.parse(savedData);
+            const today = new Date().toDateString();
+            if (parsed.date === today && parsed.totalSteps) {
+              setTodayStepsFromStorage(parsed.totalSteps);
+            } else {
+              setTodayStepsFromStorage(0);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading steps:', error);
+        }
+      };
+      loadStepsFromStorage();
+    }, [])
+  );
 
   // Mock user data
   const userData = {
@@ -59,13 +85,23 @@ export default function UserHomeScreen() {
     unreadNotifications: 3,
   };
 
-  // Today's progress data
-  const todayProgress = {
-    steps: { current: 5499, target: 7000 },
-    exerciseMinutes: 45,
-    foodLogged: 3,
-    caloriesBurnt: 320,
+  // Progress data for different dates - uses stored steps for today
+  const getProgressDataForDate = (dateIndex: number) => {
+    // Generate different mock data based on date index
+    const dataByDate: { [key: number]: { steps: { current: number; target: number }; exerciseMinutes: number; foodLogged: number; caloriesBurnt: number } } = {
+      0: { steps: { current: 6200, target: 7000 }, exerciseMinutes: 60, foodLogged: 3, caloriesBurnt: 380 },
+      1: { steps: { current: 4800, target: 7000 }, exerciseMinutes: 30, foodLogged: 2, caloriesBurnt: 250 },
+      2: { steps: { current: 7100, target: 7000 }, exerciseMinutes: 55, foodLogged: 3, caloriesBurnt: 420 },
+      3: { steps: { current: todayStepsFromStorage, target: 7000 }, exerciseMinutes: 45, foodLogged: 3, caloriesBurnt: 320 }, // Today - uses stored steps
+      4: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 }, // Future
+      5: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 }, // Future
+      6: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 }, // Future
+    };
+    return dataByDate[dateIndex] || dataByDate[3];
   };
+
+  // Get progress data based on selected date
+  const todayProgress = getProgressDataForDate(selectedDateIndex);
 
   // Notifications data
   const notifications = [
@@ -73,6 +109,18 @@ export default function UserHomeScreen() {
     { id: 2, title: 'Reminder', message: 'Don\'t forget to log your lunch', time: '4h ago', type: 'reminder' },
     { id: 3, title: 'Weekly Report', message: 'Your weekly summary is ready', time: '1d ago', type: 'info' },
   ];
+
+  // Today's Tips data
+  const todaysTips = [
+    { id: 1, icon: 'water', color: '#06b6d4', tip: 'Stay hydrated! Drink at least 8 glasses of water today.' },
+    { id: 2, icon: 'walk', color: '#22c55e', tip: 'A 30-minute walk with your partner can boost your mood and health.' },
+    { id: 3, icon: 'nutrition', color: '#f59e0b', tip: 'Include more leafy greens and fruits in your meals today.' },
+    { id: 4, icon: 'bed', color: '#8b5cf6', tip: 'Aim for 7-8 hours of quality sleep for better fertility.' },
+    { id: 5, icon: 'heart', color: '#ef4444', tip: 'Practice deep breathing exercises to reduce stress levels.' },
+  ];
+
+  // Get a random tip based on the day
+  const dailyTip = todaysTips[new Date().getDate() % todaysTips.length];
 
   const stepsPercentage = Math.min((todayProgress.steps.current / todayProgress.steps.target) * 100, 100);
 
@@ -111,7 +159,9 @@ export default function UserHomeScreen() {
       day: 'numeric',
       year: 'numeric'
     };
-    return new Date().toLocaleDateString('en-US', options);
+    // Use the selected date from the date selector
+    const selectedDate = dates[selectedDateIndex]?.date || new Date();
+    return selectedDate.toLocaleDateString('en-US', options);
   };
 
   // Circular progress component
@@ -360,6 +410,20 @@ export default function UserHomeScreen() {
             </View>
           </View>
 
+          {/* Today's Tip Card */}
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Today's Tip</Text>
+          <View style={[styles.tipCard, { backgroundColor: colors.cardBackground }]}>
+            <View style={[styles.tipIconContainer, { backgroundColor: dailyTip.color + '20' }]}>
+              <Ionicons name={dailyTip.icon as any} size={28} color={dailyTip.color} />
+            </View>
+            <View style={styles.tipContent}>
+              <Text style={[styles.tipText, { color: colors.text }]}>{dailyTip.tip}</Text>
+            </View>
+            <View style={styles.tipBadge}>
+              <Ionicons name="bulb" size={16} color="#f59e0b" />
+            </View>
+          </View>
+
         </View>
       </ScrollView>
 
@@ -407,15 +471,16 @@ export default function UserHomeScreen() {
               </TouchableOpacity>
             </View>
           ))}
-        </ScrollView>
 
-        <TouchableOpacity 
-          style={[styles.clearAllButton, { borderTopColor: colors.border }]}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="trash-outline" size={18} color="#ef4444" />
-          <Text style={styles.clearAllText}>Clear All</Text>
-        </TouchableOpacity>
+          {/* Clear All Button - Below notifications */}
+          <TouchableOpacity 
+            style={styles.clearAllButton}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={18} color="#ef4444" />
+            <Text style={styles.clearAllText}>Clear All</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </Animated.View>
       
       {/* Bottom Navigation */}
@@ -675,6 +740,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+    marginBottom: 24,
   },
   activityCard: {
     flex: 1,
@@ -796,11 +862,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     padding: 16,
-    borderTopWidth: 1,
+    marginTop: 16,
+    marginHorizontal: 16,
+    marginBottom: 20,
+    backgroundColor: '#fee2e2',
+    borderRadius: 12,
   },
   clearAllText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#ef4444',
+  },
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  tipIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  tipContent: {
+    flex: 1,
+  },
+  tipText: {
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 22,
+  },
+  tipBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
   },
 });
