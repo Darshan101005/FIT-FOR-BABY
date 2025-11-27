@@ -3,15 +3,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
-  Animated,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    Image,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -21,6 +22,7 @@ interface ExerciseType {
   name: string;
   nameTamil: string;
   icon: string;
+  image: any;
   colors: [string, string];
   iconColor: string;
   caloriesPerMinute: number;
@@ -35,6 +37,7 @@ const exerciseTypes: ExerciseType[] = [
     name: 'Couple Walking',
     nameTamil: 'தம்பதிகள் நடைப்பயிற்சி',
     icon: 'walk',
+    image: require('../../assets/images/couple_walk.png'),
     colors: ['#dcfce7', '#bbf7d0'],
     iconColor: '#22c55e',
     caloriesPerMinute: 4,
@@ -46,6 +49,7 @@ const exerciseTypes: ExerciseType[] = [
     name: 'High Knees',
     nameTamil: 'ஹை நீஸ்',
     icon: 'run-fast',
+    image: require('../../assets/images/highknees.png'),
     colors: ['#fef3c7', '#fde68a'],
     iconColor: '#f59e0b',
     caloriesPerMinute: 8,
@@ -55,6 +59,7 @@ const exerciseTypes: ExerciseType[] = [
     name: 'Yoga/Pranayama',
     nameTamil: 'யோகா/பிராணாயாமா',
     icon: 'meditation',
+    image: require('../../assets/images/yoga.png'),
     colors: ['#ede9fe', '#ddd6fe'],
     iconColor: '#8b5cf6',
     caloriesPerMinute: 3,
@@ -64,6 +69,7 @@ const exerciseTypes: ExerciseType[] = [
     name: 'Strength Training',
     nameTamil: 'பலப்பயிற்சி',
     icon: 'dumbbell',
+    image: require('../../assets/images/strength_training.png'),
     colors: ['#fee2e2', '#fecaca'],
     iconColor: '#ef4444',
     caloriesPerMinute: 5,
@@ -73,6 +79,7 @@ const exerciseTypes: ExerciseType[] = [
     name: 'Swimming',
     nameTamil: 'நீச்சல்',
     icon: 'swim',
+    image: require('../../assets/images/swim.png'),
     colors: ['#cffafe', '#a5f3fc'],
     iconColor: '#06b6d4',
     caloriesPerMinute: 7,
@@ -82,6 +89,7 @@ const exerciseTypes: ExerciseType[] = [
     name: 'Cycling',
     nameTamil: 'சைக்கிள் ஓட்டுதல்',
     icon: 'bike',
+    image: require('../../assets/images/cycle.png'),
     colors: ['#dbeafe', '#bfdbfe'],
     iconColor: '#3b82f6',
     caloriesPerMinute: 6,
@@ -91,6 +99,7 @@ const exerciseTypes: ExerciseType[] = [
     name: 'Other Exercise',
     nameTamil: 'பிற உடற்பயிற்சி',
     icon: 'run',
+    image: require('../../assets/images/run_male.jpg'),
     colors: ['#f1f5f9', '#e2e8f0'],
     iconColor: '#64748b',
     caloriesPerMinute: 5,
@@ -209,7 +218,7 @@ export default function LogExerciseScreen() {
               colors={exercise.colors}
               style={styles.exerciseIconContainer}
             >
-              <MaterialCommunityIcons name={exercise.icon as any} size={32} color={exercise.iconColor} />
+              <Image source={exercise.image} style={styles.exerciseImage} resizeMode="cover" />
             </LinearGradient>
             <Text style={styles.exerciseLabel}>{exercise.name}</Text>
             <Text style={styles.exerciseLabelTamil}>{exercise.nameTamil}</Text>
@@ -236,7 +245,7 @@ export default function LogExerciseScreen() {
             colors={selectedExercise.colors}
             style={styles.selectedIcon}
           >
-            <MaterialCommunityIcons name={selectedExercise.icon as any} size={32} color={selectedExercise.iconColor} />
+            <Image source={selectedExercise.image} style={styles.selectedExerciseImage} resizeMode="cover" />
           </LinearGradient>
           <View>
             <Text style={styles.selectedName}>{selectedExercise.name}</Text>
@@ -472,7 +481,7 @@ export default function LogExerciseScreen() {
             colors={selectedExercise.colors}
             style={styles.summaryHeader}
           >
-            <MaterialCommunityIcons name={selectedExercise.icon as any} size={40} color={selectedExercise.iconColor} />
+            <Image source={selectedExercise.image} style={styles.summaryExerciseImage} resizeMode="cover" />
             <View style={styles.summaryHeaderText}>
               <Text style={[styles.summaryExerciseName, { color: selectedExercise.iconColor }]}>{selectedExercise.name}</Text>
               <Text style={[styles.summaryDuration, { color: selectedExercise.iconColor, opacity: 0.8 }]}>{duration} minutes • {intensityLabel}</Text>
@@ -661,6 +670,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
+    overflow: 'hidden',
+  },
+  exerciseImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
   },
   exerciseLabel: { fontSize: 14, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
   exerciseLabelTamil: { fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 2 },
@@ -687,6 +702,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  selectedExerciseImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
   },
   selectedName: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
   selectedNameTamil: { fontSize: 14, color: '#64748b', marginTop: 2 },
@@ -843,6 +864,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     gap: 16,
+  },
+  summaryExerciseImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
   },
   summaryHeaderText: { flex: 1 },
   summaryExerciseName: { fontSize: 20, fontWeight: '800', color: '#ffffff' },
