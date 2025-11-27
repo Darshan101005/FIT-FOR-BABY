@@ -359,7 +359,7 @@ export default function UserDashboardScreen() {
   const renderExerciseItem = (log: ExerciseLog, isMale: boolean) => {
     const iconInfo = getExerciseIcon(log.exerciseType);
     return (
-      <View key={`${isMale ? 'M' : 'F'}_${log.id}`} style={[styles.recentItem, { borderLeftWidth: 3, borderLeftColor: isMale ? COLORS.primary : '#e91e8c' }]}>
+      <View key={`${isMale ? 'M' : 'F'}_${log.id}`} style={styles.recentItem}>
         <View style={[styles.recentIcon, { backgroundColor: getIntensityColor(log.intensity) + '15' }]}>
           {iconInfo.family === 'MaterialCommunityIcons' ? (
             <MaterialCommunityIcons name={iconInfo.icon as any} size={20} color={getIntensityColor(log.intensity)} />
@@ -387,7 +387,7 @@ export default function UserDashboardScreen() {
 
   // Render meal item with user indicator
   const renderMealItem = (meal: MealLog, isMale: boolean) => (
-    <View key={`${isMale ? 'M' : 'F'}_${meal.id}`} style={[styles.recentItem, { borderLeftWidth: 3, borderLeftColor: isMale ? COLORS.primary : '#e91e8c' }]}>
+    <View key={`${isMale ? 'M' : 'F'}_${meal.id}`} style={styles.recentItem}>
       <View style={[styles.recentIcon, { backgroundColor: COLORS.accent + '15' }]}>
         <Ionicons name={getMealIcon(meal.mealType) as any} size={20} color={COLORS.accent} />
       </View>

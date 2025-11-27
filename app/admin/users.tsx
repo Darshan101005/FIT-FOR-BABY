@@ -59,6 +59,34 @@ interface Couple {
   female: CoupleUser;
 }
 
+// Mock appointments data for users
+interface UserAppointment {
+  id: string;
+  date: string;
+  time: string;
+  doctor: string;
+  purpose: string;
+  type: 'checkup' | 'consultation' | 'follow-up' | 'counseling';
+}
+
+const mockUserAppointments: Record<string, UserAppointment | null> = {
+  'C_001': { id: 'APT001', date: '2024-11-29', time: '10:00 AM', doctor: 'Dr. Priya Sharma', purpose: 'Monthly health checkup', type: 'checkup' },
+  'C_002': { id: 'APT002', date: '2024-11-29', time: '11:30 AM', doctor: 'Dr. Anita Reddy', purpose: 'Nutrition consultation', type: 'consultation' },
+  'C_003': { id: 'APT003', date: '2024-11-30', time: '09:00 AM', doctor: 'Dr. Vikram Singh', purpose: 'Follow-up on exercise plan', type: 'follow-up' },
+  'C_004': { id: 'APT004', date: '2024-11-30', time: '02:00 PM', doctor: 'Dr. Lakshmi N', purpose: 'Couple counseling session', type: 'counseling' },
+  'C_005': null,
+};
+
+const getAppointmentTypeColor = (type: string) => {
+  switch (type) {
+    case 'checkup': return COLORS.success;
+    case 'consultation': return COLORS.info;
+    case 'follow-up': return COLORS.warning;
+    case 'counseling': return COLORS.accent;
+    default: return COLORS.textMuted;
+  }
+};
+
 // Mock couples data
 const mockCouples: Couple[] = [
   {
@@ -66,40 +94,40 @@ const mockCouples: Couple[] = [
     coupleId: 'C_001',
     enrollmentDate: '2024-10-01',
     status: 'active',
-    male: { id: 'C_001_M', name: 'John Doe', email: 'john@example.com', phone: '+91 98765 43210', age: 32, weight: 75, height: 175, bmi: 24.5, status: 'active', lastActive: '2024-11-25', forceReset: false },
-    female: { id: 'C_001_F', name: 'Sarah Doe', email: 'sarah@example.com', phone: '+91 98765 43211', age: 28, weight: 58, height: 162, bmi: 22.1, status: 'active', lastActive: '2024-11-25', forceReset: false },
+    male: { id: 'C_001_M', name: 'John Doe', email: 'john@example.com', phone: '+91 98765 43210', age: 32, weight: 75, height: 175, bmi: 24.5, status: 'active', lastActive: '2024-11-25 09:45 AM', forceReset: false },
+    female: { id: 'C_001_F', name: 'Sarah Doe', email: 'sarah@example.com', phone: '+91 98765 43211', age: 28, weight: 58, height: 162, bmi: 22.1, status: 'active', lastActive: '2024-11-25 10:30 AM', forceReset: false },
   },
   {
     id: '2',
     coupleId: 'C_002',
     enrollmentDate: '2024-10-15',
     status: 'active',
-    male: { id: 'C_002_M', name: 'Raj Kumar', email: 'raj@example.com', phone: '+91 98765 43212', age: 30, weight: 70, height: 170, bmi: 24.2, status: 'active', lastActive: '2024-11-24', forceReset: false },
-    female: { id: 'C_002_F', name: 'Priya Kumar', email: 'priya@example.com', phone: '+91 98765 43213', age: 27, weight: 55, height: 158, bmi: 22.0, status: 'inactive', lastActive: '2024-11-10', forceReset: false },
+    male: { id: 'C_002_M', name: 'Raj Kumar', email: 'raj@example.com', phone: '+91 98765 43212', age: 30, weight: 70, height: 170, bmi: 24.2, status: 'active', lastActive: '2024-11-24 03:15 PM', forceReset: false },
+    female: { id: 'C_002_F', name: 'Priya Kumar', email: 'priya@example.com', phone: '+91 98765 43213', age: 27, weight: 55, height: 158, bmi: 22.0, status: 'inactive', lastActive: '2024-11-10 08:20 AM', forceReset: false },
   },
   {
     id: '3',
     coupleId: 'C_003',
     enrollmentDate: '2024-11-01',
     status: 'active',
-    male: { id: 'C_003_M', name: 'Anand M', email: 'anand@example.com', phone: '+91 98765 43214', age: 35, weight: 80, height: 178, bmi: 25.2, status: 'pending', lastActive: '2024-11-20', forceReset: true },
-    female: { id: 'C_003_F', name: 'Meena S', email: 'meena@example.com', phone: '+91 98765 43215', age: 31, weight: 62, height: 160, bmi: 24.2, status: 'pending', lastActive: '2024-11-22', forceReset: true },
+    male: { id: 'C_003_M', name: 'Anand M', email: 'anand@example.com', phone: '+91 98765 43214', age: 35, weight: 80, height: 178, bmi: 25.2, status: 'pending', lastActive: '2024-11-20 11:45 AM', forceReset: true },
+    female: { id: 'C_003_F', name: 'Meena S', email: 'meena@example.com', phone: '+91 98765 43215', age: 31, weight: 62, height: 160, bmi: 24.2, status: 'pending', lastActive: '2024-11-22 02:00 PM', forceReset: true },
   },
   {
     id: '4',
     coupleId: 'C_004',
     enrollmentDate: '2024-11-10',
     status: 'active',
-    male: { id: 'C_004_M', name: 'Vikram S', email: 'vikram@example.com', phone: '+91 98765 43216', age: 29, weight: 68, height: 172, bmi: 23.0, status: 'active', lastActive: '2024-11-26', forceReset: false },
-    female: { id: 'C_004_F', name: 'Lakshmi V', email: 'lakshmi@example.com', phone: '+91 98765 43217', age: 26, weight: 52, height: 155, bmi: 21.6, status: 'active', lastActive: '2024-11-26', forceReset: false },
+    male: { id: 'C_004_M', name: 'Vikram S', email: 'vikram@example.com', phone: '+91 98765 43216', age: 29, weight: 68, height: 172, bmi: 23.0, status: 'active', lastActive: '2024-11-26 06:30 PM', forceReset: false },
+    female: { id: 'C_004_F', name: 'Lakshmi V', email: 'lakshmi@example.com', phone: '+91 98765 43217', age: 26, weight: 52, height: 155, bmi: 21.6, status: 'active', lastActive: '2024-11-26 07:15 PM', forceReset: false },
   },
   {
     id: '5',
     coupleId: 'C_005',
     enrollmentDate: '2024-11-15',
     status: 'inactive',
-    male: { id: 'C_005_M', name: 'Suresh R', email: 'suresh@example.com', phone: '+91 98765 43218', age: 33, weight: 82, height: 180, bmi: 25.3, status: 'inactive', lastActive: '2024-11-05', forceReset: false },
-    female: { id: 'C_005_F', name: 'Geetha R', email: 'geetha@example.com', phone: '+91 98765 43219', age: 30, weight: 60, height: 165, bmi: 22.0, status: 'inactive', lastActive: '2024-11-05', forceReset: false },
+    male: { id: 'C_005_M', name: 'Suresh R', email: 'suresh@example.com', phone: '+91 98765 43218', age: 33, weight: 82, height: 180, bmi: 25.3, status: 'inactive', lastActive: '2024-11-05 04:45 PM', forceReset: false },
+    female: { id: 'C_005_F', name: 'Geetha R', email: 'geetha@example.com', phone: '+91 98765 43219', age: 30, weight: 60, height: 165, bmi: 22.0, status: 'inactive', lastActive: '2024-11-05 05:00 PM', forceReset: false },
   },
 ];
 
@@ -386,7 +414,7 @@ export default function AdminUsersScreen() {
                 </View>
                 <View style={styles.userDetailRow}>
                   <Ionicons name="time" size={14} color={COLORS.textMuted} />
-                  <Text style={styles.userDetailText}>Last active: {couple.male.lastActive}</Text>
+                  <Text style={styles.userDetailText}>Last Login: {couple.male.lastActive}</Text>
                 </View>
               </View>
 
@@ -411,7 +439,7 @@ export default function AdminUsersScreen() {
                 >
                   <Ionicons name={couple.male.status === 'active' ? 'pause-circle-outline' : 'play-circle-outline'} size={16} color={couple.male.status === 'active' ? COLORS.error : COLORS.success} />
                   <Text style={[styles.actionButtonText, { color: couple.male.status === 'active' ? COLORS.error : COLORS.success }]}>
-                    {couple.male.status === 'active' ? 'Deactivate' : 'Activate'}
+                    {couple.male.status === 'active' ? 'Delete' : 'Activate'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -467,7 +495,7 @@ export default function AdminUsersScreen() {
                 </View>
                 <View style={styles.userDetailRow}>
                   <Ionicons name="time" size={14} color={COLORS.textMuted} />
-                  <Text style={styles.userDetailText}>Last active: {couple.female.lastActive}</Text>
+                  <Text style={styles.userDetailText}>Last Login: {couple.female.lastActive}</Text>
                 </View>
               </View>
 
@@ -492,11 +520,56 @@ export default function AdminUsersScreen() {
                 >
                   <Ionicons name={couple.female.status === 'active' ? 'pause-circle-outline' : 'play-circle-outline'} size={16} color={couple.female.status === 'active' ? COLORS.error : COLORS.success} />
                   <Text style={[styles.actionButtonText, { color: couple.female.status === 'active' ? COLORS.error : COLORS.success }]}>
-                    {couple.female.status === 'active' ? 'Deactivate' : 'Activate'}
+                    {couple.female.status === 'active' ? 'Delete' : 'Activate'}
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Upcoming Appointment Section */}
+            {(() => {
+              const appointment = mockUserAppointments[couple.coupleId];
+              return (
+                <View style={styles.appointmentCard}>
+                  <View style={styles.appointmentHeader}>
+                    <Ionicons name="calendar" size={18} color={COLORS.primary} />
+                    <Text style={styles.appointmentTitle}>Upcoming Appointment</Text>
+                  </View>
+                  {appointment ? (
+                    <View style={styles.appointmentContent}>
+                      <View style={styles.appointmentRow}>
+                        <View style={styles.appointmentInfo}>
+                          <View style={styles.appointmentDateBadge}>
+                            <Ionicons name="time-outline" size={14} color={COLORS.primary} />
+                            <Text style={styles.appointmentDateText}>{appointment.date} at {appointment.time}</Text>
+                          </View>
+                          <View style={[styles.appointmentTypeBadge, { backgroundColor: getAppointmentTypeColor(appointment.type) + '15' }]}>
+                            <Text style={[styles.appointmentTypeText, { color: getAppointmentTypeColor(appointment.type) }]}>
+                              {appointment.type.charAt(0).toUpperCase() + appointment.type.slice(1)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={styles.appointmentDetailRow}>
+                        <Ionicons name="medkit" size={14} color={COLORS.accent} />
+                        <Text style={styles.appointmentDetailLabel}>Doctor:</Text>
+                        <Text style={styles.appointmentDetailValue}>{appointment.doctor}</Text>
+                      </View>
+                      <View style={styles.appointmentDetailRow}>
+                        <Ionicons name="document-text" size={14} color={COLORS.info} />
+                        <Text style={styles.appointmentDetailLabel}>Purpose:</Text>
+                        <Text style={styles.appointmentDetailValue}>{appointment.purpose}</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.noAppointmentContent}>
+                      <Ionicons name="calendar-outline" size={24} color={COLORS.textMuted} />
+                      <Text style={styles.noAppointmentText}>No upcoming appointments</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })()}
           </View>
         )}
       </View>
@@ -1048,6 +1121,94 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+
+  // Appointment Card Styles
+  appointmentCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  appointmentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  appointmentTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  appointmentContent: {
+    gap: 10,
+  },
+  appointmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  appointmentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  appointmentDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary + '10',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 4,
+  },
+  appointmentDateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  appointmentTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  appointmentTypeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  appointmentDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  appointmentDetailLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+  appointmentDetailValue: {
+    fontSize: 12,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+    flex: 1,
+  },
+  noAppointmentContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+  },
+  noAppointmentText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
   },
 
   // Modal Styles
