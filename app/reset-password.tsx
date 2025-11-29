@@ -1,0 +1,534 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import React, { useMemo, useRef, useState } from 'react';
+import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+
+const isWeb = Platform.OS === 'web';
+
+export default function ResetPasswordScreen() {
+  const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(true); // Visible by default
+  const [toast, setToast] = useState({ visible: false, message: '', type: '' });
+  const toastAnim = useRef(new Animated.Value(-100)).current;
+
+  const isMobileWeb = useMemo(() => {
+    if (!isWeb) return false;
+    return /Mobi|Android|iPhone/i.test(navigator.userAgent);
+  }, []);
+
+  // Responsive sizing - same as login page
+  const logoSize = isMobileWeb ?
+    Math.min(screenWidth * 0.8, 500) :
+    (isWeb ? Math.min(screenWidth * 0.5, 350) : Math.min(screenWidth * 0.85, 420));
+
+  const showToast = (message: string, type: 'error' | 'success') => {
+    setToast({ visible: true, message, type });
+    Animated.spring(toastAnim, {
+      toValue: 20,
+      useNativeDriver: true,
+    }).start();
+
+    setTimeout(() => {
+      Animated.timing(toastAnim, {
+        toValue: -100,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setToast({ visible: false, message: '', type: '' });
+      });
+    }, 3000);
+  };
+
+  const validatePassword = (password: string) => {
+    if (password.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    if (!/[A-Z]/.test(password)) {
+      return 'Password must contain at least one uppercase letter';
+    }
+    if (!/[a-z]/.test(password)) {
+      return 'Password must contain at least one lowercase letter';
+    }
+    if (!/[0-9]/.test(password)) {
+      return 'Password must contain at least one number';
+    }
+    return null;
+  };
+
+  const handleResetPassword = () => {
+    if (!newPassword.trim()) {
+      showToast('Please enter new password', 'error');
+      return;
+    }
+
+    if (!confirmPassword.trim()) {
+      showToast('Please confirm your password', 'error');
+      return;
+    }
+
+    const validationError = validatePassword(newPassword);
+    if (validationError) {
+      showToast(validationError, 'error');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      showToast('Passwords do not match', 'error');
+      return;
+    }
+
+    // Password reset successful
+    showToast('Password reset successfully!', 'success');
+    setTimeout(() => {
+      router.replace('/login');
+    }, 1500);
+  };
+
+  const getPasswordStrength = () => {
+    if (!newPassword) return { level: 0, text: '', color: '#e2e8f0' };
+    
+    let strength = 0;
+    if (newPassword.length >= 8) strength++;
+    if (/[A-Z]/.test(newPassword)) strength++;
+    if (/[a-z]/.test(newPassword)) strength++;
+    if (/[0-9]/.test(newPassword)) strength++;
+    if (/[^A-Za-z0-9]/.test(newPassword)) strength++;
+
+    if (strength <= 2) return { level: strength, text: 'Weak', color: '#ef4444' };
+    if (strength <= 3) return { level: strength, text: 'Medium', color: '#f59e0b' };
+    if (strength <= 4) return { level: strength, text: 'Strong', color: '#22c55e' };
+    return { level: strength, text: 'Very Strong', color: '#006dab' };
+  };
+
+  const passwordStrength = getPasswordStrength();
+
+  return (
+    <View style={styles.container}>
+      {toast.visible && (
+        <Animated.View 
+          style={[
+            styles.toast,
+            toast.type === 'error' ? styles.toastError : styles.toastSuccess,
+            { transform: [{ translateY: toastAnim }] }
+          ]}
+        >
+          <View style={styles.toastContent}>
+            <Text style={styles.toastIcon}>
+              {toast.type === 'error' ? '✗' : '✓'}
+            </Text>
+            <Text style={styles.toastText}>{toast.message}</Text>
+          </View>
+        </Animated.View>
+      )}
+
+      <KeyboardAvoidingView 
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView 
+          contentContainerStyle={[styles.scrollContent, isMobileWeb && styles.mobileWebScrollContent]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={[styles.contentWrapper, isMobileWeb && styles.mobileWebContentWrapper]}>
+            <View>
+              <View style={[styles.logoSection, isMobileWeb && styles.mobileWebLogoSection]}>
+                <Image 
+                  source={require('../assets/logos/logo-icon.svg')}
+                  style={{ width: logoSize, height: logoSize }}
+                  contentFit="contain"
+                />
+              </View>
+            </View>
+
+            <View style={isMobileWeb && styles.mobileWebFormWrapper}>
+              <View style={styles.headerSection}>
+                <Text style={styles.title}>Reset Password</Text>
+                <Text style={styles.subtitle}>
+                  Create a new secure password for your account
+                </Text>
+              </View>
+
+              {/* New Password Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>New Password</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="lock-closed-outline" size={20} color="#64748b" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="Enter new password"
+                    placeholderTextColor="#94a3b8"
+                    secureTextEntry={!showNewPassword}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity 
+                    onPress={() => setShowNewPassword(!showNewPassword)}
+                    style={styles.eyeButton}
+                  >
+                    <Ionicons 
+                      name={showNewPassword ? 'eye-outline' : 'eye-off-outline'} 
+                      size={22} 
+                      color="#64748b" 
+                    />
+                  </TouchableOpacity>
+                </View>
+                
+                {/* Password Strength Indicator */}
+                {newPassword.length > 0 && (
+                  <View style={styles.strengthContainer}>
+                    <View style={styles.strengthBars}>
+                      {[1, 2, 3, 4, 5].map((level) => (
+                        <View 
+                          key={level}
+                          style={[
+                            styles.strengthBar,
+                            { backgroundColor: level <= passwordStrength.level ? passwordStrength.color : '#e2e8f0' }
+                          ]}
+                        />
+                      ))}
+                    </View>
+                    <Text style={[styles.strengthText, { color: passwordStrength.color }]}>
+                      {passwordStrength.text}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Confirm Password Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Confirm Password</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="lock-closed-outline" size={20} color="#64748b" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Confirm your password"
+                    placeholderTextColor="#94a3b8"
+                    secureTextEntry={true}
+                    autoCapitalize="none"
+                  />
+                </View>
+                
+                {/* Password Match Indicator */}
+                {confirmPassword.length > 0 && (
+                  <View style={styles.matchContainer}>
+                    <Ionicons 
+                      name={newPassword === confirmPassword ? 'checkmark-circle' : 'close-circle'} 
+                      size={16} 
+                      color={newPassword === confirmPassword ? '#22c55e' : '#ef4444'} 
+                    />
+                    <Text style={[
+                      styles.matchText,
+                      { color: newPassword === confirmPassword ? '#22c55e' : '#ef4444' }
+                    ]}>
+                      {newPassword === confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Password Requirements */}
+              <View style={styles.requirementsContainer}>
+                <Text style={styles.requirementsTitle}>Password must contain:</Text>
+                <View style={styles.requirementItem}>
+                  <Ionicons 
+                    name={newPassword.length >= 8 ? 'checkmark-circle' : 'ellipse-outline'} 
+                    size={14} 
+                    color={newPassword.length >= 8 ? '#22c55e' : '#94a3b8'} 
+                  />
+                  <Text style={[styles.requirementText, newPassword.length >= 8 && styles.requirementMet]}>
+                    At least 8 characters
+                  </Text>
+                </View>
+                <View style={styles.requirementItem}>
+                  <Ionicons 
+                    name={/[A-Z]/.test(newPassword) ? 'checkmark-circle' : 'ellipse-outline'} 
+                    size={14} 
+                    color={/[A-Z]/.test(newPassword) ? '#22c55e' : '#94a3b8'} 
+                  />
+                  <Text style={[styles.requirementText, /[A-Z]/.test(newPassword) && styles.requirementMet]}>
+                    One uppercase letter
+                  </Text>
+                </View>
+                <View style={styles.requirementItem}>
+                  <Ionicons 
+                    name={/[a-z]/.test(newPassword) ? 'checkmark-circle' : 'ellipse-outline'} 
+                    size={14} 
+                    color={/[a-z]/.test(newPassword) ? '#22c55e' : '#94a3b8'} 
+                  />
+                  <Text style={[styles.requirementText, /[a-z]/.test(newPassword) && styles.requirementMet]}>
+                    One lowercase letter
+                  </Text>
+                </View>
+                <View style={styles.requirementItem}>
+                  <Ionicons 
+                    name={/[0-9]/.test(newPassword) ? 'checkmark-circle' : 'ellipse-outline'} 
+                    size={14} 
+                    color={/[0-9]/.test(newPassword) ? '#22c55e' : '#94a3b8'} 
+                  />
+                  <Text style={[styles.requirementText, /[0-9]/.test(newPassword) && styles.requirementMet]}>
+                    One number
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.resetButton}
+                onPress={handleResetPassword}
+                activeOpacity={0.85}
+              >
+                <LinearGradient
+                  colors={['#006dab', '#005a8f']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.gradientButton}
+                >
+                  <Text style={styles.resetButtonText}>Reset Password</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <View style={styles.backContainer}>
+                <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
+                  <Text style={styles.backLink}>← Back to Login</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  toast: {
+    position: 'absolute',
+    top: 0,
+    left: isWeb ? undefined : 16,
+    right: isWeb ? 20 : 16,
+    zIndex: 1000,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    maxWidth: isWeb ? 320 : undefined,
+    minWidth: isWeb ? undefined : 280,
+    borderLeftWidth: 4,
+  },
+  toastError: {
+    borderLeftColor: '#ef4444',
+  },
+  toastSuccess: {
+    borderLeftColor: '#98be4e',
+  },
+  toastContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  toastIcon: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    minWidth: 20,
+  },
+  toastText: {
+    color: '#1e293b',
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingVertical: isWeb ? 20 : 20,
+    paddingTop: isWeb ? 30 : 40,
+    paddingBottom: isWeb ? 40 : 120,
+  },
+  mobileWebScrollContent: {
+    paddingTop: 0,
+    paddingBottom: 100,
+  },
+  contentWrapper: {
+    maxWidth: 500,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: isWeb ? 40 : 24,
+    marginTop: isWeb ? 0 : -32,
+  },
+  mobileWebContentWrapper: {
+    flex: 1,
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 0,
+    paddingBottom: 100,
+  },
+  logoSection: {
+    alignItems: 'center',
+    marginBottom: isWeb ? -118 : -88,
+  },
+  mobileWebLogoSection: {
+    marginTop: -40,
+    marginBottom: 0,
+  },
+  mobileWebFormWrapper: {
+    marginTop: -80,
+  },
+  headerSection: {
+    marginBottom: isWeb ? 24 : 20,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#006dab',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 8,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 14,
+    height: 54,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#0f172a',
+    height: '100%',
+  },
+  eyeButton: {
+    padding: 4,
+  },
+  strengthContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 10,
+  },
+  strengthBars: {
+    flexDirection: 'row',
+    gap: 4,
+    flex: 1,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
+  strengthText: {
+    fontSize: 12,
+    fontWeight: '600',
+    minWidth: 80,
+    textAlign: 'right',
+  },
+  matchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  matchText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  requirementsContainer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 24,
+  },
+  requirementsTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+    marginBottom: 10,
+  },
+  requirementItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  requirementText: {
+    fontSize: 13,
+    color: '#94a3b8',
+  },
+  requirementMet: {
+    color: '#22c55e',
+  },
+  resetButton: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#006dab',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+    marginBottom: 24,
+  },
+  gradientButton: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 64,
+  },
+  resetButtonText: {
+    color: '#ffffff',
+    fontSize: 19,
+    fontWeight: '800',
+  },
+  backContainer: {
+    alignItems: 'center',
+    marginBottom: isWeb ? 20 : 40,
+    paddingBottom: 20,
+  },
+  backLink: {
+    fontSize: 15,
+    color: '#006dab',
+    fontWeight: '600',
+  },
+});

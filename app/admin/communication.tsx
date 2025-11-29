@@ -195,6 +195,71 @@ const mockBroadcasts: Broadcast[] = [
   },
 ];
 
+interface CallRequest {
+  id: string;
+  coupleId: string;
+  coupleName: string;
+  requestedBy: 'male' | 'female';
+  requesterName: string;
+  phone: string;
+  requestType: 'call' | 'video';
+  reason: string;
+  requestedAt: Date;
+  status: 'pending' | 'completed' | 'cancelled';
+}
+
+// Mock call requests data
+const mockCallRequests: CallRequest[] = [
+  {
+    id: 'cr1',
+    coupleId: 'C_001',
+    coupleName: 'John & Jane Doe',
+    requestedBy: 'female',
+    requesterName: 'Jane Doe',
+    phone: '+91 98765 43210',
+    requestType: 'call',
+    reason: 'Need to discuss diet plan modifications',
+    requestedAt: new Date('2024-11-28T10:30:00'),
+    status: 'pending',
+  },
+  {
+    id: 'cr2',
+    coupleId: 'C_002',
+    coupleName: 'Mike & Sarah Smith',
+    requestedBy: 'male',
+    requesterName: 'Mike Smith',
+    phone: '+91 98765 43212',
+    requestType: 'video',
+    reason: 'Questions about exercise routine',
+    requestedAt: new Date('2024-11-28T09:15:00'),
+    status: 'pending',
+  },
+  {
+    id: 'cr3',
+    coupleId: 'C_003',
+    coupleName: 'David & Emily Wilson',
+    requestedBy: 'female',
+    requesterName: 'Emily Wilson',
+    phone: '+91 98765 43214',
+    requestType: 'call',
+    reason: 'Follow-up on last week\'s consultation',
+    requestedAt: new Date('2024-11-27T14:45:00'),
+    status: 'completed',
+  },
+  {
+    id: 'cr4',
+    coupleId: 'C_004',
+    coupleName: 'Robert & Lisa Brown',
+    requestedBy: 'female',
+    requesterName: 'Lisa Brown',
+    phone: '+91 98765 43216',
+    requestType: 'call',
+    reason: 'Urgent health concern',
+    requestedAt: new Date('2024-11-28T11:00:00'),
+    status: 'pending',
+  },
+];
+
 export default function AdminCommunicationScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
@@ -202,7 +267,7 @@ export default function AdminCommunicationScreen() {
   const isDesktop = screenWidth >= 1024;
   const toastAnim = useRef(new Animated.Value(-100)).current;
 
-  const [activeTab, setActiveTab] = useState<'inbox' | 'broadcast'>('inbox');
+  const [activeTab, setActiveTab] = useState<'inbox' | 'broadcast' | 'calls'>('inbox');
   const [chatThreads] = useState<ChatThread[]>(mockChatThreads);
   const [selectedThread, setSelectedThread] = useState<ChatThread | null>(null);
   const [showChatModal, setShowChatModal] = useState(false);
@@ -331,6 +396,24 @@ export default function AdminCommunicationScreen() {
           <Text style={[styles.tabText, activeTab === 'broadcast' && styles.tabTextActive]}>
             Broadcast
           </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'calls' && styles.tabActive]}
+          onPress={() => setActiveTab('calls')}
+        >
+          <Ionicons
+            name="call"
+            size={18}
+            color={activeTab === 'calls' ? COLORS.primary : COLORS.textMuted}
+          />
+          <Text style={[styles.tabText, activeTab === 'calls' && styles.tabTextActive]}>
+            Requested Calls
+          </Text>
+          {mockCallRequests.filter(c => c.status === 'pending').length > 0 && (
+            <View style={styles.tabBadge}>
+              <Text style={styles.tabBadgeText}>{mockCallRequests.filter(c => c.status === 'pending').length}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -587,6 +670,129 @@ export default function AdminCommunicationScreen() {
     </View>
   );
 
+  // Requested Calls Section
+  const renderCallsSection = () => {
+    const pendingCalls = mockCallRequests.filter(c => c.status === 'pending');
+    const completedCalls = mockCallRequests.filter(c => c.status === 'completed');
+
+    const formatDateTime = (date: Date) => {
+      return {
+        date: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      };
+    };
+
+    return (
+      <View style={styles.callsSection}>
+        <View style={styles.callsHeader}>
+          <Text style={styles.sectionTitle}>Requested Calls</Text>
+          <Text style={styles.sectionSubtitle}>Manage call requests from users</Text>
+        </View>
+
+        {/* Pending Calls */}
+        {pendingCalls.length > 0 && (
+          <View style={styles.callsCategory}>
+            <Text style={styles.callsCategoryTitle}>Pending Requests ({pendingCalls.length})</Text>
+            {pendingCalls.map(call => {
+              const dateTime = formatDateTime(call.requestedAt);
+              return (
+                <View key={call.id} style={styles.callCard}>
+                  <View style={styles.callCardHeader}>
+                    <View style={styles.callUserInfo}>
+                      <View style={[styles.callAvatar, { backgroundColor: call.requestedBy === 'male' ? COLORS.primary : '#e91e8c' }]}>
+                        <Ionicons name={call.requestedBy === 'male' ? 'male' : 'female'} size={18} color="#fff" />
+                      </View>
+                      <View>
+                        <Text style={styles.callUserName}>{call.requesterName}</Text>
+                        <Text style={styles.callCoupleId}>{call.coupleId} • {call.coupleName}</Text>
+                      </View>
+                    </View>
+                    <View style={[styles.callTypeBadge, call.requestType === 'video' && styles.callTypeBadgeVideo]}>
+                      <Ionicons name={call.requestType === 'call' ? 'call' : 'videocam'} size={14} color={call.requestType === 'call' ? COLORS.primary : COLORS.accent} />
+                      <Text style={[styles.callTypeBadgeText, call.requestType === 'video' && styles.callTypeBadgeTextVideo]}>
+                        {call.requestType === 'call' ? 'Phone Call' : 'Video Call'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.callDetails}>
+                    <View style={styles.callDetailRow}>
+                      <Ionicons name="call-outline" size={16} color={COLORS.textMuted} />
+                      <Text style={styles.callDetailText}>{call.phone}</Text>
+                    </View>
+                    <View style={styles.callDetailRow}>
+                      <Ionicons name="calendar-outline" size={16} color={COLORS.textMuted} />
+                      <Text style={styles.callDetailText}>{dateTime.date}</Text>
+                    </View>
+                    <View style={styles.callDetailRow}>
+                      <Ionicons name="time-outline" size={16} color={COLORS.textMuted} />
+                      <Text style={styles.callDetailText}>{dateTime.time}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.callReason}>
+                    <Text style={styles.callReasonLabel}>Reason:</Text>
+                    <Text style={styles.callReasonText}>{call.reason}</Text>
+                  </View>
+
+                  <View style={styles.callActions}>
+                    <TouchableOpacity style={styles.callActionButton}>
+                      <Ionicons name="call" size={18} color="#fff" />
+                      <Text style={styles.callActionButtonText}>Call Now</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.callActionSecondary}>
+                      <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
+                      <Text style={styles.callActionSecondaryText}>Mark Complete</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Completed Calls */}
+        {completedCalls.length > 0 && (
+          <View style={styles.callsCategory}>
+            <Text style={styles.callsCategoryTitle}>Completed ({completedCalls.length})</Text>
+            {completedCalls.map(call => {
+              const dateTime = formatDateTime(call.requestedAt);
+              return (
+                <View key={call.id} style={[styles.callCard, styles.callCardCompleted]}>
+                  <View style={styles.callCardHeader}>
+                    <View style={styles.callUserInfo}>
+                      <View style={[styles.callAvatar, { backgroundColor: COLORS.textMuted }]}>
+                        <Ionicons name={call.requestedBy === 'male' ? 'male' : 'female'} size={18} color="#fff" />
+                      </View>
+                      <View>
+                        <Text style={[styles.callUserName, styles.callUserNameCompleted]}>{call.requesterName}</Text>
+                        <Text style={styles.callCoupleId}>{call.coupleId}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.completedBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
+                      <Text style={styles.completedBadgeText}>Completed</Text>
+                    </View>
+                  </View>
+                  <View style={styles.callDetailsCompact}>
+                    <Text style={styles.callDetailTextCompact}>{dateTime.date} at {dateTime.time}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {pendingCalls.length === 0 && completedCalls.length === 0 && (
+          <View style={styles.emptyState}>
+            <Ionicons name="call-outline" size={48} color={COLORS.textMuted} />
+            <Text style={styles.emptyStateText}>No call requests</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   // Broadcast Modal
   const renderBroadcastModal = () => (
     <Modal
@@ -630,40 +836,6 @@ export default function AdminCommunicationScreen() {
                 value={broadcastForm.message}
                 onChangeText={(text) => setBroadcastForm({ ...broadcastForm, message: text })}
               />
-            </View>
-
-            <View style={styles.formSection}>
-              <Text style={styles.formLabel}>Target Audience</Text>
-              <View style={styles.audienceOptions}>
-                {[
-                  { id: 'all', label: 'All Users', icon: 'people' },
-                  { id: 'study', label: 'Study Group Only', icon: 'flask' },
-                  { id: 'control', label: 'Control Group Only', icon: 'shield' },
-                ].map(option => (
-                  <TouchableOpacity
-                    key={option.id}
-                    style={[
-                      styles.audienceOption,
-                      broadcastForm.targetAudience === option.id && styles.audienceOptionActive,
-                    ]}
-                    onPress={() => setBroadcastForm({ ...broadcastForm, targetAudience: option.id as any })}
-                  >
-                    <Ionicons
-                      name={option.icon as any}
-                      size={20}
-                      color={broadcastForm.targetAudience === option.id ? COLORS.primary : COLORS.textMuted}
-                    />
-                    <Text
-                      style={[
-                        styles.audienceOptionText,
-                        broadcastForm.targetAudience === option.id && styles.audienceOptionTextActive,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
             </View>
           </ScrollView>
 
@@ -805,13 +977,22 @@ export default function AdminCommunicationScreen() {
           {renderThreadList()}
           {isDesktop && renderChatPanel()}
         </View>
-      ) : (
+      ) : activeTab === 'broadcast' ? (
         <ScrollView
           contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.content, !isMobile && styles.contentDesktop]}>
             {renderBroadcastSection()}
+          </View>
+        </ScrollView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.content, !isMobile && styles.contentDesktop]}>
+            {renderCallsSection()}
           </View>
         </ScrollView>
       )}
@@ -1525,5 +1706,190 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#fff',
+  },
+
+  // Calls Section Styles
+  callsSection: {
+    flex: 1,
+  },
+  callsHeader: {
+    marginBottom: 20,
+  },
+  callsCategory: {
+    marginBottom: 24,
+  },
+  callsCategoryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  callCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.warning,
+  },
+  callCardCompleted: {
+    borderLeftColor: COLORS.success,
+    opacity: 0.8,
+  },
+  callCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  callUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  callAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  callUserName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  callUserNameCompleted: {
+    color: COLORS.textSecondary,
+  },
+  callCoupleId: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  callTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary + '15',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 4,
+  },
+  callTypeBadgeVideo: {
+    backgroundColor: COLORS.accent + '15',
+  },
+  callTypeBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  callTypeBadgeTextVideo: {
+    color: COLORS.accent,
+  },
+  callDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  callDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  callDetailText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  callDetailsCompact: {
+    marginTop: 4,
+  },
+  callDetailTextCompact: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  callReason: {
+    marginBottom: 14,
+  },
+  callReasonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    marginBottom: 4,
+  },
+  callReasonText: {
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    lineHeight: 18,
+  },
+  callActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  callActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  callActionButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  callActionSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.success + '15',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  callActionSecondaryText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.success,
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.success + '15',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 4,
+  },
+  completedBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.success,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    marginTop: 12,
   },
 });

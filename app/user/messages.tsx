@@ -99,60 +99,13 @@ const mockThreads: ChatThread[] = [
   },
 ];
 
-const mockMessages: Message[] = [
-  {
-    id: '1',
-    text: 'Hello! Welcome to Fit for Baby support. How can we help you today?',
-    sender: 'support',
-    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-  },
-  {
-    id: '2',
-    text: 'Hi, I have a question about the couple walking feature. How do I sync with my partner?',
-    sender: 'user',
-    timestamp: new Date(Date.now() - 4.5 * 60 * 60 * 1000),
-    status: 'read',
-  },
-  {
-    id: '3',
-    text: 'Great question! To sync with your partner:\n\n1. Go to Profile → Partner Settings\n2. Tap "Connect Partner"\n3. Share the generated code with your partner\n4. They enter the code on their device\n\nOnce connected, your walks will be synced automatically! 🚶‍♂️🚶‍♀️',
-    sender: 'support',
-    timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000),
-  },
-  {
-    id: '4',
-    text: 'Thank you! That worked perfectly. One more thing - can we set walking goals together?',
-    sender: 'user',
-    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
-    status: 'read',
-  },
-  {
-    id: '5',
-    text: 'Absolutely! After syncing, you can:\n\n• Set shared daily step goals\n• Create couple walking challenges\n• View combined progress\n• Celebrate milestones together\n\nWould you like me to guide you through setting up your first couple goal?',
-    sender: 'support',
-    timestamp: new Date(Date.now() - 2.5 * 60 * 60 * 1000),
-  },
-  {
-    id: '6',
-    text: 'Yes please! 🙏',
-    sender: 'user',
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    status: 'read',
-  },
-  {
-    id: '7',
-    text: 'Your query has been resolved. Let us know if you need anything else!',
-    sender: 'support',
-    timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000),
-  },
-];
-
-const quickReplies = [
-  'Thank you!',
-  'I need more help',
-  'Connect to counsellor',
-  'Report an issue',
-];
+// Initial welcome message when user starts a new chat
+const getWelcomeMessage = (): Message => ({
+  id: '1',
+  text: 'Hello! Welcome to Fit for Baby support. How can we help you today?',
+  sender: 'support',
+  timestamp: new Date(),
+});
 
 export default function MessagesScreen() {
   const router = useRouter();
@@ -163,7 +116,7 @@ export default function MessagesScreen() {
 
   const [view, setView] = useState<'threads' | 'chat' | 'faq'>('threads');
   const [selectedThread, setSelectedThread] = useState<ChatThread | null>(null);
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
+  const [messages, setMessages] = useState<Message[]>([getWelcomeMessage()]);
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
@@ -221,35 +174,6 @@ export default function MessagesScreen() {
       const supportResponse: Message = {
         id: (Date.now() + 1).toString(),
         text: "Thank you for your message! Our team will review and respond shortly. In the meantime, feel free to explore our FAQ section for quick answers.",
-        sender: 'support',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, supportResponse]);
-    }, 2000);
-
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  };
-
-  const handleQuickReply = (reply: string) => {
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: reply,
-      sender: 'user',
-      timestamp: new Date(),
-      status: 'sent',
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setIsTyping(true);
-
-    // Simulate support response
-    setTimeout(() => {
-      setIsTyping(false);
-      const supportResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "Thank you for your message! Our team will review and respond shortly.",
         sender: 'support',
         timestamp: new Date(),
       };
@@ -459,8 +383,10 @@ export default function MessagesScreen() {
         ref={scrollViewRef}
         style={styles.messagesContainer}
         contentContainerStyle={styles.messagesContent}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
+        bounces={true}
+        alwaysBounceVertical={true}
       >
         {/* Date divider */}
         <View style={styles.dateDivider}>
@@ -537,24 +463,6 @@ export default function MessagesScreen() {
         )}
       </ScrollView>
 
-      {/* Quick Replies */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.quickRepliesContainer}
-        contentContainerStyle={styles.quickRepliesContent}
-      >
-        {quickReplies.map((reply) => (
-          <TouchableOpacity
-            key={reply}
-            style={styles.quickReply}
-            onPress={() => handleQuickReply(reply)}
-          >
-            <Text style={styles.quickReplyText}>{reply}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
       {/* Input Area */}
       <View style={styles.inputArea}>
         <TouchableOpacity style={styles.attachButton}>
@@ -601,7 +509,10 @@ export default function MessagesScreen() {
       {view === 'threads' && (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
+          bounces={true}
+          alwaysBounceVertical={true}
+          nestedScrollEnabled={true}
         >
           {renderThreadsList()}
         </ScrollView>
@@ -610,7 +521,10 @@ export default function MessagesScreen() {
       {view === 'faq' && (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
+          bounces={true}
+          alwaysBounceVertical={true}
+          nestedScrollEnabled={true}
         >
           {renderFAQ()}
         </ScrollView>
@@ -667,10 +581,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: { 
     flexGrow: 1, 
-    paddingBottom: isWeb ? 40 : 100,
+    paddingBottom: isWeb ? 40 : 120,
+    minHeight: '100%',
   },
   content: {
-    padding: isWeb ? 40 : 20,
+    padding: isWeb ? 40 : 16,
     maxWidth: 700,
     width: '100%',
     alignSelf: 'center',
@@ -939,33 +854,6 @@ const styles = StyleSheet.create({
   },
   typingDot3: {
     opacity: 0.8,
-  },
-  quickRepliesContainer: {
-    maxHeight: 50,
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-  },
-  quickRepliesContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  quickReply: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginRight: 8,
-  },
-  quickReplyText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748b',
   },
   inputArea: {
     flexDirection: 'row',
