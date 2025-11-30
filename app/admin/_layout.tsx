@@ -1,18 +1,19 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, usePathname, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Animated,
-  Image,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    Image,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 // Fit for Baby Color Palette
@@ -103,6 +104,32 @@ export default function AdminLayout() {
   
   const [sidebarCollapsed, setSidebarCollapsed] = useState(isTablet);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  
+  // Logged-in admin info
+  const [adminName, setAdminName] = useState('Admin');
+  const [adminRole, setAdminRole] = useState('admin');
+  const [adminInitials, setAdminInitials] = useState('AD');
+
+  useEffect(() => {
+    loadAdminInfo();
+  }, []);
+
+  const loadAdminInfo = async () => {
+    try {
+      const name = await AsyncStorage.getItem('adminName');
+      const role = await AsyncStorage.getItem('userRole');
+      if (name) {
+        setAdminName(name);
+        const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+        setAdminInitials(initials || 'AD');
+      }
+      if (role) {
+        setAdminRole(role);
+      }
+    } catch (error) {
+      console.error('Error loading admin info:', error);
+    }
+  };
 
   const isActive = (route: string) => pathname === route || pathname.startsWith(route + '/');
 
@@ -198,11 +225,11 @@ export default function AdminLayout() {
       <View style={styles.sidebarFooter}>
         <TouchableOpacity style={[styles.profileSection, sidebarCollapsed && styles.profileSectionCollapsed]}>
           <View style={styles.profileAvatar}>
-            <Text style={styles.profileInitials}>NR</Text>
+            <Text style={styles.profileInitials}>{adminInitials}</Text>
           </View>
           {!sidebarCollapsed && (
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>Nursing Researcher</Text>
+              <Text style={styles.profileName}>{adminName}</Text>
               <View style={styles.onlineStatus}>
                 <View style={styles.onlineDot} />
                 <Text style={styles.onlineText}>Online</Text>
@@ -270,10 +297,10 @@ export default function AdminLayout() {
         <View style={styles.drawerFooter}>
           <TouchableOpacity style={styles.drawerProfileSection}>
             <View style={styles.profileAvatar}>
-              <Text style={styles.profileInitials}>NR</Text>
+              <Text style={styles.profileInitials}>{adminInitials}</Text>
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>Nursing Researcher</Text>
+              <Text style={styles.profileName}>{adminName}</Text>
               <View style={styles.onlineStatus}>
                 <View style={styles.onlineDot} />
                 <Text style={styles.onlineText}>Online</Text>

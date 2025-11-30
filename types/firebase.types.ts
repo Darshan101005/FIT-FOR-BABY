@@ -324,8 +324,8 @@ export interface Admin {
   displayName: string;
   profilePicture?: string;
   
-  // Role & Permissions
-  role: 'admin' | 'superadmin';
+  // Role & Permissions - owner is the main account holder
+  role: 'admin' | 'superadmin' | 'owner';
   permissions: AdminPermissions;
   
   // Department
@@ -333,6 +333,11 @@ export interface Admin {
   
   // Status
   isActive: boolean;
+  isDeleted?: boolean;
+  deletedAt?: Timestamp;
+  
+  // Password (stored for small-scale project - superadmin reference only)
+  password?: string;
   
   // Timestamps
   createdAt: Timestamp;

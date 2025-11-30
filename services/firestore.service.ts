@@ -4,22 +4,22 @@
 
 import { Admin, Appointment, AppointmentStatus, COLLECTIONS, ExerciseLog, FoodLog, Notification, NurseVisit, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    getDoc,
-    getDocs,
-    limit,
-    onSnapshot,
-    orderBy,
-    query,
-    setDoc,
-    Timestamp,
-    Unsubscribe,
-    updateDoc,
-    where,
-    writeBatch
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  Timestamp,
+  Unsubscribe,
+  updateDoc,
+  where,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -360,7 +360,7 @@ export const adminService = {
   async get(adminId: string): Promise<Admin | null> {
     const adminRef = doc(db, COLLECTIONS.ADMINS, adminId);
     const snapshot = await getDoc(adminRef);
-    return snapshot.exists() ? (snapshot.data() as Admin) : null;
+    return snapshot.exists() ? ({ uid: snapshot.id, ...snapshot.data() } as Admin) : null;
   },
 
   // Check if user is admin
@@ -374,7 +374,7 @@ export const adminService = {
     const adminsRef = collection(db, COLLECTIONS.ADMINS);
     const q = query(adminsRef, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as Admin);
+    return snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Admin));
   },
 
   // Create admin
@@ -403,6 +403,66 @@ export const adminService = {
     await updateDoc(adminRef, {
       isActive: false,
       updatedAt: now(),
+    });
+  },
+
+  // Activate admin
+  async activate(adminId: string): Promise<void> {
+    const adminRef = doc(db, COLLECTIONS.ADMINS, adminId);
+    await updateDoc(adminRef, {
+      isActive: true,
+      updatedAt: now(),
+    });
+  },
+
+  // Delete admin permanently
+  async delete(adminId: string): Promise<void> {
+    const adminRef = doc(db, COLLECTIONS.ADMINS, adminId);
+    await deleteDoc(adminRef);
+  },
+
+  // Promote to superadmin
+  async promoteToSuperAdmin(adminId: string): Promise<void> {
+    const adminRef = doc(db, COLLECTIONS.ADMINS, adminId);
+    await updateDoc(adminRef, {
+      role: 'superadmin',
+      updatedAt: now(),
+    });
+  },
+
+  // Demote to regular admin
+  async demoteToAdmin(adminId: string): Promise<void> {
+    const adminRef = doc(db, COLLECTIONS.ADMINS, adminId);
+    await updateDoc(adminRef, {
+      role: 'admin',
+      updatedAt: now(),
+    });
+  },
+
+  // Get admin by email
+  async getByEmail(email: string): Promise<Admin | null> {
+    const adminsRef = collection(db, COLLECTIONS.ADMINS);
+    const q = query(adminsRef, where('email', '==', email), limit(1));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return null;
+    const doc = snapshot.docs[0];
+    return { uid: doc.id, ...doc.data() } as Admin;
+  },
+
+  // Subscribe to admins list (real-time updates)
+  subscribe(callback: (admins: (Admin & { id: string })[]) => void): Unsubscribe {
+    const adminsRef = collection(db, COLLECTIONS.ADMINS);
+    const q = query(adminsRef, orderBy('createdAt', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+      callback(snapshot.docs.map(doc => ({ id: doc.id, uid: doc.id, ...doc.data() } as Admin & { id: string })));
+    });
+  },
+
+  // Update last login
+  async updateLastLogin(adminId: string): Promise<void> {
+    const adminRef = doc(db, COLLECTIONS.ADMINS, adminId);
+    await updateDoc(adminRef, {
+      lastLoginAt: now(),
     });
   },
 };

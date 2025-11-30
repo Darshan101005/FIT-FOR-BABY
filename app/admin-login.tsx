@@ -1,16 +1,26 @@
+import { loginWithEmail, registerWithEmail } from '@/services/firebase';
+import { adminService } from '@/services/firestore.service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
+
+// Owner configuration - change these for production
+const OWNER_CONFIG = {
+  email: 'darshanvenkatesan2005@gmail.com',
+  password: 'Dar.1010',
+  displayName: 'Darshan',
+  phone: '9884671395',
+};
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -18,7 +28,38 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  // Auto-setup owner account if it doesn't exist
+  const setupOwnerIfNeeded = async (userUid: string, userEmail: string) => {
+    // Check if this is the owner email and if owner document exists
+    if (userEmail.toLowerCase() === OWNER_CONFIG.email.toLowerCase()) {
+      const existingAdmin = await adminService.get(userUid);
+      if (!existingAdmin) {
+        // Create owner document in Firestore
+        await adminService.create(userUid, {
+          email: OWNER_CONFIG.email,
+          firstName: OWNER_CONFIG.displayName.split(' ')[0] || OWNER_CONFIG.displayName,
+          lastName: OWNER_CONFIG.displayName.split(' ')[1] || '',
+          displayName: OWNER_CONFIG.displayName,
+          phone: OWNER_CONFIG.phone,
+          role: 'owner',
+          password: OWNER_CONFIG.password, // Store for owner verification
+          isActive: true,
+          permissions: {
+            canManageUsers: true,
+            canManageAdmins: true,
+            canViewReports: true,
+            canSendNotifications: true,
+            canManageAppointments: true,
+            canAccessMonitoring: true,
+            canManageContent: true,
+          },
+        });
+        console.log('✅ Owner account created in Firestore');
+      }
+    }
+  };
+
+  const handleLogin = async () => {
     // Validation
     if (!email || !password) {
       Alert.alert('Error', 'Please enter both email and password');
@@ -31,26 +72,69 @@ export default function AdminLogin() {
     }
 
     setLoading(true);
+    const normalizedEmail = email.trim().toLowerCase();
 
-    // Demo/Mock login - accept admin123 or superadmin123 password
-    setTimeout(async () => {
-      if (password === 'superadmin123') {
-        // Super Admin login
-        await AsyncStorage.setItem('isSuperAdmin', 'true');
-        setLoading(false);
-        Alert.alert('Success', 'Welcome Super Admin!');
-        router.replace('/admin/home');
-      } else if (password === 'admin123') {
-        // Regular Admin login
-        await AsyncStorage.setItem('isSuperAdmin', 'false');
-        setLoading(false);
-        Alert.alert('Success', 'Welcome Admin!');
-        router.replace('/admin/home');
-      } else {
-        setLoading(false);
-        Alert.alert('Login Failed', 'Incorrect password.');
+    try {
+      // Try to login first
+      let result = await loginWithEmail(normalizedEmail, password);
+      
+      // If login fails and this is the owner email, try to register first
+      if (!result.success && normalizedEmail === OWNER_CONFIG.email.toLowerCase() && password === OWNER_CONFIG.password) {
+        console.log('Owner not found in Auth, creating...');
+        const registerResult = await registerWithEmail(OWNER_CONFIG.email, OWNER_CONFIG.password);
+        if (registerResult.success && registerResult.user) {
+          result = { success: true, user: registerResult.user };
+          console.log('✅ Owner registered in Firebase Auth');
+        }
       }
-    }, 1000);
+      
+      if (!result.success) {
+        Alert.alert('Login Failed', result.error || 'Invalid email or password');
+        setLoading(false);
+        return;
+      }
+
+      // Setup owner in Firestore if needed
+      await setupOwnerIfNeeded(result.user!.uid, normalizedEmail);
+
+      // Check if user is an admin in Firestore
+      const adminData = await adminService.get(result.user!.uid);
+      
+      if (!adminData) {
+        Alert.alert('Access Denied', 'You are not registered as an admin.');
+        setLoading(false);
+        return;
+      }
+
+      if (!adminData.isActive) {
+        Alert.alert('Account Paused', 'Your admin account has been paused. Please contact the owner.');
+        setLoading(false);
+        return;
+      }
+
+      // Store admin info for access control
+      const isSuperAdmin = adminData.role === 'superadmin' || adminData.role === 'owner';
+      await AsyncStorage.setItem('isSuperAdmin', isSuperAdmin ? 'true' : 'false');
+      await AsyncStorage.setItem('adminRole', adminData.role);
+      await AsyncStorage.setItem('adminUid', adminData.uid);
+      await AsyncStorage.setItem('adminEmail', adminData.email);
+      await AsyncStorage.setItem('adminName', adminData.displayName);
+
+      // Update last login time
+      await adminService.updateLastLogin(adminData.uid);
+
+      setLoading(false);
+      
+      const roleLabel = adminData.role === 'owner' ? 'Owner' : 
+                        adminData.role === 'superadmin' ? 'Super Admin' : 'Admin';
+      Alert.alert('Success', `Welcome ${roleLabel}!`);
+      router.replace('/admin/home');
+      
+    } catch (error: any) {
+      console.error('Login error:', error);
+      Alert.alert('Error', error.message || 'An error occurred during login');
+      setLoading(false);
+    }
   };
 
   return (

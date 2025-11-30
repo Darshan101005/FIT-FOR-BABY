@@ -143,6 +143,44 @@ const getAuthErrorMessage = (code: string): string => {
   }
 };
 
+// Delete user from Firebase Auth (emulator only - uses REST API)
+// In production, you would need Cloud Functions for this
+export const deleteAuthUser = async (uid: string): Promise<{ success: boolean; error?: string }> => {
+  if (!USE_EMULATOR) {
+    console.warn('deleteAuthUser only works with Firebase Emulator. In production, use Cloud Functions.');
+    return { success: false, error: 'Auth deletion requires server-side implementation in production' };
+  }
+  
+  try {
+    // Firebase Auth Emulator REST API for deleting users
+    // POST to identitytoolkit with delete action
+    const response = await fetch(
+      `http://${EMULATOR_HOST}:9099/identitytoolkit.googleapis.com/v1/projects/${firebaseConfig.projectId}/accounts:delete`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ localId: uid }),
+      }
+    );
+    
+    if (response.ok) {
+      console.log('✅ User deleted from Firebase Auth');
+      return { success: true };
+    } else {
+      const errorData = await response.text();
+      console.error('Failed to delete auth user:', errorData);
+      // Still return success for Firestore deletion - Auth deletion is best effort
+      return { success: false, error: errorData };
+    }
+  } catch (error: any) {
+    console.error('Error deleting auth user:', error);
+    // Still return - Firestore deletion is the main goal
+    return { success: false, error: error.message };
+  }
+};
+
 // ============================================
 // LEGACY ADMIN FUNCTIONS (for backward compatibility)
 // ============================================

@@ -4,14 +4,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Image,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Image,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -100,9 +100,11 @@ export default function AdminHomeScreen() {
   const isMobile = screenWidth < 768;
   const isTablet = screenWidth >= 768 && screenWidth < 1024;
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [adminName, setAdminName] = useState('Admin');
 
   useEffect(() => {
     checkSuperAdminStatus();
+    loadAdminName();
   }, []);
 
   const checkSuperAdminStatus = async () => {
@@ -111,6 +113,17 @@ export default function AdminHomeScreen() {
       setIsSuperAdmin(superAdminFlag === 'true');
     } catch (error) {
       console.error('Error checking super admin status:', error);
+    }
+  };
+
+  const loadAdminName = async () => {
+    try {
+      const name = await AsyncStorage.getItem('adminName');
+      if (name) {
+        setAdminName(name);
+      }
+    } catch (error) {
+      console.error('Error loading admin name:', error);
     }
   };
 
@@ -123,7 +136,7 @@ export default function AdminHomeScreen() {
     <View style={styles.header}>
       <View>
         <Text style={styles.greeting}>Welcome back,</Text>
-        <Text style={styles.userName}>{isSuperAdmin ? 'Super Admin' : 'Nursing Researcher'}</Text>
+        <Text style={styles.userName}>{adminName}</Text>
       </View>
       <View style={styles.headerRight}>
         {isSuperAdmin && (

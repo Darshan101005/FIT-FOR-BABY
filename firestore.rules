@@ -18,6 +18,13 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     
+    // Helper function to check if user is superadmin
+    function isSuperAdmin() {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'superadmin';
+    }
+    
     // Users collection
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
@@ -59,9 +66,13 @@ service cloud.firestore {
     }
     
     // Admins collection
+    // NOTE: In production, tighten these rules to only allow superadmin
     match /admins/{adminId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      // For development: allow any authenticated user to create/update admins
+      // For production: change to isSuperAdmin()
+      allow create, update: if isAuthenticated();
+      allow delete: if isSuperAdmin() || isAdmin();
     }
     
     // Questionnaire responses

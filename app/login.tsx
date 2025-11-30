@@ -1,3 +1,5 @@
+import { loginWithEmail } from '@/services/firebase';
+import { adminService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -83,48 +85,70 @@ export default function LoginScreen() {
     }
     setLoginState('loading');
     
-    // Simulate network delay
-    setTimeout(async () => {
-      try {
-        // Check for super admin login
-        if (password === 'superadmin123') {
-          await AsyncStorage.setItem('isSuperAdmin', 'true');
-          await AsyncStorage.setItem('userRole', 'superadmin');
-          setLoginState('success');
-          showToast('Welcome Super Admin!', 'success');
-          setTimeout(() => {
-            router.replace('/admin/home');
-          }, 800);
-        }
-        // Check for admin login
-        else if (password === 'admin123') {
-          await AsyncStorage.setItem('isSuperAdmin', 'false');
-          await AsyncStorage.setItem('userRole', 'admin');
-          setLoginState('success');
-          showToast('Welcome Admin!', 'success');
-          setTimeout(() => {
-            router.replace('/admin/home');
-          }, 800);
-        }
-        // Check for user login
-        else if (password === 'user123') {
-          await AsyncStorage.setItem('isSuperAdmin', 'false');
-          await AsyncStorage.setItem('userRole', 'user');
-          setLoginState('success');
-          showToast('OTP sent to your phone', 'success');
-          setTimeout(() => {
-            router.push('/verify-otp');
-          }, 800);
-        } else {
-          showToast('Incorrect password', 'error');
-          setLoginState('idle');
-        }
-      } catch (error) {
-        console.error('Login error:', error);
-        showToast('Login failed. Please try again.', 'error');
+    const normalizedEmail = email.trim().toLowerCase();
+
+    try {
+      // Login with Firebase
+      const result = await loginWithEmail(normalizedEmail, password);
+      
+      if (!result.success) {
+        showToast(result.error || 'Invalid email or password', 'error');
         setLoginState('idle');
+        return;
       }
-    }, 1500);
+
+      const userUid = result.user!.uid;
+
+      // Check if user is an admin
+      const adminData = await adminService.get(userUid);
+      
+      if (adminData) {
+        // This is an admin/superadmin/owner
+        if (!adminData.isActive) {
+          showToast('Your account has been paused. Contact the owner.', 'error');
+          setLoginState('idle');
+          return;
+        }
+
+        // Store admin info
+        const isSuperAdmin = adminData.role === 'superadmin' || adminData.role === 'owner';
+        await AsyncStorage.setItem('isSuperAdmin', isSuperAdmin ? 'true' : 'false');
+        await AsyncStorage.setItem('userRole', adminData.role);
+        await AsyncStorage.setItem('adminUid', adminData.uid);
+        await AsyncStorage.setItem('adminEmail', adminData.email);
+        await AsyncStorage.setItem('adminName', adminData.displayName);
+
+        // Update last login
+        await adminService.updateLastLogin(adminData.uid);
+
+        setLoginState('success');
+        const roleLabel = adminData.role === 'owner' ? 'Owner' : 
+                          adminData.role === 'superadmin' ? 'Super Admin' : 'Admin';
+        showToast(`Welcome ${roleLabel}!`, 'success');
+        
+        setTimeout(() => {
+          router.replace('/admin/home');
+        }, 800);
+      } else {
+        // This is a regular user - check users collection
+        // TODO: Implement user login flow when user collection is ready
+        await AsyncStorage.setItem('isSuperAdmin', 'false');
+        await AsyncStorage.setItem('userRole', 'user');
+        await AsyncStorage.setItem('userUid', userUid);
+        await AsyncStorage.setItem('userEmail', normalizedEmail);
+
+        setLoginState('success');
+        showToast('OTP sent to your phone', 'success');
+        
+        setTimeout(() => {
+          router.push('/verify-otp');
+        }, 800);
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      showToast(error.message || 'Login failed. Please try again.', 'error');
+      setLoginState('idle');
+    }
   };
 
   return (

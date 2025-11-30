@@ -1,21 +1,30 @@
+import { registerWithEmail } from '@/services/firebase';
+import { adminService } from '@/services/firestore.service';
+import { Admin as FirebaseAdmin } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
+
+// Extend Firebase Admin type with document ID
+interface Admin extends FirebaseAdmin {
+  id: string; // Firestore document ID
+}
 
 // Fit for Baby Color Palette
 const COLORS = {
@@ -37,72 +46,22 @@ const COLORS = {
   borderLight: '#f1f5f9',
 };
 
-interface Admin {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  role: 'admin' | 'superadmin';
-  status: 'active' | 'inactive';
-  createdAt: string;
-  lastLogin?: string;
-}
-
-// Mock admin data
-const initialAdmins: Admin[] = [
-  {
-    id: 'ADM001',
-    name: 'Super Admin',
-    email: 'superadmin@fitforbaby.com',
-    phone: '+91 98765 00001',
-    role: 'superadmin',
-    status: 'active',
-    createdAt: '2024-01-01',
-    lastLogin: '2024-11-27',
-  },
-  {
-    id: 'ADM002',
-    name: 'Dr. Priya Sharma',
-    email: 'priya@fitforbaby.com',
-    phone: '+91 98765 00002',
-    role: 'admin',
-    status: 'active',
-    createdAt: '2024-03-15',
-    lastLogin: '2024-11-26',
-  },
-  {
-    id: 'ADM003',
-    name: 'Dr. Vikram Singh',
-    email: 'vikram@fitforbaby.com',
-    phone: '+91 98765 00003',
-    role: 'admin',
-    status: 'active',
-    createdAt: '2024-05-20',
-    lastLogin: '2024-11-25',
-  },
-  {
-    id: 'ADM004',
-    name: 'Nurse Anita Reddy',
-    email: 'anita@fitforbaby.com',
-    phone: '+91 98765 00004',
-    role: 'admin',
-    status: 'inactive',
-    createdAt: '2024-06-10',
-    lastLogin: '2024-10-15',
-  },
-];
+// Admin interface is now imported from firebase.types.ts
 
 export default function ManageAdminsScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
 
-  const [admins, setAdmins] = useState<Admin[]>(initialAdmins);
+  const [admins, setAdmins] = useState<Admin[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showPauseModal, setShowPauseModal] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState<Admin | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
@@ -112,12 +71,66 @@ export default function ManageAdminsScreen() {
     email: '',
     phone: '',
     password: '',
-    role: 'admin' as 'admin' | 'superadmin',
+    role: 'admin' as 'admin' | 'superadmin' | 'owner',
   });
+  const [formError, setFormError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [ownerPasswordInput, setOwnerPasswordInput] = useState('');
+  const [showOwnerPasswordModal, setShowOwnerPasswordModal] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+
+  // Current logged-in user info (fetched from AsyncStorage/Firestore)
+  const [currentUser, setCurrentUser] = useState<Admin | null>(null);
 
   useEffect(() => {
     checkSuperAdminAccess();
+    loadCurrentUser();
   }, []);
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      // Subscribe to real-time admin updates
+      console.log('Setting up admin subscription...');
+      const unsubscribe = adminService.subscribe((adminList) => {
+        console.log('Received admin list update:', adminList.length, 'admins');
+        setAdmins(adminList);
+        setLoading(false);
+      });
+
+      return () => {
+        console.log('Cleaning up admin subscription');
+        unsubscribe();
+      };
+    }
+  }, [isSuperAdmin]);
+
+  // Load current logged-in user's admin data
+  const loadCurrentUser = async () => {
+    try {
+      const adminUid = await AsyncStorage.getItem('adminUid');
+      if (adminUid) {
+        const adminData = await adminService.get(adminUid);
+        if (adminData) {
+          setCurrentUser(adminData as Admin);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading current user:', error);
+    }
+  };
+
+  // Manual refresh function
+  const refreshAdmins = async () => {
+    setLoading(true);
+    try {
+      const adminList = await adminService.getAll();
+      setAdmins(adminList as Admin[]);
+    } catch (error) {
+      console.error('Error refreshing admins:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const checkSuperAdminAccess = async () => {
     try {
@@ -134,85 +147,237 @@ export default function ManageAdminsScreen() {
     }
   };
 
+  // Helper to format date
+  const formatDate = (timestamp: any): string => {
+    if (!timestamp) return 'N/A';
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch {
+      return 'N/A';
+    }
+  };
+
   // Filter admins
   const filteredAdmins = admins.filter(admin => {
     const matchesSearch = 
-      admin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      admin.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      admin.id.toLowerCase().includes(searchQuery.toLowerCase());
+      admin.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      admin.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      admin.uid?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesStatus = filterStatus === 'all' || admin.status === filterStatus;
+    const matchesStatus = filterStatus === 'all' || 
+      (filterStatus === 'active' && admin.isActive) ||
+      (filterStatus === 'inactive' && !admin.isActive);
     
     return matchesSearch && matchesStatus;
   });
 
-  const handleAddAdmin = () => {
+  const handleAddAdmin = async () => {
     if (!formData.name || !formData.email || !formData.password) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      setFormError('Please fill in all required fields');
       return;
     }
 
-    const newAdmin: Admin = {
-      id: `ADM${String(admins.length + 1).padStart(3, '0')}`,
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      role: formData.role,
-      status: 'active',
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-
-    setAdmins([...admins, newAdmin]);
-    setShowAddModal(false);
-    resetForm();
-    Alert.alert('Success', `Admin ${formData.name} has been created successfully!`);
-  };
-
-  const handleEditAdmin = () => {
-    if (!selectedAdmin) return;
-
-    const updatedAdmins = admins.map(admin => 
-      admin.id === selectedAdmin.id 
-        ? { ...admin, name: formData.name, email: formData.email, phone: formData.phone, role: formData.role }
-        : admin
-    );
-
-    setAdmins(updatedAdmins);
-    setShowEditModal(false);
-    setSelectedAdmin(null);
-    resetForm();
-    Alert.alert('Success', 'Admin details updated successfully!');
-  };
-
-  const handleDeleteAdmin = () => {
-    if (!selectedAdmin) return;
-
-    if (selectedAdmin.role === 'superadmin') {
-      Alert.alert('Error', 'Cannot delete a Super Admin account');
+    if (formData.password.length < 6) {
+      setFormError('Password must be at least 6 characters');
       return;
     }
 
-    const updatedAdmins = admins.filter(admin => admin.id !== selectedAdmin.id);
-    setAdmins(updatedAdmins);
+    setActionLoading(true);
+    setFormError('');
+
+    try {
+      // Create Firebase Auth user
+      const authResult = await registerWithEmail(formData.email, formData.password);
+      
+      if (!authResult.success || !authResult.user) {
+        setFormError(authResult.error || 'Failed to create admin account');
+        setActionLoading(false);
+        return;
+      }
+
+      // Create admin document in Firestore
+      const nameParts = formData.name.trim().split(' ');
+      await adminService.create(authResult.user.uid, {
+        email: formData.email,
+        phone: formData.phone || '',
+        firstName: nameParts[0] || '',
+        lastName: nameParts.slice(1).join(' ') || '',
+        displayName: formData.name,
+        role: formData.role,
+        isActive: true,
+        password: formData.password, // Store password for superadmin reference
+        permissions: {
+          canManageUsers: true,
+          canManageAdmins: formData.role === 'superadmin',
+          canViewReports: true,
+          canSendNotifications: true,
+          canManageAppointments: true,
+          canAccessMonitoring: true,
+          canManageContent: formData.role === 'superadmin',
+        },
+      });
+
+      setShowAddModal(false);
+      resetForm();
+      Alert.alert('Success', `Admin ${formData.name} has been created successfully!\n\nEmail: ${formData.email}\nPassword: ${formData.password}`);
+    } catch (error: any) {
+      console.error('Error creating admin:', error);
+      setFormError(error.message || 'Failed to create admin');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleEditAdmin = async () => {
+    if (!selectedAdmin) return;
+
+    if (!formData.name || !formData.email) {
+      setFormError('Please fill in all required fields');
+      return;
+    }
+
+    setActionLoading(true);
+    setFormError('');
+
+    try {
+      const nameParts = formData.name.trim().split(' ');
+      const updateData: any = {
+        email: formData.email,
+        phone: formData.phone || '',
+        firstName: nameParts[0] || '',
+        lastName: nameParts.slice(1).join(' ') || '',
+        displayName: formData.name,
+        role: formData.role,
+      };
+
+      // Store password in Firestore if provided (for small-scale project per user request)
+      // Note: In production, use Firebase Admin SDK on server-side for password changes
+      if (formData.password && formData.password.trim().length > 0) {
+        updateData.password = formData.password; // Stored for superadmin reference
+      }
+
+      await adminService.update(selectedAdmin.uid, updateData);
+
+      setShowEditModal(false);
+      setSelectedAdmin(null);
+      resetForm();
+      Alert.alert('Success', 'Admin details updated successfully!');
+    } catch (error: any) {
+      console.error('Error updating admin:', error);
+      setFormError(error.message || 'Failed to update admin');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteAdmin = async () => {
+    if (!selectedAdmin) return;
+
+    // Owner cannot be deleted
+    if (selectedAdmin.role === 'owner') {
+      Alert.alert('Error', 'Cannot delete the Owner account.');
+      setShowDeleteModal(false);
+      return;
+    }
+
+    // All deletions require password confirmation
+    // Close delete modal and open password modal
     setShowDeleteModal(false);
-    setSelectedAdmin(null);
-    Alert.alert('Success', `Admin ${selectedAdmin.name} has been deleted.`);
+    setShowOwnerPasswordModal(true);
   };
 
-  const handleToggleStatus = (admin: Admin) => {
-    if (admin.role === 'superadmin') {
-      Alert.alert('Error', 'Cannot deactivate a Super Admin account');
+  const performDelete = async () => {
+    if (!selectedAdmin) return;
+
+    setActionLoading(true);
+
+    try {
+      const adminId = selectedAdmin.id || selectedAdmin.uid;
+      const deletedName = selectedAdmin.displayName;
+      
+      console.log('Deleting admin with ID:', adminId);
+      
+      // Delete from Firestore - user won't be able to login anymore
+      await adminService.delete(adminId);
+      console.log('✅ Admin deleted from Firestore');
+      
+      // Close modals and reset state
+      setShowDeleteModal(false);
+      setShowOwnerPasswordModal(false);
+      setOwnerPasswordInput('');
+      setSelectedAdmin(null);
+      
+      Alert.alert(
+        'Admin Deleted', 
+        `${deletedName} has been removed and can no longer access the system.`
+      );
+    } catch (error: any) {
+      console.error('Error deleting admin:', error);
+      Alert.alert('Error', error.message || 'Failed to delete admin');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleOwnerPasswordConfirm = async () => {
+    // Clear previous error
+    setPasswordError('');
+    
+    if (!currentUser || !currentUser.password) {
+      setPasswordError('Unable to verify your credentials. Please re-login.');
       return;
     }
+    
+    if (ownerPasswordInput !== currentUser.password) {
+      setPasswordError('Incorrect password. Please try again.');
+      return;
+    }
+    
+    // Password correct, proceed with deletion
+    await performDelete();
+  };
 
-    const updatedAdmins = admins.map(a => 
-      a.id === admin.id 
-        ? { ...a, status: a.status === 'active' ? 'inactive' : 'active' } as Admin
-        : a
-    );
+  const openPauseModal = (admin: Admin) => {
+    setSelectedAdmin(admin);
+    setShowPauseModal(true);
+  };
 
-    setAdmins(updatedAdmins);
-    Alert.alert('Success', `Admin ${admin.name} is now ${admin.status === 'active' ? 'inactive' : 'active'}`);
+  const handleToggleStatus = async () => {
+    if (!selectedAdmin) return;
+    
+    setActionLoading(true);
+    try {
+      if (selectedAdmin.isActive) {
+        await adminService.deactivate(selectedAdmin.uid);
+        Alert.alert('Success', `${selectedAdmin.displayName} has been paused`);
+      } else {
+        await adminService.activate(selectedAdmin.uid);
+        Alert.alert('Success', `${selectedAdmin.displayName} is now active`);
+      }
+      setShowPauseModal(false);
+      setSelectedAdmin(null);
+    } catch (error: any) {
+      console.error('Error toggling admin status:', error);
+      Alert.alert('Error', error.message || 'Failed to update admin status');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePromoteDemote = async (admin: Admin) => {
+    try {
+      if (admin.role === 'admin') {
+        await adminService.promoteToSuperAdmin(admin.uid);
+        Alert.alert('Success', `${admin.displayName} has been promoted to Super Admin`);
+      } else {
+        await adminService.demoteToAdmin(admin.uid);
+        Alert.alert('Success', `${admin.displayName} has been demoted to Admin`);
+      }
+    } catch (error: any) {
+      console.error('Error promoting/demoting admin:', error);
+      Alert.alert('Error', error.message || 'Failed to change admin role');
+    }
   };
 
   const resetForm = () => {
@@ -223,17 +388,21 @@ export default function ManageAdminsScreen() {
       password: '',
       role: 'admin',
     });
+    setFormError('');
+    setShowPassword(false);
   };
 
   const openEditModal = (admin: Admin) => {
     setSelectedAdmin(admin);
     setFormData({
-      name: admin.name,
-      email: admin.email,
-      phone: admin.phone,
-      password: '',
+      name: admin.displayName || '',
+      email: admin.email || '',
+      phone: admin.phone || '',
+      password: admin.password || '', // Load stored password for display
       role: admin.role,
     });
+    setFormError('');
+    setShowPassword(false);
     setShowEditModal(true);
   };
 
@@ -242,10 +411,11 @@ export default function ManageAdminsScreen() {
     setShowDeleteModal(true);
   };
 
-  if (!isSuperAdmin) {
+  if (!isSuperAdmin || loading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Checking access...</Text>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>{loading ? 'Loading admins...' : 'Checking access...'}</Text>
       </View>
     );
   }
@@ -266,16 +436,24 @@ export default function ManageAdminsScreen() {
             <Text style={styles.headerSubtitle}>Super Admin Control Panel</Text>
           </View>
         </View>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => {
-            resetForm();
-            setShowAddModal(true);
-          }}
-        >
-          <Ionicons name="add" size={20} color="#fff" />
-          {!isMobile && <Text style={styles.addButtonText}>Add Admin</Text>}
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={refreshAdmins}
+          >
+            <Ionicons name="refresh" size={20} color={COLORS.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => {
+              resetForm();
+              setShowAddModal(true);
+            }}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            {!isMobile && <Text style={styles.addButtonText}>Add Admin</Text>}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search and Filters */}
@@ -326,7 +504,7 @@ export default function ManageAdminsScreen() {
           <Ionicons name="checkmark-circle" size={22} color={COLORS.success} />
         </View>
         <View>
-          <Text style={styles.statValue}>{admins.filter(a => a.status === 'active').length}</Text>
+          <Text style={styles.statValue}>{admins.filter(a => a.isActive).length}</Text>
           <Text style={styles.statLabel}>Active</Text>
         </View>
       </View>
@@ -336,7 +514,7 @@ export default function ManageAdminsScreen() {
           <Ionicons name="pause-circle" size={22} color={COLORS.warning} />
         </View>
         <View>
-          <Text style={styles.statValue}>{admins.filter(a => a.status === 'inactive').length}</Text>
+          <Text style={styles.statValue}>{admins.filter(a => !a.isActive).length}</Text>
           <Text style={styles.statLabel}>Inactive</Text>
         </View>
       </View>
@@ -354,62 +532,96 @@ export default function ManageAdminsScreen() {
   );
 
   // Admin Card
-  const renderAdminCard = (admin: Admin) => (
-    <View key={admin.id} style={styles.adminCard}>
-      <View style={styles.adminCardLeft}>
-        <View style={[styles.adminAvatar, { backgroundColor: admin.role === 'superadmin' ? COLORS.accent : COLORS.primary }]}>
-          <Text style={styles.adminAvatarText}>
-            {admin.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-          </Text>
-        </View>
-        <View style={styles.adminInfo}>
-          <View style={styles.adminNameRow}>
-            <Text style={styles.adminName}>{admin.name}</Text>
-            {admin.role === 'superadmin' && (
-              <View style={styles.superAdminBadge}>
-                <Ionicons name="shield-checkmark" size={12} color={COLORS.accentDark} />
-                <Text style={styles.superAdminBadgeText}>Super</Text>
-              </View>
-            )}
+  const renderAdminCard = (admin: Admin) => {
+    const displayName = admin.displayName || admin.email?.split('@')[0] || 'Admin';
+    const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const createdDate = admin.createdAt ? admin.createdAt.toDate().toLocaleDateString() : 'N/A';
+    
+    // Determine avatar color based on role
+    const getAvatarColor = () => {
+      switch (admin.role) {
+        case 'owner': return COLORS.primaryDark;
+        case 'superadmin': return COLORS.accent;
+        default: return COLORS.primary;
+      }
+    };
+    
+    return (
+      <View key={admin.id} style={styles.adminCard}>
+        <View style={styles.adminCardLeft}>
+          <View style={[styles.adminAvatar, { backgroundColor: getAvatarColor() }]}>
+            <Text style={styles.adminAvatarText}>{initials}</Text>
           </View>
-          <Text style={styles.adminEmail}>{admin.email}</Text>
-          <Text style={styles.adminPhone}>{admin.phone}</Text>
-          <View style={styles.adminMeta}>
-            <Text style={styles.adminMetaText}>ID: {admin.id}</Text>
-            <Text style={styles.adminMetaText}>•</Text>
-            <Text style={styles.adminMetaText}>Created: {admin.createdAt}</Text>
+          <View style={styles.adminInfo}>
+            <View style={styles.adminNameRow}>
+              <Text style={styles.adminName}>{displayName}</Text>
+              {admin.role === 'owner' && (
+                <View style={[styles.superAdminBadge, { backgroundColor: COLORS.primaryDark + '20' }]}>
+                  <Ionicons name="diamond" size={12} color={COLORS.primaryDark} />
+                  <Text style={[styles.superAdminBadgeText, { color: COLORS.primaryDark }]}>Owner</Text>
+                </View>
+              )}
+              {admin.role === 'superadmin' && (
+                <View style={styles.superAdminBadge}>
+                  <Ionicons name="shield-checkmark" size={12} color={COLORS.accentDark} />
+                  <Text style={styles.superAdminBadgeText}>Super</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.adminEmail}>{admin.email}</Text>
+            <Text style={styles.adminPhone}>{admin.phone || 'No phone'}</Text>
+            <View style={styles.adminMeta}>
+              <Text style={styles.adminMetaText}>ID: {admin.id?.slice(0, 8)}...</Text>
+              <Text style={styles.adminMetaText}>•</Text>
+              <Text style={styles.adminMetaText}>Created: {createdDate}</Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      <View style={styles.adminCardRight}>
-        <TouchableOpacity
-          style={[
-            styles.statusBadge,
-            { backgroundColor: admin.status === 'active' ? COLORS.success + '15' : COLORS.error + '15' }
-          ]}
-          onPress={() => handleToggleStatus(admin)}
-        >
-          <View style={[
-            styles.statusDot,
-            { backgroundColor: admin.status === 'active' ? COLORS.success : COLORS.error }
-          ]} />
-          <Text style={[
-            styles.statusText,
-            { color: admin.status === 'active' ? COLORS.success : COLORS.error }
-          ]}>
-            {admin.status.charAt(0).toUpperCase() + admin.status.slice(1)}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.adminCardRight}>
+          <TouchableOpacity
+            style={[
+              styles.statusBadge,
+              { backgroundColor: admin.isActive ? COLORS.success + '15' : COLORS.warning + '15' }
+            ]}
+            onPress={() => admin.role !== 'owner' && admin.uid !== currentUser?.uid && openPauseModal(admin)}
+            disabled={admin.role === 'owner' || admin.uid === currentUser?.uid}
+          >
+            <View style={[
+              styles.statusDot,
+              { backgroundColor: admin.isActive ? COLORS.success : COLORS.warning }
+            ]} />
+            <Text style={[
+              styles.statusText,
+              { color: admin.isActive ? COLORS.success : COLORS.warning }
+            ]}>
+              {admin.isActive ? 'Active' : 'Paused'}
+            </Text>
+          </TouchableOpacity>
 
         <View style={styles.actionButtons}>
+          {/* Pause/Play button - not for owner and not for self */}
+          {admin.role !== 'owner' && admin.uid !== currentUser?.uid && (
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: admin.isActive ? COLORS.warning + '20' : COLORS.success + '20' }]}
+              onPress={() => openPauseModal(admin)}
+            >
+              <Ionicons 
+                name={admin.isActive ? 'pause-circle-outline' : 'play-circle-outline'} 
+                size={20} 
+                color={admin.isActive ? COLORS.warning : COLORS.success} 
+              />
+            </TouchableOpacity>
+          )}
+          {/* Edit button */}
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => openEditModal(admin)}
           >
             <Ionicons name="create-outline" size={20} color={COLORS.primary} />
           </TouchableOpacity>
-          {admin.role !== 'superadmin' && (
+          {/* Delete button - not for owner, not for self, superadmin needs password confirmation */}
+          {admin.role !== 'owner' && admin.uid !== currentUser?.uid && (
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => openDeleteModal(admin)}
@@ -420,7 +632,8 @@ export default function ManageAdminsScreen() {
         </View>
       </View>
     </View>
-  );
+    );
+  };
 
   // Add/Edit Modal
   const renderFormModal = (isEdit: boolean) => (
@@ -476,66 +689,161 @@ export default function ManageAdminsScreen() {
               />
             </View>
 
-            {!isEdit && (
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Password *</Text>
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>{isEdit ? 'Password (leave empty to keep current)' : 'Password *'}</Text>
+              <View style={styles.passwordInputContainer}>
                 <TextInput
-                  style={styles.formInput}
-                  placeholder="Enter password"
+                  style={styles.passwordInput}
+                  placeholder={isEdit ? 'Enter new password to change' : 'Enter password'}
                   placeholderTextColor={COLORS.textMuted}
                   value={formData.password}
                   onChangeText={(text) => setFormData({ ...formData, password: text })}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                 />
-              </View>
-            )}
-
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Role</Text>
-              <View style={styles.roleSelector}>
                 <TouchableOpacity
-                  style={[styles.roleOption, formData.role === 'admin' && styles.roleOptionActive]}
-                  onPress={() => setFormData({ ...formData, role: 'admin' })}
+                  style={styles.passwordToggle}
+                  onPress={() => setShowPassword(!showPassword)}
                 >
-                  <Ionicons 
-                    name="person" 
-                    size={18} 
-                    color={formData.role === 'admin' ? COLORS.primary : COLORS.textMuted} 
+                  <Ionicons
+                    name={showPassword ? 'eye-off' : 'eye'}
+                    size={22}
+                    color={COLORS.textMuted}
                   />
-                  <Text style={[styles.roleOptionText, formData.role === 'admin' && styles.roleOptionTextActive]}>
-                    Admin
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.roleOption, formData.role === 'superadmin' && styles.roleOptionActive]}
-                  onPress={() => setFormData({ ...formData, role: 'superadmin' })}
-                >
-                  <Ionicons 
-                    name="shield-checkmark" 
-                    size={18} 
-                    color={formData.role === 'superadmin' ? COLORS.accent : COLORS.textMuted} 
-                  />
-                  <Text style={[styles.roleOptionText, formData.role === 'superadmin' && styles.roleOptionTextActive]}>
-                    Super Admin
-                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Hide role selector when editing owner - owner role cannot be changed */}
+            {!(isEdit && selectedAdmin?.role === 'owner') && (
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Role</Text>
+                <View style={styles.roleSelector}>
+                  <TouchableOpacity
+                    style={[styles.roleOption, formData.role === 'admin' && styles.roleOptionActive]}
+                    onPress={() => setFormData({ ...formData, role: 'admin' })}
+                  >
+                    <Ionicons 
+                      name="person" 
+                      size={18} 
+                      color={formData.role === 'admin' ? COLORS.primary : COLORS.textMuted} 
+                    />
+                    <Text style={[styles.roleOptionText, formData.role === 'admin' && styles.roleOptionTextActive]}>
+                      Admin
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.roleOption, formData.role === 'superadmin' && styles.roleOptionActive]}
+                    onPress={() => setFormData({ ...formData, role: 'superadmin' })}
+                  >
+                    <Ionicons 
+                      name="shield-checkmark" 
+                      size={18} 
+                      color={formData.role === 'superadmin' ? COLORS.accent : COLORS.textMuted} 
+                    />
+                    <Text style={[styles.roleOptionText, formData.role === 'superadmin' && styles.roleOptionTextActive]}>
+                      Super Admin
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {formError ? (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={16} color={COLORS.error} />
+                <Text style={styles.errorText}>{formError}</Text>
+              </View>
+            ) : null}
           </ScrollView>
 
           <View style={styles.modalFooter}>
             <TouchableOpacity
               style={styles.modalSecondaryButton}
               onPress={() => isEdit ? setShowEditModal(false) : setShowAddModal(false)}
+              disabled={actionLoading}
             >
               <Text style={styles.modalSecondaryButtonText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.modalPrimaryButton}
+              style={[styles.modalPrimaryButton, actionLoading && { opacity: 0.6 }]}
               onPress={isEdit ? handleEditAdmin : handleAddAdmin}
+              disabled={actionLoading}
             >
-              <Ionicons name={isEdit ? "checkmark" : "add"} size={18} color="#fff" />
-              <Text style={styles.modalPrimaryButtonText}>{isEdit ? 'Save Changes' : 'Create Admin'}</Text>
+              {actionLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name={isEdit ? "checkmark" : "add"} size={18} color="#fff" />
+                  <Text style={styles.modalPrimaryButtonText}>{isEdit ? 'Save Changes' : 'Create Admin'}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Pause/Activate Confirmation Modal
+  const renderPauseModal = () => (
+    <Modal
+      visible={showPauseModal}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setShowPauseModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.deleteModalContent, isMobile && styles.modalContentMobile]}>
+          <View style={[styles.deleteIconContainer, { backgroundColor: selectedAdmin?.isActive ? COLORS.warning + '15' : COLORS.success + '15' }]}>
+            <Ionicons 
+              name={selectedAdmin?.isActive ? 'pause-circle' : 'play-circle'} 
+              size={48} 
+              color={selectedAdmin?.isActive ? COLORS.warning : COLORS.success} 
+            />
+          </View>
+          <Text style={styles.deleteModalTitle}>
+            {selectedAdmin?.isActive ? 'Pause Admin' : 'Activate Admin'}
+          </Text>
+          <Text style={styles.deleteModalText}>
+            {selectedAdmin?.isActive 
+              ? `Are you sure you want to pause ${selectedAdmin?.displayName}? They won't be able to log in until activated again.`
+              : `Are you sure you want to activate ${selectedAdmin?.displayName}? They will be able to log in again.`
+            }
+          </Text>
+          <View style={styles.deleteModalButtons}>
+            <TouchableOpacity
+              style={styles.deleteModalCancelButton}
+              onPress={() => {
+                setShowPauseModal(false);
+                setSelectedAdmin(null);
+              }}
+              disabled={actionLoading}
+            >
+              <Text style={styles.deleteModalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.deleteModalConfirmButton, 
+                { backgroundColor: selectedAdmin?.isActive ? COLORS.warning : COLORS.success },
+                actionLoading && { opacity: 0.6 }
+              ]}
+              onPress={handleToggleStatus}
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons 
+                    name={selectedAdmin?.isActive ? 'pause' : 'play'} 
+                    size={18} 
+                    color="#fff" 
+                  />
+                  <Text style={styles.deleteModalConfirmText}>
+                    {selectedAdmin?.isActive ? 'Pause' : 'Activate'}
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -558,21 +866,102 @@ export default function ManageAdminsScreen() {
           </View>
           <Text style={styles.deleteModalTitle}>Delete Admin</Text>
           <Text style={styles.deleteModalText}>
-            Are you sure you want to delete {selectedAdmin?.name}? This action cannot be undone.
+            Are you sure you want to delete {selectedAdmin?.displayName || selectedAdmin?.email}? This action cannot be undone.
           </Text>
           <View style={styles.deleteModalButtons}>
             <TouchableOpacity
               style={styles.deleteModalCancelButton}
               onPress={() => setShowDeleteModal(false)}
+              disabled={actionLoading}
             >
               <Text style={styles.deleteModalCancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.deleteModalConfirmButton}
+              style={[styles.deleteModalConfirmButton, actionLoading && { opacity: 0.6 }]}
               onPress={handleDeleteAdmin}
+              disabled={actionLoading}
             >
-              <Ionicons name="trash" size={18} color="#fff" />
-              <Text style={styles.deleteModalConfirmText}>Delete</Text>
+              {actionLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="trash" size={18} color="#fff" />
+                  <Text style={styles.deleteModalConfirmText}>Delete</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Password Confirmation Modal (for deleting admins)
+  const renderOwnerPasswordModal = () => (
+    <Modal
+      visible={showOwnerPasswordModal}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => {
+        setShowOwnerPasswordModal(false);
+        setOwnerPasswordInput('');
+      }}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.deleteModalContent, isMobile && styles.modalContentMobile]}>
+          <View style={[styles.deleteIconContainer, { backgroundColor: COLORS.warning + '15' }]}>
+            <Ionicons name="key" size={48} color={COLORS.warning} />
+          </View>
+          <Text style={styles.deleteModalTitle}>Password Required</Text>
+          <Text style={styles.deleteModalText}>
+            Enter your password to confirm deletion of {selectedAdmin?.displayName}.
+          </Text>
+          <View style={styles.formGroup}>
+            <TextInput
+              style={[styles.formInput, { marginTop: 10, borderColor: passwordError ? COLORS.error : COLORS.border }]}
+              placeholder="Enter your password"
+              placeholderTextColor={COLORS.textMuted}
+              value={ownerPasswordInput}
+              onChangeText={(text) => {
+                setOwnerPasswordInput(text);
+                if (passwordError) setPasswordError('');
+              }}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+            {passwordError ? (
+              <View style={styles.passwordErrorContainer}>
+                <Ionicons name="alert-circle" size={14} color={COLORS.error} />
+                <Text style={styles.passwordErrorText}>{passwordError}</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={styles.deleteModalButtons}>
+            <TouchableOpacity
+              style={styles.deleteModalCancelButton}
+              onPress={() => {
+                setShowOwnerPasswordModal(false);
+                setOwnerPasswordInput('');
+                setPasswordError('');
+                setSelectedAdmin(null);
+              }}
+              disabled={actionLoading}
+            >
+              <Text style={styles.deleteModalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.deleteModalConfirmButton, actionLoading && { opacity: 0.6 }]}
+              onPress={handleOwnerPasswordConfirm}
+              disabled={actionLoading || !ownerPasswordInput}
+            >
+              {actionLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="trash" size={18} color="#fff" />
+                  <Text style={styles.deleteModalConfirmText}>Delete</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -613,6 +1002,8 @@ export default function ManageAdminsScreen() {
       {renderFormModal(false)}
       {renderFormModal(true)}
       {renderDeleteModal()}
+      {renderPauseModal()}
+      {renderOwnerPasswordModal()}
     </View>
   );
 }
@@ -686,6 +1077,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addButton: {
     flexDirection: 'row',
@@ -1040,6 +1444,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textPrimary,
   },
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 10,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  passwordToggle: {
+    padding: 12,
+  },
   roleSelector: {
     flexDirection: 'row',
     gap: 12,
@@ -1131,5 +1551,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+
+  // Error display
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.error + '15',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.error,
+  },
+  passwordErrorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  passwordErrorText: {
+    fontSize: 13,
+    color: COLORS.error,
+    fontWeight: '500',
   },
 });
