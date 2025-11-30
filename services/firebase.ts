@@ -11,8 +11,9 @@ import { Platform } from 'react-native';
 // CONFIGURATION
 // ============================================
 
-// Set to true for local development, false for production
-const USE_EMULATOR = __DEV__; // Automatically true in development
+// Set to false to use REAL Firebase (recommended for team development)
+// Set to true only for offline local testing
+const USE_EMULATOR = false; // Using real Firebase for team sync
 
 // Emulator host - use 10.0.2.2 for Android emulator, localhost for web/iOS
 const getEmulatorHost = () => {
