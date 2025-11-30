@@ -581,7 +581,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: { 
     flexGrow: 1, 
-    paddingBottom: isWeb ? 40 : 120,
+    paddingBottom: isWeb ? 60 : 150,
     minHeight: '100%',
   },
   content: {
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
     maxWidth: 700,
     width: '100%',
     alignSelf: 'center',
-    paddingBottom: isWeb ? 20 : 30,
+    paddingBottom: isWeb ? 40 : 60,
   },
   faqSection: { marginBottom: 24 },
   faqCard: {

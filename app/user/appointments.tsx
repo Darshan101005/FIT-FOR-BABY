@@ -14,6 +14,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import BottomNavBar from '@/components/navigation/BottomNavBar';
 
 const isWeb = Platform.OS === 'web';
 
@@ -887,6 +888,8 @@ export default function AppointmentsScreen() {
           )}
         </View>
       </ScrollView>
+      
+      <BottomNavBar />
     </View>
   );
 }
@@ -968,7 +971,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 30,
+    paddingBottom: 100,
   },
   contentContainer: {
     paddingHorizontal: 16,
