@@ -4,6 +4,8 @@ import { Admin as FirebaseAdmin } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+// Added imports for Password Update functionality
+import { getAuth, updatePassword } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -251,11 +253,43 @@ export default function ManageAdminsScreen() {
         role: formData.role,
       };
 
-      // Store password in Firestore if provided (for small-scale project per user request)
-      // Note: In production, use Firebase Admin SDK on server-side for password changes
-      if (formData.password && formData.password.trim().length > 0) {
-        updateData.password = formData.password; // Stored for superadmin reference
+      // --- LOGIC CHANGE START ---
+      // Check if the user is editing their own profile
+      const isEditingSelf = currentUser && selectedAdmin.uid === currentUser.uid;
+
+      // Only attempt to update password if it's the current user AND they provided a new password
+      if (isEditingSelf && formData.password && formData.password.trim().length > 0) {
+        
+        if (formData.password.length < 6) {
+             setFormError('New password must be at least 6 characters');
+             setActionLoading(false);
+             return;
+        }
+
+        try {
+          const auth = getAuth();
+          // Verify we have a user logged in to Auth SDK
+          if (auth.currentUser) {
+            // Update in Firebase Auth
+            await updatePassword(auth.currentUser, formData.password);
+            // If successful, add to Firestore update data to keep sync
+            updateData.password = formData.password;
+          } else {
+             console.warn("No Auth user found, skipping auth password update");
+          }
+        } catch (authError: any) {
+          if (authError.code === 'auth/requires-recent-login') {
+            Alert.alert('Security Check', 'To change your password, please logout and login again to verify your identity.');
+            setActionLoading(false);
+            return;
+          } else {
+            // Throw to outer catch block
+            throw new Error(authError.message || 'Failed to update password in authentication system.');
+          }
+        }
       }
+      // If editing someone else, we do NOTHING with password, even if entered.
+      // --- LOGIC CHANGE END ---
 
       await adminService.update(selectedAdmin.uid, updateData);
 
@@ -394,11 +428,17 @@ export default function ManageAdminsScreen() {
 
   const openEditModal = (admin: Admin) => {
     setSelectedAdmin(admin);
+    // Determine if we show the password in the box
+    // If editing self, show current password (or empty if you prefer they re-enter)
+    // If editing others, we will hide the field in render, so data here matters less, 
+    // but good practice not to load their password.
+    const isEditingSelf = currentUser && admin.uid === currentUser.uid;
+
     setFormData({
       name: admin.displayName || '',
       email: admin.email || '',
       phone: admin.phone || '',
-      password: admin.password || '', // Load stored password for display
+      password: isEditingSelf ? (admin.password || '') : '', // Only load pass if self
       role: admin.role,
     });
     setFormError('');
@@ -689,29 +729,37 @@ export default function ManageAdminsScreen() {
               />
             </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>{isEdit ? 'Password (leave empty to keep current)' : 'Password *'}</Text>
-              <View style={styles.passwordInputContainer}>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder={isEdit ? 'Enter new password to change' : 'Enter password'}
-                  placeholderTextColor={COLORS.textMuted}
-                  value={formData.password}
-                  onChangeText={(text) => setFormData({ ...formData, password: text })}
-                  secureTextEntry={!showPassword}
-                />
-                <TouchableOpacity
-                  style={styles.passwordToggle}
-                  onPress={() => setShowPassword(!showPassword)}
-                >
-                  <Ionicons
-                    name={showPassword ? 'eye-off' : 'eye'}
-                    size={22}
-                    color={COLORS.textMuted}
+            {/* --- LOGIC CHANGE START --- 
+                Only show Password Field if:
+                1. It is 'Add New Admin' mode (!isEdit)
+                2. OR It is 'Edit Mode' AND user is editing themselves
+            */}
+            {(!isEdit || (isEdit && selectedAdmin?.uid === currentUser?.uid)) && (
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>{isEdit ? 'Password (leave empty to keep current)' : 'Password *'}</Text>
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder={isEdit ? 'Enter new password to change' : 'Enter password'}
+                    placeholderTextColor={COLORS.textMuted}
+                    value={formData.password}
+                    onChangeText={(text) => setFormData({ ...formData, password: text })}
+                    secureTextEntry={!showPassword}
                   />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.passwordToggle}
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-off' : 'eye'}
+                      size={22}
+                      color={COLORS.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
+            )}
+            {/* --- LOGIC CHANGE END --- */}
 
             {/* Hide role selector when editing owner - owner role cannot be changed */}
             {!(isEdit && selectedAdmin?.role === 'owner') && (
