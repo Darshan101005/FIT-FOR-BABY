@@ -1,11 +1,30 @@
-// Firebase Configuration
-// TODO: Replace with your actual Firebase config from Firebase Console
+// Firebase Configuration with Emulator Support
+// Switch between emulator and production by changing USE_EMULATOR flag
 
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
+import { connectStorageEmulator, getStorage } from 'firebase/storage';
+import { Platform } from 'react-native';
 
-// Your web app's Firebase configuration
+// ============================================
+// CONFIGURATION
+// ============================================
+
+// Set to true for local development, false for production
+const USE_EMULATOR = __DEV__; // Automatically true in development
+
+// Emulator host - use 10.0.2.2 for Android emulator, localhost for web/iOS
+const getEmulatorHost = () => {
+  if (Platform.OS === 'android') {
+    return '10.0.2.2'; // Android emulator localhost
+  }
+  return 'localhost'; // iOS simulator and web
+};
+
+const EMULATOR_HOST = getEmulatorHost();
+
+// Your Firebase production configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBJ55SK7CRIB7gpVZ0FYvxVq7rqXYk205w",
   authDomain: "fit-for-baby.firebaseapp.com",
@@ -16,46 +35,69 @@ const firebaseConfig = {
   measurementId: "G-4PR80EPMZQ"
 };
 
-// Initialize Firebase
+// ============================================
+// INITIALIZE FIREBASE
+// ============================================
+
 const app = initializeApp(firebaseConfig);
 
 // Initialize services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 
-// Admin Login Function
-export const loginAdmin = async (email: string, password: string) => {
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-    
-    console.log('Admin logged in:', user.email);
-    return { success: true, user };
-  } catch (error: any) {
-    console.error('Login error:', error.message);
-    
-    // Handle specific error codes
-    let errorMessage = 'Login failed. Please try again.';
-    
-    if (error.code === 'auth/invalid-email') {
-      errorMessage = 'Invalid email address.';
-    } else if (error.code === 'auth/user-not-found') {
-      errorMessage = 'No admin account found with this email.';
-    } else if (error.code === 'auth/wrong-password') {
-      errorMessage = 'Incorrect password.';
-    } else if (error.code === 'auth/invalid-credential') {
-      errorMessage = 'Invalid email or password.';
+// Connect to emulators if in development
+let emulatorsConnected = false;
+
+export const connectToEmulators = () => {
+  if (USE_EMULATOR && !emulatorsConnected) {
+    try {
+      connectAuthEmulator(auth, `http://${EMULATOR_HOST}:9099`, { disableWarnings: true });
+      connectFirestoreEmulator(db, EMULATOR_HOST, 8080);
+      connectStorageEmulator(storage, EMULATOR_HOST, 9199);
+      emulatorsConnected = true;
+      console.log('🔥 Connected to Firebase Emulators');
+    } catch (error) {
+      console.log('Emulators already connected or error:', error);
     }
-    
-    return { success: false, error: errorMessage };
   }
 };
 
-// Logout Function
-export const logoutAdmin = async () => {
+// Auto-connect to emulators in development
+if (USE_EMULATOR) {
+  connectToEmulators();
+}
+
+// ============================================
+// AUTHENTICATION FUNCTIONS
+// ============================================
+
+// Login with email and password
+export const loginWithEmail = async (email: string, password: string) => {
   try {
-    await auth.signOut();
-    console.log('Admin logged out');
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return { success: true, user: userCredential.user };
+  } catch (error: any) {
+    console.error('Login error:', error.message);
+    return { success: false, error: getAuthErrorMessage(error.code) };
+  }
+};
+
+// Register new user
+export const registerWithEmail = async (email: string, password: string) => {
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    return { success: true, user: userCredential.user };
+  } catch (error: any) {
+    console.error('Registration error:', error.message);
+    return { success: false, error: getAuthErrorMessage(error.code) };
+  }
+};
+
+// Logout
+export const logout = async () => {
+  try {
+    await signOut(auth);
     return { success: true };
   } catch (error: any) {
     console.error('Logout error:', error.message);
@@ -63,7 +105,47 @@ export const logoutAdmin = async () => {
   }
 };
 
-// Check if user is logged in
-export const getCurrentUser = () => {
+// Reset password
+export const resetPassword = async (email: string) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Password reset error:', error.message);
+    return { success: false, error: getAuthErrorMessage(error.code) };
+  }
+};
+
+// Get current user
+export const getCurrentUser = (): User | null => {
   return auth.currentUser;
 };
+
+// Auth error message helper
+const getAuthErrorMessage = (code: string): string => {
+  switch (code) {
+    case 'auth/invalid-email':
+      return 'Invalid email address.';
+    case 'auth/user-not-found':
+      return 'No account found with this email.';
+    case 'auth/wrong-password':
+      return 'Incorrect password.';
+    case 'auth/invalid-credential':
+      return 'Invalid email or password.';
+    case 'auth/email-already-in-use':
+      return 'An account with this email already exists.';
+    case 'auth/weak-password':
+      return 'Password should be at least 6 characters.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please try again later.';
+    default:
+      return 'An error occurred. Please try again.';
+  }
+};
+
+// ============================================
+// LEGACY ADMIN FUNCTIONS (for backward compatibility)
+// ============================================
+
+export const loginAdmin = loginWithEmail;
+export const logoutAdmin = logout;
