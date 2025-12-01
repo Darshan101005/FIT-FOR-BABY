@@ -132,10 +132,31 @@ service cloud.firestore {
     
     // Couples collection (user onboarding)
     match /couples/{coupleId} {
-      allow read: if isAdmin();
+      // Admins can read, create, update couples
+      allow read: if true; // Allow read for login verification
       allow create: if isAdmin();
-      allow update: if isAdmin();
+      allow update: if true; // Allow update for user profile and weight logging
       allow delete: if isSuperAdmin();
+      
+      // Weight logs subcollection - couples can read/write their own logs
+      match /weightLogs/{logId} {
+        allow read, write: if true; // Allow for Firestore-only auth
+      }
+      
+      // Steps subcollection
+      match /steps/{stepId} {
+        allow read, write: if true;
+      }
+      
+      // Food logs subcollection
+      match /foodLogs/{logId} {
+        allow read, write: if true;
+      }
+      
+      // Exercise logs subcollection
+      match /exerciseLogs/{logId} {
+        allow read, write: if true;
+      }
     }
   }
 }

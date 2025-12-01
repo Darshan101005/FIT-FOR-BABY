@@ -4,14 +4,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 // Owner configuration - change these for production
@@ -118,7 +118,12 @@ export default function AdminLogin() {
       await AsyncStorage.setItem('adminRole', adminData.role);
       await AsyncStorage.setItem('adminUid', adminData.uid);
       await AsyncStorage.setItem('adminEmail', adminData.email);
-      await AsyncStorage.setItem('adminName', adminData.displayName);
+      
+      // Construct admin name with fallbacks
+      const adminName = adminData.displayName || 
+        `${adminData.firstName || ''} ${adminData.lastName || ''}`.trim() || 
+        'Admin';
+      await AsyncStorage.setItem('adminName', adminName);
 
       // Update last login time
       await adminService.updateLastLogin(adminData.uid);

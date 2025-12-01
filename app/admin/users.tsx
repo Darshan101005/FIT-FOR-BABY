@@ -492,6 +492,12 @@ export default function AdminUsersScreen() {
                     <Text style={styles.userDetailText}>Age: {couple.male.age} years</Text>
                   </View>
                 ) : null}
+                {couple.male.dateOfBirth ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="gift" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>DOB: {new Date(couple.male.dateOfBirth).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+                  </View>
+                ) : null}
                 {couple.male.phone ? (
                   <View style={styles.userDetailRow}>
                     <Ionicons name="call" size={14} color={COLORS.textMuted} />
@@ -502,6 +508,14 @@ export default function AdminUsersScreen() {
                   <View style={styles.userDetailRow}>
                     <Ionicons name="mail" size={14} color={COLORS.textMuted} />
                     <Text style={styles.userDetailText}>{couple.male.email}</Text>
+                  </View>
+                ) : null}
+                {couple.male.address && (couple.male.address.addressLine1 || couple.male.address.city || couple.male.address.state) ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="location" size={14} color={COLORS.textMuted} />
+                    <Text style={[styles.userDetailText, { flex: 1 }]} numberOfLines={2}>
+                      {[couple.male.address.addressLine1, couple.male.address.addressLine2, couple.male.address.city, couple.male.address.state, couple.male.address.pincode].filter(Boolean).join(', ')}
+                    </Text>
                   </View>
                 ) : null}
                 {/* Health Metrics - only show if at least one value exists */}
@@ -613,6 +627,12 @@ export default function AdminUsersScreen() {
                     <Text style={styles.userDetailText}>Age: {couple.female.age} years</Text>
                   </View>
                 ) : null}
+                {couple.female.dateOfBirth ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="gift" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>DOB: {new Date(couple.female.dateOfBirth).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+                  </View>
+                ) : null}
                 {couple.female.phone ? (
                   <View style={styles.userDetailRow}>
                     <Ionicons name="call" size={14} color={COLORS.textMuted} />
@@ -623,6 +643,14 @@ export default function AdminUsersScreen() {
                   <View style={styles.userDetailRow}>
                     <Ionicons name="mail" size={14} color={COLORS.textMuted} />
                     <Text style={styles.userDetailText}>{couple.female.email}</Text>
+                  </View>
+                ) : null}
+                {couple.female.address && (couple.female.address.addressLine1 || couple.female.address.city || couple.female.address.state) ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="location" size={14} color={COLORS.textMuted} />
+                    <Text style={[styles.userDetailText, { flex: 1 }]} numberOfLines={2}>
+                      {[couple.female.address.addressLine1, couple.female.address.addressLine2, couple.female.address.city, couple.female.address.state, couple.female.address.pincode].filter(Boolean).join(', ')}
+                    </Text>
                   </View>
                 ) : null}
                 {/* Health Metrics - only show if at least one value exists */}

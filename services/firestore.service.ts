@@ -818,6 +818,7 @@ export const coupleService = {
     email?: string;
     phone?: string;
     dateOfBirth?: string;
+    height?: number;
     address?: {
       addressLine1?: string;
       addressLine2?: string;
@@ -839,6 +840,9 @@ export const coupleService = {
     }
     if (profileData.dateOfBirth) {
       updateData[`${gender}.dateOfBirth`] = profileData.dateOfBirth;
+    }
+    if (profileData.height && profileData.height > 0) {
+      updateData[`${gender}.height`] = profileData.height;
     }
     if (profileData.address) {
       // Clean address object - remove empty values
@@ -874,6 +878,173 @@ export const coupleService = {
   async delete(coupleId: string): Promise<void> {
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
     await deleteDoc(coupleRef);
+  },
+};
+
+// ============================================
+// COUPLE WEIGHT LOG OPERATIONS
+// Path: /couples/{coupleId}/weightLogs/{logId}
+// ============================================
+
+export interface CoupleWeightLog {
+  id?: string;
+  coupleId?: string;
+  gender?: 'male' | 'female';
+  date: string; // YYYY-MM-DD
+  weight: number; // in kg
+  height?: number; // in cm
+  waist?: number; // in cm
+  bmi?: number;
+  whtr?: number; // Waist-to-Height Ratio
+  notes?: string;
+  loggedAt?: Timestamp;
+  createdAt?: Timestamp;
+}
+
+export const coupleWeightLogService = {
+  // Add weight log for a couple member
+  async add(coupleId: string, gender: 'male' | 'female', data: {
+    weight: number;
+    height?: number;
+    waist?: number;
+    bmi?: number;
+    whtr?: number;
+    notes?: string;
+    date?: string;
+  }): Promise<string> {
+    try {
+      // First verify the couple exists
+      const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+      const coupleSnapshot = await getDoc(coupleRef);
+      
+      if (!coupleSnapshot.exists()) {
+        throw new Error(`Couple ${coupleId} not found`);
+      }
+
+      const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'weightLogs');
+      const date = data.date || formatDateString(new Date());
+      
+      // Calculate BMI if height is provided and not already provided
+      let bmi = data.bmi;
+      if (!bmi && data.height && data.height > 0) {
+        const heightInMeters = data.height / 100;
+        bmi = Math.round((data.weight / (heightInMeters * heightInMeters)) * 10) / 10;
+      }
+
+      // Calculate WHtR if waist and height are provided and not already provided
+      let whtr = data.whtr;
+      if (!whtr && data.waist && data.height && data.height > 0) {
+        whtr = Math.round((data.waist / data.height) * 100) / 100;
+      }
+      
+      // Add the weight log to subcollection
+      const docRef = await addDoc(logsRef, {
+        coupleId,
+        gender,
+        date,
+        weight: data.weight,
+        height: data.height || null,
+        waist: data.waist || null,
+        bmi: bmi || null,
+        whtr: whtr || null,
+        notes: data.notes || null,
+        loggedAt: now(),
+        createdAt: now(),
+      });
+      
+      // Also update the current weight in the couple document
+      const updateData: Record<string, any> = {
+        [`${gender}.weight`]: data.weight,
+        updatedAt: now(),
+      };
+      if (data.height) {
+        updateData[`${gender}.height`] = data.height;
+      }
+      if (bmi) {
+        updateData[`${gender}.bmi`] = bmi;
+      }
+      await updateDoc(coupleRef, updateData);
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding weight log:', error);
+      throw error;
+    }
+  },
+
+  // Get all weight logs for a couple member
+  async getAll(coupleId: string, gender: 'male' | 'female', limitCount: number = 30): Promise<CoupleWeightLog[]> {
+    try {
+      const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'weightLogs');
+      // Simple query - filter by gender client-side to avoid composite index requirement
+      const q = query(logsRef, orderBy('date', 'desc'), limit(limitCount * 2));
+      const snapshot = await getDocs(q);
+      return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as CoupleWeightLog))
+        .filter(log => log.gender === gender)
+        .slice(0, limitCount);
+    } catch (error) {
+      console.error('Error getting weight logs:', error);
+      return [];
+    }
+  },
+
+  // Get all weight logs for both members (for admin)
+  async getAllForCouple(coupleId: string, limitCount: number = 60): Promise<CoupleWeightLog[]> {
+    const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'weightLogs');
+    const q = query(logsRef, orderBy('date', 'desc'), limit(limitCount));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CoupleWeightLog));
+  },
+
+  // Get latest weight log for a member
+  async getLatest(coupleId: string, gender: 'male' | 'female'): Promise<CoupleWeightLog | null> {
+    const logs = await this.getAll(coupleId, gender, 1);
+    return logs[0] || null;
+  },
+
+  // Get weight logs for a date range
+  async getByDateRange(coupleId: string, gender: 'male' | 'female', startDate: string, endDate: string): Promise<CoupleWeightLog[]> {
+    const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'weightLogs');
+    const q = query(
+      logsRef,
+      where('gender', '==', gender),
+      where('date', '>=', startDate),
+      where('date', '<=', endDate),
+      orderBy('date', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CoupleWeightLog));
+  },
+
+  // Delete weight log
+  async delete(coupleId: string, logId: string): Promise<void> {
+    const logRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'weightLogs', logId);
+    await deleteDoc(logRef);
+  },
+
+  // Subscribe to weight logs (real-time)
+  subscribe(coupleId: string, gender: 'male' | 'female', callback: (logs: CoupleWeightLog[]) => void): Unsubscribe {
+    try {
+      const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'weightLogs');
+      // Simple query - filter by gender client-side to avoid composite index requirement
+      const q = query(logsRef, orderBy('date', 'desc'), limit(60));
+      return onSnapshot(q, 
+        (snapshot) => {
+          const allLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CoupleWeightLog));
+          const filteredLogs = allLogs.filter(log => log.gender === gender).slice(0, 30);
+          callback(filteredLogs);
+        },
+        (error) => {
+          console.error('Weight logs subscription error:', error);
+          callback([]);
+        }
+      );
+    } catch (error) {
+      console.error('Failed to setup weight logs subscription:', error);
+      callback([]);
+      return () => {};
+    }
   },
 };
 

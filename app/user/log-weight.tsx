@@ -1,8 +1,10 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Platform,
   ScrollView,
@@ -13,6 +15,7 @@ import {
   View,
   useWindowDimensions
 } from 'react-native';
+import { coupleService, coupleWeightLogService } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
 
@@ -22,17 +25,11 @@ interface WeightEntry {
   weight: number;
   height?: number;
   waist?: number;
+  bmi?: number;
+  whtr?: number;
   notes?: string;
+  loggedAt?: any;
 }
-
-// Mock historical data
-const mockHistory: WeightEntry[] = [
-  { id: '1', date: '2024-11-20', weight: 85.2, waist: 92 },
-  { id: '2', date: '2024-11-15', weight: 86.0, waist: 93 },
-  { id: '3', date: '2024-11-10', weight: 86.8, waist: 94 },
-  { id: '4', date: '2024-11-05', weight: 87.5, waist: 95 },
-  { id: '5', date: '2024-11-01', weight: 88.0, waist: 96 },
-];
 
 export default function LogWeightScreen() {
   const router = useRouter();
@@ -47,6 +44,73 @@ export default function LogWeightScreen() {
   const [unit, setUnit] = useState<'kg' | 'lbs'>('kg');
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
+  
+  // Firestore state
+  const [coupleId, setCoupleId] = useState<string | null>(null);
+  const [userGender, setUserGender] = useState<'male' | 'female' | null>(null);
+  const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Load user session and weight history
+  useEffect(() => {
+    loadUserSession();
+  }, []);
+
+  // Subscribe to weight logs when coupleId and gender are available
+  useEffect(() => {
+    if (!coupleId || !userGender) return;
+    
+    const unsubscribe = coupleWeightLogService.subscribe(
+      coupleId,
+      userGender,
+      (logs) => {
+        const formattedLogs: WeightEntry[] = logs.map(log => ({
+          id: log.id || '',
+          date: log.date,
+          weight: log.weight,
+          height: log.height,
+          waist: log.waist,
+          bmi: log.bmi,
+          whtr: log.whtr,
+          notes: log.notes,
+          loggedAt: log.loggedAt
+        }));
+        setWeightHistory(formattedLogs);
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [coupleId, userGender]);
+
+  const loadUserSession = async () => {
+    try {
+      const storedCoupleId = await AsyncStorage.getItem('coupleId');
+      const storedGender = await AsyncStorage.getItem('userGender') as 'male' | 'female' | null;
+      
+      if (storedCoupleId && storedGender) {
+        setCoupleId(storedCoupleId);
+        setUserGender(storedGender);
+        
+        // Load user's saved height from profile
+        const coupleData = await coupleService.get(storedCoupleId);
+        if (coupleData) {
+          const userData = storedGender === 'male' ? coupleData.male : coupleData.female;
+          if (userData?.height) {
+            setHeight(userData.height.toString());
+          }
+        }
+      } else {
+        setIsLoading(false);
+        showToast('Please log in again', 'error');
+      }
+    } catch (error) {
+      console.error('Error loading session:', error);
+      setIsLoading(false);
+    }
+  };
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -92,17 +156,54 @@ export default function LogWeightScreen() {
     return { label: 'High risk', color: '#ef4444' };
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!weight || parseFloat(weight) <= 0) {
       showToast('Please enter a valid weight', 'error');
       return;
     }
-    showToast('Weight logged successfully!', 'success');
-    setTimeout(() => {
+
+    if (!coupleId || !userGender) {
+      showToast('Session expired. Please log in again.', 'error');
+      console.error('Missing session data - coupleId:', coupleId, 'userGender:', userGender);
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const weightValue = unit === 'lbs' ? parseFloat(weight) * 0.453592 : parseFloat(weight);
+      const heightValue = parseFloat(height) || 165;
+      const waistValue = waist ? parseFloat(waist) : undefined;
+      
+      const bmi = parseFloat(calculateBMI());
+      const whtr = calculateWHtR();
+
+      console.log('Saving weight log:', { coupleId, userGender, weightValue, heightValue, waistValue, bmi, whtr });
+
+      const logData = {
+        weight: Math.round(weightValue * 10) / 10,
+        height: heightValue,
+        waist: waistValue,
+        bmi: Math.round(bmi * 10) / 10,
+        whtr: whtr ? parseFloat(whtr) : undefined,
+        notes: notes || undefined,
+        date: new Date().toISOString().split('T')[0],
+      };
+
+      const logId = await coupleWeightLogService.add(coupleId, userGender, logData);
+      console.log('Weight log saved with ID:', logId);
+
+      showToast('Weight logged successfully!', 'success');
       setWeight('');
       setWaist('');
       setNotes('');
-    }, 1500);
+    } catch (error: any) {
+      console.error('Error saving weight:', error);
+      const errorMessage = error?.message || 'Failed to save weight. Please try again.';
+      showToast(errorMessage, 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -110,6 +211,32 @@ export default function LogWeightScreen() {
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  const handleDeleteLatest = async () => {
+    if (!coupleId || weightHistory.length === 0) return;
+    
+    const latestEntry = weightHistory[0];
+    
+    // Confirm deletion - use window.confirm for web, simple confirmation for mobile
+    const confirmDelete = isWeb 
+      ? window.confirm('Are you sure you want to delete the latest weight entry?')
+      : true; // For mobile, we'll show the delete button only, no extra confirmation
+    
+    if (!confirmDelete) {
+      return;
+    }
+    
+    setIsDeleting(true);
+    try {
+      await coupleWeightLogService.delete(coupleId, latestEntry.id);
+      showToast('Entry deleted successfully', 'success');
+    } catch (error) {
+      console.error('Error deleting entry:', error);
+      showToast('Failed to delete entry', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const renderHeader = () => (
@@ -288,32 +415,28 @@ export default function LogWeightScreen() {
           />
         </View>
 
-        {/* Health Tips */}
-        <View style={styles.tipsCard}>
-          <View style={styles.tipsHeader}>
-            <Ionicons name="bulb-outline" size={20} color="#f59e0b" />
-            <Text style={styles.tipsTitle}>Tips for Accurate Measurements</Text>
-          </View>
-          <View style={styles.tipsList}>
-            <Text style={styles.tipItem}>• Weigh yourself at the same time each day</Text>
-            <Text style={styles.tipItem}>• Best time: Morning, after using restroom</Text>
-            <Text style={styles.tipItem}>• Wear similar clothing or weigh without clothes</Text>
-            <Text style={styles.tipItem}>• For waist: Stand relaxed, don't suck in</Text>
-          </View>
-        </View>
-
         {/* Save Button */}
         <TouchableOpacity
-          style={styles.saveButton}
+          style={[styles.saveButton, isSaving && { opacity: 0.7 }]}
           onPress={handleSave}
           activeOpacity={0.85}
+          disabled={isSaving}
         >
           <LinearGradient
             colors={['#006dab', '#005a8f']}
             style={styles.saveButtonGradient}
           >
-            <Text style={styles.saveButtonText}>Save Measurement</Text>
-            <Ionicons name="checkmark" size={20} color="#fff" />
+            {isSaving ? (
+              <>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.saveButtonText}>Saving...</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.saveButtonText}>Save Measurement</Text>
+                <Ionicons name="checkmark" size={20} color="#fff" />
+              </>
+            )}
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -321,8 +444,37 @@ export default function LogWeightScreen() {
   };
 
   const renderHistory = () => {
-    const lastEntry = mockHistory[0];
-    const firstEntry = mockHistory[mockHistory.length - 1];
+    if (isLoading) {
+      return (
+        <View style={[styles.content, { alignItems: 'center', justifyContent: 'center', minHeight: 300 }]}>
+          <ActivityIndicator size="large" color="#006dab" />
+          <Text style={{ marginTop: 16, color: '#64748b' }}>Loading history...</Text>
+        </View>
+      );
+    }
+
+    if (weightHistory.length === 0) {
+      return (
+        <View style={[styles.content, { alignItems: 'center', justifyContent: 'center', minHeight: 300 }]}>
+          <MaterialCommunityIcons name="scale-bathroom" size={64} color="#cbd5e1" />
+          <Text style={{ marginTop: 16, fontSize: 18, fontWeight: '600', color: '#64748b' }}>
+            No weight entries yet
+          </Text>
+          <Text style={{ marginTop: 8, color: '#94a3b8', textAlign: 'center' }}>
+            Start logging your weight to track your progress
+          </Text>
+          <TouchableOpacity
+            style={{ marginTop: 24, backgroundColor: '#006dab', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+            onPress={() => setStep('log')}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Log Your First Weight</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    const lastEntry = weightHistory[0];
+    const firstEntry = weightHistory[weightHistory.length - 1];
     const totalChange = firstEntry.weight - lastEntry.weight;
 
     return (
@@ -359,9 +511,10 @@ export default function LogWeightScreen() {
         <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>Weight Trend</Text>
           <View style={styles.chartContainer}>
-            {mockHistory.slice().reverse().map((entry, index) => {
-              const maxWeight = Math.max(...mockHistory.map(e => e.weight));
-              const minWeight = Math.min(...mockHistory.map(e => e.weight));
+            {weightHistory.slice(0, 7).reverse().map((entry, index, arr) => {
+              const displayData = weightHistory.slice(0, 7);
+              const maxWeight = Math.max(...displayData.map(e => e.weight));
+              const minWeight = Math.min(...displayData.map(e => e.weight));
               const range = maxWeight - minWeight || 1;
               const heightPercent = ((entry.weight - minWeight) / range) * 100;
               
@@ -373,7 +526,7 @@ export default function LogWeightScreen() {
                         styles.chartBarFill, 
                         { 
                           height: `${Math.max(20, heightPercent)}%`,
-                          backgroundColor: index === mockHistory.length - 1 ? '#006dab' : '#94a3b8'
+                          backgroundColor: index === arr.length - 1 ? '#006dab' : '#94a3b8'
                         }
                       ]} 
                     />
@@ -387,13 +540,14 @@ export default function LogWeightScreen() {
         </View>
 
         {/* History List */}
-        <Text style={styles.historyTitle}>Recent Entries</Text>
-        {mockHistory.map((entry, index) => {
-          const prevEntry = mockHistory[index + 1];
+        <Text style={styles.historyTitle}>Recent Entries ({weightHistory.length})</Text>
+        {weightHistory.map((entry, index) => {
+          const prevEntry = weightHistory[index + 1];
           const change = prevEntry ? entry.weight - prevEntry.weight : 0;
+          const isLatest = index === 0;
           
           return (
-            <View key={entry.id} style={styles.historyItem}>
+            <View key={entry.id} style={[styles.historyItem, isLatest && styles.historyItemLatest]}>
               <View style={styles.historyDate}>
                 <Text style={styles.historyDay}>
                   {new Date(entry.date).toLocaleDateString('en-US', { day: 'numeric' })}
@@ -401,6 +555,11 @@ export default function LogWeightScreen() {
                 <Text style={styles.historyMonth}>
                   {new Date(entry.date).toLocaleDateString('en-US', { month: 'short' })}
                 </Text>
+                {isLatest && (
+                  <View style={styles.latestBadge}>
+                    <Text style={styles.latestBadgeText}>Latest</Text>
+                  </View>
+                )}
               </View>
               <View style={styles.historyDetails}>
                 <View style={styles.historyMain}>
@@ -425,13 +584,37 @@ export default function LogWeightScreen() {
                     </View>
                   )}
                 </View>
+                {entry.bmi && (
+                  <View style={styles.historyWaist}>
+                    <Text style={styles.historyWaistText}>BMI: {entry.bmi}</Text>
+                  </View>
+                )}
                 {entry.waist && (
                   <View style={styles.historyWaist}>
                     <MaterialCommunityIcons name="tape-measure" size={16} color="#94a3b8" />
                     <Text style={styles.historyWaistText}>Waist: {entry.waist} cm</Text>
+                    {entry.whtr && <Text style={styles.historyWaistText}> • WHtR: {entry.whtr}</Text>}
                   </View>
                 )}
+                {entry.notes && (
+                  <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, fontStyle: 'italic' }}>
+                    {entry.notes}
+                  </Text>
+                )}
               </View>
+              {isLatest && (
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={handleDeleteLatest}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <ActivityIndicator size="small" color="#ef4444" />
+                  ) : (
+                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           );
         })}
@@ -812,4 +995,30 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   historyWaistText: { fontSize: 13, color: '#64748b' },
+  historyItemLatest: {
+    borderWidth: 2,
+    borderColor: '#006dab',
+  },
+  latestBadge: {
+    backgroundColor: '#006dab',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  latestBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#ffffff',
+    textTransform: 'uppercase',
+  },
+  deleteButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fef2f2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
 });

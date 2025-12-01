@@ -210,6 +210,10 @@ export default function PersonalInfoScreen() {
         showToast('Pincode must be 6 digits', 'error');
         return;
       }
+      if (field === 'addressLine1' && (!tempValue || !tempValue.trim())) {
+        showToast('Address Line 1 is required', 'error');
+        return;
+      }
       
       // Build update object
       let updateData: any = {};
@@ -771,14 +775,76 @@ export default function PersonalInfoScreen() {
                 </TouchableOpacity>
                 
                 {showDobPicker && (
-                  <DateTimePicker
-                    value={userData.dateOfBirth ? new Date(userData.dateOfBirth) : new Date(1990, 0, 1)}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    maximumDate={new Date()}
-                    minimumDate={new Date(1950, 0, 1)}
-                    onChange={handleDobChange}
-                  />
+                  Platform.OS === 'web' ? (
+                    <Modal
+                      visible={showDobPicker}
+                      transparent={true}
+                      animationType="fade"
+                      onRequestClose={() => setShowDobPicker(false)}
+                    >
+                      <View style={styles.dobModalOverlay}>
+                        <View style={[styles.dobModalContent, { backgroundColor: colors.cardBackground }]}>
+                          <Text style={[styles.dobModalTitle, { color: colors.text }]}>Select Date of Birth</Text>
+                          <TextInput
+                            style={[styles.dobInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border }]}
+                            placeholder="YYYY-MM-DD"
+                            placeholderTextColor={colors.textMuted}
+                            defaultValue={userData.dateOfBirth || ''}
+                            onChangeText={(text) => {
+                              // Store temporarily
+                              setTempValue(text);
+                            }}
+                          />
+                          <Text style={[styles.dobHelperText, { color: colors.textSecondary }]}>
+                            Format: YYYY-MM-DD (e.g., 1990-05-15)
+                          </Text>
+                          <View style={styles.dobModalButtons}>
+                            <TouchableOpacity
+                              style={[styles.dobModalCancelBtn, { borderColor: colors.border }]}
+                              onPress={() => {
+                                setShowDobPicker(false);
+                                setTempValue(null);
+                              }}
+                            >
+                              <Text style={[styles.dobModalCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.dobModalSaveBtn, { backgroundColor: colors.primary }]}
+                              onPress={async () => {
+                                if (tempValue && /^\d{4}-\d{2}-\d{2}$/.test(tempValue)) {
+                                  try {
+                                    const userGender = await AsyncStorage.getItem('userGender') as 'male' | 'female';
+                                    await coupleService.updateUserField(userData.coupleId, userGender, {
+                                      [`${userGender}.dateOfBirth`]: tempValue,
+                                    });
+                                    setUserData(prev => ({ ...prev, dateOfBirth: tempValue }));
+                                    setShowDobPicker(false);
+                                    setTempValue(null);
+                                    showToast('Date of birth updated', 'success');
+                                  } catch (error) {
+                                    showToast('Failed to save', 'error');
+                                  }
+                                } else {
+                                  showToast('Please enter date in YYYY-MM-DD format', 'error');
+                                }
+                              }}
+                            >
+                              <Text style={styles.dobModalSaveText}>Save</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    </Modal>
+                  ) : (
+                    <DateTimePicker
+                      value={userData.dateOfBirth ? new Date(userData.dateOfBirth) : new Date(1990, 0, 1)}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      maximumDate={new Date()}
+                      minimumDate={new Date(1950, 0, 1)}
+                      onChange={handleDobChange}
+                    />
+                  )
                 )}
               </>
             ))}
@@ -1322,5 +1388,65 @@ const styles = StyleSheet.create({
   stateItemText: {
     fontSize: 15,
     fontWeight: '500',
+  },
+  // DOB Web Modal Styles
+  dobModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  dobModalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 24,
+  },
+  dobModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  dobInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  dobHelperText: {
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  dobModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 12,
+  },
+  dobModalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  dobModalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  dobModalSaveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  dobModalSaveText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

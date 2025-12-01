@@ -1,7 +1,9 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
@@ -10,6 +12,7 @@ import {
     View,
     useWindowDimensions,
 } from 'react-native';
+import { CoupleWeightLog, coupleService, coupleWeightLogService } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
 
@@ -79,25 +82,11 @@ interface UserData {
   phone: string;
   email: string;
   status: 'Active' | 'Inactive';
+  dateOfBirth?: string;
+  lastWeightDate?: string;
 }
 
-// Mock user data
-const mockUserData: Record<string, { male: UserData; female: UserData }> = {
-  'C_001': {
-    male: { id: 'C_001_M', name: 'John Doe', gender: 'male', age: 32, weight: 75, height: 175, bmi: 24.5, phone: '+91 98765 43210', email: 'john@example.com', status: 'Active' },
-    female: { id: 'C_001_F', name: 'Sarah Doe', gender: 'female', age: 28, weight: 58, height: 162, bmi: 22.1, phone: '+91 98765 43211', email: 'sarah@example.com', status: 'Active' },
-  },
-  'C_002': {
-    male: { id: 'C_002_M', name: 'Raj Kumar', gender: 'male', age: 30, weight: 70, height: 170, bmi: 24.2, phone: '+91 98765 43212', email: 'raj@example.com', status: 'Active' },
-    female: { id: 'C_002_F', name: 'Priya Kumar', gender: 'female', age: 27, weight: 55, height: 158, bmi: 22.0, phone: '+91 98765 43213', email: 'priya@example.com', status: 'Active' },
-  },
-  'C_003': {
-    male: { id: 'C_003_M', name: 'Anand M', gender: 'male', age: 35, weight: 80, height: 178, bmi: 25.2, phone: '+91 98765 43214', email: 'anand@example.com', status: 'Active' },
-    female: { id: 'C_003_F', name: 'Meena S', gender: 'female', age: 31, weight: 62, height: 160, bmi: 24.2, phone: '+91 98765 43215', email: 'meena@example.com', status: 'Active' },
-  },
-};
-
-// Mock exercise logs - based on log-exercise.tsx structure
+// Mock exercise logs - keep for now until exercise logging is implemented
 const mockExerciseLogs: Record<string, ExerciseLog[]> = {
   'C_001_M': [
     { id: 'ex1', date: '2024-11-28', exerciseType: 'couple-walking', exerciseName: 'Couple Walking', nameTamil: 'தம்பதிகள் நடைப்பயிற்சி', duration: 30, intensity: 'moderate', hardnessRank: 4, caloriesBurned: 120, steps: 3500, partnerParticipated: true, notes: 'Morning walk in the park' },
@@ -199,14 +188,123 @@ export default function UserDashboardScreen() {
   const coupleId = params.coupleId as string || 'C_001';
 
   const [selectedTab, setSelectedTab] = useState<'overview' | 'exercise' | 'meals'>('overview');
-  const [selectedDate, setSelectedDate] = useState('2024-11-28');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [coupleData, setCoupleData] = useState<any>(null);
+  const [maleUser, setMaleUser] = useState<UserData | null>(null);
+  const [femaleUser, setFemaleUser] = useState<UserData | null>(null);
+  const [maleWeightLogs, setMaleWeightLogs] = useState<CoupleWeightLog[]>([]);
+  const [femaleWeightLogs, setFemaleWeightLogs] = useState<CoupleWeightLog[]>([]);
+  const [showWeightHistoryModal, setShowWeightHistoryModal] = useState(false);
+  const [selectedGenderForHistory, setSelectedGenderForHistory] = useState<'male' | 'female'>('male');
 
-  // Get data for BOTH users
-  const coupleData = mockUserData[coupleId];
-  const maleUser = coupleData?.male;
-  const femaleUser = coupleData?.female;
+  // Load couple data from Firestore
+  useEffect(() => {
+    const loadCoupleData = async () => {
+      try {
+        const couple = await coupleService.get(coupleId);
+        if (couple) {
+          setCoupleData(couple);
+          
+          // Calculate age from date of birth
+          const calculateAge = (dob: string | undefined) => {
+            if (!dob) return 0;
+            const birthDate = new Date(dob);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+              age--;
+            }
+            return age;
+          };
+          
+          // Build user data from couple data
+          if (couple.male) {
+            setMaleUser({
+              id: `${coupleId}_M`,
+              name: couple.male.name || couple.male.displayName || 'Male Partner',
+              gender: 'male',
+              age: couple.male.age || calculateAge(couple.male.dateOfBirth),
+              weight: couple.male.weight || 0,
+              height: couple.male.height || 0,
+              bmi: couple.male.bmi || 0,
+              phone: couple.male.phone || '',
+              email: couple.male.email || '',
+              status: couple.status === 'active' ? 'Active' : 'Inactive',
+              dateOfBirth: couple.male.dateOfBirth,
+            });
+          }
+          
+          if (couple.female) {
+            setFemaleUser({
+              id: `${coupleId}_F`,
+              name: couple.female.name || couple.female.displayName || 'Female Partner',
+              gender: 'female',
+              age: couple.female.age || calculateAge(couple.female.dateOfBirth),
+              weight: couple.female.weight || 0,
+              height: couple.female.height || 0,
+              bmi: couple.female.bmi || 0,
+              phone: couple.female.phone || '',
+              email: couple.female.email || '',
+              status: couple.status === 'active' ? 'Active' : 'Inactive',
+              dateOfBirth: couple.female.dateOfBirth,
+            });
+          }
+        }
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading couple data:', error);
+        setIsLoading(false);
+      }
+    };
+
+    loadCoupleData();
+  }, [coupleId]);
+
+  // Subscribe to weight logs
+  useEffect(() => {
+    if (!coupleId) return;
+
+    const loadWeightLogs = async () => {
+      try {
+        const [maleLogs, femaleLogs] = await Promise.all([
+          coupleWeightLogService.getAll(coupleId, 'male', 30),
+          coupleWeightLogService.getAll(coupleId, 'female', 30)
+        ]);
+        setMaleWeightLogs(maleLogs);
+        setFemaleWeightLogs(femaleLogs);
+        
+        // Update user data with latest weight
+        if (maleLogs.length > 0) {
+          const latestMale = maleLogs[0];
+          setMaleUser(prev => prev ? {
+            ...prev,
+            weight: latestMale.weight,
+            height: latestMale.height || prev.height,
+            bmi: latestMale.bmi || prev.bmi,
+            lastWeightDate: latestMale.date
+          } : null);
+        }
+        if (femaleLogs.length > 0) {
+          const latestFemale = femaleLogs[0];
+          setFemaleUser(prev => prev ? {
+            ...prev,
+            weight: latestFemale.weight,
+            height: latestFemale.height || prev.height,
+            bmi: latestFemale.bmi || prev.bmi,
+            lastWeightDate: latestFemale.date
+          } : null);
+        }
+      } catch (error) {
+        console.error('Error loading weight logs:', error);
+      }
+    };
+
+    loadWeightLogs();
+  }, [coupleId]);
   
-  // Get exercise and meal logs for both users
+  // Get exercise and meal logs for both users (keep using mock for now)
   const maleExerciseLogs = mockExerciseLogs[`${coupleId}_M`] || [];
   const femaleExerciseLogs = mockExerciseLogs[`${coupleId}_F`] || [];
   const maleMealLogs = mockMealLogs[`${coupleId}_M`] || [];
@@ -281,8 +379,31 @@ export default function UserDashboardScreen() {
     </View>
   );
 
+  // Open weight history modal
+  const openWeightHistory = (gender: 'male' | 'female') => {
+    setSelectedGenderForHistory(gender);
+    setShowWeightHistoryModal(true);
+  };
+
+  // Get weight logs for selected gender
+  const getSelectedWeightLogs = () => {
+    return selectedGenderForHistory === 'male' ? maleWeightLogs : femaleWeightLogs;
+  };
+
   // Render single user card
-  const renderSingleUserCard = (user: UserData | undefined, isMale: boolean) => (
+  const renderSingleUserCard = (user: UserData | null | undefined, isMale: boolean) => {
+    if (!user) {
+      return (
+        <View style={[styles.userInfoCard, { flex: 1, borderLeftWidth: 4, borderLeftColor: isMale ? COLORS.primary : '#e91e8c' }]}>
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={{ marginTop: 10, color: COLORS.textSecondary }}>Loading...</Text>
+          </View>
+        </View>
+      );
+    }
+    
+    return (
     <View style={[styles.userInfoCard, { flex: 1, borderLeftWidth: 4, borderLeftColor: isMale ? COLORS.primary : '#e91e8c' }]}>
       <View style={styles.userInfoHeader}>
         <View style={[styles.userAvatar, { backgroundColor: isMale ? COLORS.primary : '#e91e8c' }]}>
@@ -290,40 +411,59 @@ export default function UserDashboardScreen() {
         </View>
         <View style={styles.userInfoDetails}>
           <View style={styles.userNameRow}>
-            <Text style={styles.userName}>{user?.name}</Text>
+            <Text style={styles.userName}>{user?.name || 'N/A'}</Text>
             <View style={[styles.genderBadge, { backgroundColor: isMale ? COLORS.primary + '15' : '#e91e8c15' }]}>
               <Text style={[styles.genderBadgeText, { color: isMale ? COLORS.primary : '#e91e8c' }]}>
                 {isMale ? 'Husband' : 'Wife'}
               </Text>
             </View>
           </View>
-          <Text style={styles.userContact}>{user?.phone}</Text>
-          <Text style={styles.userContact}>{user?.email}</Text>
+          <Text style={styles.userContact}>{user?.phone || '-'}</Text>
+          <Text style={styles.userContact}>{user?.email || '-'}</Text>
+          {user?.dateOfBirth && (
+            <Text style={styles.userContact}>DOB: {user.dateOfBirth}</Text>
+          )}
         </View>
       </View>
       <View style={styles.userStatsRow}>
         <View style={styles.userStatItem}>
-          <Text style={styles.userStatValue}>{user?.age}</Text>
+          <Text style={styles.userStatValue}>{user?.age || '-'}</Text>
           <Text style={styles.userStatLabel}>Age</Text>
         </View>
         <View style={styles.userStatDivider} />
-        <View style={styles.userStatItem}>
-          <Text style={styles.userStatValue}>{user?.weight} kg</Text>
+        <TouchableOpacity 
+          style={styles.userStatItem}
+          onPress={() => openWeightHistory(isMale ? 'male' : 'female')}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={[styles.userStatValue, { color: COLORS.primary }]}>{user?.weight || '-'} kg</Text>
+            <Ionicons name="chevron-forward" size={14} color={COLORS.primary} style={{ marginLeft: 2 }} />
+          </View>
           <Text style={styles.userStatLabel}>Weight</Text>
-        </View>
+          {user?.lastWeightDate && (
+            <Text style={{ fontSize: 10, color: COLORS.textMuted }}>{user.lastWeightDate}</Text>
+          )}
+        </TouchableOpacity>
         <View style={styles.userStatDivider} />
         <View style={styles.userStatItem}>
-          <Text style={styles.userStatValue}>{user?.height} cm</Text>
+          <Text style={styles.userStatValue}>{user?.height || '-'} cm</Text>
           <Text style={styles.userStatLabel}>Height</Text>
         </View>
         <View style={styles.userStatDivider} />
-        <View style={styles.userStatItem}>
-          <Text style={styles.userStatValue}>{user?.bmi}</Text>
+        <TouchableOpacity 
+          style={styles.userStatItem}
+          onPress={() => openWeightHistory(isMale ? 'male' : 'female')}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={[styles.userStatValue, { color: COLORS.primary }]}>{user?.bmi?.toFixed(1) || '-'}</Text>
+            <Ionicons name="chevron-forward" size={14} color={COLORS.primary} style={{ marginLeft: 2 }} />
+          </View>
           <Text style={styles.userStatLabel}>BMI</Text>
-        </View>
+        </TouchableOpacity>
       </View>
     </View>
   );
+  };
 
   // User Info Cards - Both Partners
   const renderUserInfo = () => (
@@ -843,9 +983,146 @@ export default function UserDashboardScreen() {
     </View>
   );
 
+  // Render weight history modal
+  const renderWeightHistoryModal = () => {
+    const weightLogs = getSelectedWeightLogs();
+    const selectedUser = selectedGenderForHistory === 'male' ? maleUser : femaleUser;
+    
+    return (
+      <Modal
+        visible={showWeightHistoryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowWeightHistoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%', width: isMobile ? '95%' : 600 }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.userAvatar, { 
+                  backgroundColor: selectedGenderForHistory === 'male' ? COLORS.primary : '#e91e8c',
+                  width: 36,
+                  height: 36,
+                }]}>
+                  <Ionicons 
+                    name={selectedGenderForHistory === 'male' ? 'male' : 'female'} 
+                    size={20} 
+                    color="#fff" 
+                  />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Weight History</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 13 }}>
+                    {selectedUser?.name}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setShowWeightHistoryModal(false)}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={{ flex: 1 }}>
+              {weightLogs.length === 0 ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <Ionicons name="scale-outline" size={48} color={COLORS.textMuted} />
+                  <Text style={{ marginTop: 12, color: COLORS.textSecondary, fontSize: 15 }}>
+                    No weight logs recorded yet
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ padding: 16 }}>
+                  {/* Summary card */}
+                  {weightLogs.length > 0 && (
+                    <View style={[styles.summaryCard, { marginBottom: 16 }]}>
+                      <View style={styles.summaryRow}>
+                        <View style={styles.summaryItem}>
+                          <Text style={styles.summaryLabel}>Latest Weight</Text>
+                          <Text style={styles.summaryValue}>{weightLogs[0].weight} kg</Text>
+                        </View>
+                        <View style={styles.summaryItem}>
+                          <Text style={styles.summaryLabel}>Latest BMI</Text>
+                          <Text style={styles.summaryValue}>{weightLogs[0].bmi?.toFixed(1) || '-'}</Text>
+                        </View>
+                        <View style={styles.summaryItem}>
+                          <Text style={styles.summaryLabel}>Total Logs</Text>
+                          <Text style={styles.summaryValue}>{weightLogs.length}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                  
+                  {/* History list */}
+                  {weightLogs.map((log, index) => (
+                    <View key={log.id} style={[styles.historyItem, index === 0 && { borderColor: COLORS.primary }]}>
+                      <View style={styles.historyDate}>
+                        <Text style={styles.historyDateText}>{log.date}</Text>
+                        {index === 0 && (
+                          <View style={[styles.latestBadge]}>
+                            <Text style={styles.latestBadgeText}>Latest</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.historyStats}>
+                        <View style={styles.historyStatItem}>
+                          <Ionicons name="fitness" size={16} color={COLORS.primary} />
+                          <Text style={styles.historyStatValue}>{log.weight} kg</Text>
+                        </View>
+                        {log.height && (
+                          <View style={styles.historyStatItem}>
+                            <Ionicons name="resize-outline" size={16} color={COLORS.accent} />
+                            <Text style={styles.historyStatValue}>{log.height} cm</Text>
+                          </View>
+                        )}
+                        {log.bmi && (
+                          <View style={styles.historyStatItem}>
+                            <MaterialCommunityIcons name="scale-balance" size={16} color={COLORS.info} />
+                            <Text style={styles.historyStatValue}>BMI: {log.bmi.toFixed(1)}</Text>
+                          </View>
+                        )}
+                        {log.waist && (
+                          <View style={styles.historyStatItem}>
+                            <Ionicons name="body" size={16} color={COLORS.warning} />
+                            <Text style={styles.historyStatValue}>Waist: {log.waist} cm</Text>
+                          </View>
+                        )}
+                        {log.whtr && (
+                          <View style={styles.historyStatItem}>
+                            <MaterialCommunityIcons name="human-male-height" size={16} color={COLORS.error} />
+                            <Text style={styles.historyStatValue}>WHtR: {log.whtr.toFixed(2)}</Text>
+                          </View>
+                        )}
+                      </View>
+                      {log.notes && (
+                        <Text style={styles.historyNotes}>{log.notes}</Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={{ marginTop: 16, color: COLORS.textSecondary }}>Loading couple data...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {renderHeader()}
+      {renderWeightHistoryModal()}
       
       <ScrollView
         contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
@@ -1501,5 +1778,90 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textMuted,
     marginTop: 12,
+  },
+  
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
+    maxWidth: 600,
+    width: '100%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  modalCloseButton: {
+    padding: 8,
+  },
+  
+  // History modal specific styles
+  historyItem: {
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  historyDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  historyDateText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  latestBadge: {
+    backgroundColor: COLORS.primary + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  latestBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  historyStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  historyStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  historyStatValue: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+  },
+  historyNotes: {
+    marginTop: 10,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
   },
 });

@@ -1,17 +1,19 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
+import { CoupleData, coupleService, coupleWeightLogService } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
 
@@ -62,6 +64,10 @@ interface CoupleDetails {
   enrollmentDate: string;
   maleStatus: string;
   femaleStatus: string;
+  maleWeight?: number;
+  femaleWeight?: number;
+  maleLastWeightDate?: string;
+  femaleLastWeightDate?: string;
 }
 
 interface DetailedLogEntry {
@@ -74,154 +80,6 @@ interface DetailedLogEntry {
   femaleStatus: LogStatus;
   unit: string;
 }
-
-// Mock couple details data
-const mockCoupleDetails: Record<string, CoupleDetails> = {
-  'C_001': {
-    coupleId: 'C_001',
-    maleName: 'John Doe',
-    femaleName: 'Sarah Doe',
-    maleEmail: 'john@example.com',
-    femaleEmail: 'sarah@example.com',
-    malePhone: '+91 98765 43210',
-    femalePhone: '+91 98765 43211',
-    enrollmentDate: '2024-10-01',
-    maleStatus: 'Active',
-    femaleStatus: 'Active',
-  },
-  'C_002': {
-    coupleId: 'C_002',
-    maleName: 'Raj Kumar',
-    femaleName: 'Priya Kumar',
-    maleEmail: 'raj@example.com',
-    femaleEmail: 'priya@example.com',
-    malePhone: '+91 98765 43212',
-    femalePhone: '+91 98765 43213',
-    enrollmentDate: '2024-10-15',
-    maleStatus: 'Active',
-    femaleStatus: 'Active',
-  },
-  'C_003': {
-    coupleId: 'C_003',
-    maleName: 'Anand M',
-    femaleName: 'Meena S',
-    maleEmail: 'anand@example.com',
-    femaleEmail: 'meena@example.com',
-    malePhone: '+91 98765 43214',
-    femalePhone: '+91 98765 43215',
-    enrollmentDate: '2024-11-01',
-    maleStatus: 'Active',
-    femaleStatus: 'Active',
-  },
-  'C_004': {
-    coupleId: 'C_004',
-    maleName: 'Vikram S',
-    femaleName: 'Lakshmi V',
-    maleEmail: 'vikram@example.com',
-    femaleEmail: 'lakshmi@example.com',
-    malePhone: '+91 98765 43216',
-    femalePhone: '+91 98765 43217',
-    enrollmentDate: '2024-11-10',
-    maleStatus: 'Active',
-    femaleStatus: 'Inactive',
-  },
-  'C_005': {
-    coupleId: 'C_005',
-    maleName: 'Suresh R',
-    femaleName: 'Geetha R',
-    maleEmail: 'suresh@example.com',
-    femaleEmail: 'geetha@example.com',
-    malePhone: '+91 98765 43218',
-    femalePhone: '+91 98765 43219',
-    enrollmentDate: '2024-11-15',
-    maleStatus: 'Active',
-    femaleStatus: 'Active',
-  },
-};
-
-// Mock detailed log values
-const mockDetailedLogs: Record<string, DetailedLogEntry[]> = {
-  'C_001': [
-    { metric: 'Steps', icon: 'walk', iconFamily: 'MaterialCommunityIcons', maleValue: '8,542', femaleValue: '7,231', maleStatus: 'complete', femaleStatus: 'complete', unit: 'steps' },
-    { metric: 'Exercise', icon: 'fitness', iconFamily: 'Ionicons', maleValue: '45 min', femaleValue: '30 min', maleStatus: 'complete', femaleStatus: 'partial', unit: '' },
-    { metric: 'Diet Log', icon: 'nutrition', iconFamily: 'Ionicons', maleValue: 'Not logged', femaleValue: '3 meals', maleStatus: 'missed', femaleStatus: 'complete', unit: '' },
-    { metric: 'Weight', icon: 'scale-bathroom', iconFamily: 'MaterialCommunityIcons', maleValue: 'Pending', femaleValue: '62.5 kg', maleStatus: 'pending', femaleStatus: 'complete', unit: '' },
-    { metric: 'Couple Walking', icon: 'people', iconFamily: 'Ionicons', maleValue: '30 min', femaleValue: '30 min', maleStatus: 'complete', femaleStatus: 'complete', unit: '' },
-    { metric: 'Feedback', icon: 'chatbubble', iconFamily: 'Ionicons', maleValue: 'Submitted', femaleValue: 'Pending', maleStatus: 'complete', femaleStatus: 'pending', unit: '' },
-  ],
-  'C_002': [
-    { metric: 'Steps', icon: 'walk', iconFamily: 'MaterialCommunityIcons', maleValue: '6,120', femaleValue: '2,100', maleStatus: 'complete', femaleStatus: 'missed', unit: 'steps' },
-    { metric: 'Exercise', icon: 'fitness', iconFamily: 'Ionicons', maleValue: '20 min', femaleValue: 'Not logged', maleStatus: 'partial', femaleStatus: 'missed', unit: '' },
-    { metric: 'Diet Log', icon: 'nutrition', iconFamily: 'Ionicons', maleValue: '3 meals', femaleValue: '1 meal', maleStatus: 'complete', femaleStatus: 'partial', unit: '' },
-    { metric: 'Weight', icon: 'scale-bathroom', iconFamily: 'MaterialCommunityIcons', maleValue: '75.2 kg', femaleValue: 'Not logged', maleStatus: 'complete', femaleStatus: 'missed', unit: '' },
-    { metric: 'Couple Walking', icon: 'people', iconFamily: 'Ionicons', maleValue: 'Not done', femaleValue: 'Not done', maleStatus: 'missed', femaleStatus: 'missed', unit: '' },
-    { metric: 'Feedback', icon: 'chatbubble', iconFamily: 'Ionicons', maleValue: 'Pending', femaleValue: 'Not logged', maleStatus: 'pending', femaleStatus: 'missed', unit: '' },
-  ],
-};
-
-// Mock data for daily logs
-const mockDailyLogs: DailyLog[] = [
-  {
-    coupleId: 'C_001',
-    maleStatus: 'Active',
-    femaleStatus: 'Active',
-    date: '2024-11-28',
-    steps: { male: 'complete', female: 'complete' },
-    exercise: { male: 'complete', female: 'partial' },
-    diet: { male: 'missed', female: 'complete' },
-    weight: { male: 'pending', female: 'complete' },
-    coupleWalking: 'complete',
-    feedback: { male: 'complete', female: 'pending' },
-  },
-  {
-    coupleId: 'C_002',
-    maleStatus: 'Active',
-    femaleStatus: 'Active',
-    date: '2024-11-28',
-    steps: { male: 'complete', female: 'missed' },
-    exercise: { male: 'partial', female: 'missed' },
-    diet: { male: 'complete', female: 'partial' },
-    weight: { male: 'complete', female: 'missed' },
-    coupleWalking: 'missed',
-    feedback: { male: 'pending', female: 'missed' },
-  },
-  {
-    coupleId: 'C_003',
-    maleStatus: 'Active',
-    femaleStatus: 'Active',
-    date: '2024-11-28',
-    steps: { male: 'complete', female: 'complete' },
-    exercise: { male: 'complete', female: 'complete' },
-    diet: { male: 'complete', female: 'complete' },
-    weight: { male: 'complete', female: 'complete' },
-    coupleWalking: 'complete',
-    feedback: { male: 'complete', female: 'complete' },
-  },
-  {
-    coupleId: 'C_004',
-    maleStatus: 'Active',
-    femaleStatus: 'Inactive',
-    date: '2024-11-28',
-    steps: { male: 'partial', female: 'pending' },
-    exercise: { male: 'missed', female: 'pending' },
-    diet: { male: 'partial', female: 'pending' },
-    weight: { male: 'missed', female: 'pending' },
-    coupleWalking: 'pending',
-    feedback: { male: 'missed', female: 'pending' },
-  },
-  {
-    coupleId: 'C_005',
-    maleStatus: 'Active',
-    femaleStatus: 'Active',
-    date: '2024-11-28',
-    steps: { male: 'complete', female: 'partial' },
-    exercise: { male: 'complete', female: 'complete' },
-    diet: { male: 'missed', female: 'missed' },
-    weight: { male: 'complete', female: 'partial' },
-    coupleWalking: 'partial',
-    feedback: { male: 'complete', female: 'complete' },
-  },
-];
 
 // Metric columns for the grid
 const metrics = [
@@ -239,14 +97,110 @@ export default function AdminMonitoringScreen() {
   const isMobile = screenWidth < 768;
   const isTablet = screenWidth >= 768 && screenWidth < 1024;
 
-  const [selectedDate, setSelectedDate] = useState('2024-11-28');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'complete' | 'partial' | 'missed'>('all');
   const [selectedGroup, setSelectedGroup] = useState<'all' | 'study' | 'control'>('all');
-  const [logs] = useState<DailyLog[]>(mockDailyLogs);
+  const [logs, setLogs] = useState<DailyLog[]>([]);
+  const [couples, setCouples] = useState<CoupleData[]>([]);
+  const [coupleDetails, setCoupleDetails] = useState<Record<string, CoupleDetails>>({});
   const [selectedCouple, setSelectedCouple] = useState<DailyLog | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showPastLogs, setShowPastLogs] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load couples data from Firestore
+  useEffect(() => {
+    const unsubscribe = coupleService.subscribe((couplesData) => {
+      setCouples(couplesData);
+      
+      // Create CoupleDetails from CoupleData
+      const details: Record<string, CoupleDetails> = {};
+      const dailyLogs: DailyLog[] = [];
+      
+      couplesData.forEach(couple => {
+        const coupleId = couple.id || '';
+        
+        // Build couple details
+        details[coupleId] = {
+          coupleId,
+          maleName: couple.male?.firstName && couple.male?.lastName 
+            ? `${couple.male.firstName} ${couple.male.lastName}` 
+            : couple.male?.displayName || 'Male Partner',
+          femaleName: couple.female?.firstName && couple.female?.lastName 
+            ? `${couple.female.firstName} ${couple.female.lastName}` 
+            : couple.female?.displayName || 'Female Partner',
+          maleEmail: couple.male?.email || '',
+          femaleEmail: couple.female?.email || '',
+          malePhone: couple.male?.phone || '',
+          femalePhone: couple.female?.phone || '',
+          enrollmentDate: couple.createdAt?.toDate?.()?.toISOString?.()?.split('T')[0] || new Date().toISOString().split('T')[0],
+          maleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
+          femaleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
+        };
+        
+        // Create daily log entry - for now mark weight as pending/complete based on last log
+        // This is a simplified version - in production you'd check actual daily logs
+        dailyLogs.push({
+          coupleId,
+          maleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
+          femaleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
+          date: selectedDate,
+          steps: { male: 'pending', female: 'pending' },
+          exercise: { male: 'pending', female: 'pending' },
+          diet: { male: 'pending', female: 'pending' },
+          weight: { male: 'pending', female: 'pending' },
+          coupleWalking: 'pending',
+          feedback: { male: 'pending', female: 'pending' },
+        });
+      });
+      
+      setCoupleDetails(details);
+      setLogs(dailyLogs);
+      setIsLoading(false);
+      
+      // Load weight data for each couple
+      couplesData.forEach(async couple => {
+        const coupleId = couple.id || '';
+        try {
+          const [maleWeight, femaleWeight] = await Promise.all([
+            coupleWeightLogService.getLatest(coupleId, 'male'),
+            coupleWeightLogService.getLatest(coupleId, 'female')
+          ]);
+          
+          setCoupleDetails(prev => ({
+            ...prev,
+            [coupleId]: {
+              ...prev[coupleId],
+              maleWeight: maleWeight?.weight,
+              maleLastWeightDate: maleWeight?.date,
+              femaleWeight: femaleWeight?.weight,
+              femaleLastWeightDate: femaleWeight?.date,
+            }
+          }));
+          
+          // Update log status based on weight data
+          const today = new Date().toISOString().split('T')[0];
+          setLogs(prevLogs => prevLogs.map(log => {
+            if (log.coupleId === coupleId) {
+              return {
+                ...log,
+                weight: {
+                  male: maleWeight?.date === today ? 'complete' : (maleWeight ? 'partial' : 'pending'),
+                  female: femaleWeight?.date === today ? 'complete' : (femaleWeight ? 'partial' : 'pending'),
+                }
+              };
+            }
+            return log;
+          }));
+        } catch (error) {
+          console.error('Error loading weight data for', coupleId, error);
+        }
+      });
+    });
+
+    return () => unsubscribe();
+  }, [selectedDate]);
 
   // Mock past logs data
   const getPastLogsForCouple = (coupleId: string) => {
@@ -642,15 +596,14 @@ export default function AdminMonitoringScreen() {
   const renderCoupleDetailModal = () => {
     if (!selectedCouple) return null;
     
-    const coupleDetails = mockCoupleDetails[selectedCouple.coupleId];
-    const detailedLogs = mockDetailedLogs[selectedCouple.coupleId] || [];
+    const details = coupleDetails[selectedCouple.coupleId];
     
-    // Generate default logs if not in mock data
-    const logsToShow = detailedLogs.length > 0 ? detailedLogs : [
+    // Generate logs based on actual data
+    const logsToShow: DetailedLogEntry[] = [
       { metric: 'Steps', icon: 'walk', iconFamily: 'MaterialCommunityIcons' as const, maleValue: selectedCouple.steps.male === 'complete' ? '7,000+' : selectedCouple.steps.male === 'partial' ? '3,500' : 'Not logged', femaleValue: selectedCouple.steps.female === 'complete' ? '7,000+' : selectedCouple.steps.female === 'partial' ? '3,500' : 'Not logged', maleStatus: selectedCouple.steps.male, femaleStatus: selectedCouple.steps.female, unit: 'steps' },
       { metric: 'Exercise', icon: 'fitness', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.exercise.male === 'complete' ? '45 min' : selectedCouple.exercise.male === 'partial' ? '20 min' : 'Not logged', femaleValue: selectedCouple.exercise.female === 'complete' ? '45 min' : selectedCouple.exercise.female === 'partial' ? '20 min' : 'Not logged', maleStatus: selectedCouple.exercise.male, femaleStatus: selectedCouple.exercise.female, unit: '' },
       { metric: 'Diet Log', icon: 'nutrition', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.diet.male === 'complete' ? '3 meals' : selectedCouple.diet.male === 'partial' ? '1 meal' : 'Not logged', femaleValue: selectedCouple.diet.female === 'complete' ? '3 meals' : selectedCouple.diet.female === 'partial' ? '1 meal' : 'Not logged', maleStatus: selectedCouple.diet.male, femaleStatus: selectedCouple.diet.female, unit: '' },
-      { metric: 'Weight', icon: 'scale-bathroom', iconFamily: 'MaterialCommunityIcons' as const, maleValue: selectedCouple.weight.male === 'complete' ? 'Logged' : selectedCouple.weight.male === 'pending' ? 'Pending' : 'Not logged', femaleValue: selectedCouple.weight.female === 'complete' ? 'Logged' : selectedCouple.weight.female === 'pending' ? 'Pending' : 'Not logged', maleStatus: selectedCouple.weight.male, femaleStatus: selectedCouple.weight.female, unit: '' },
+      { metric: 'Weight', icon: 'scale-bathroom', iconFamily: 'MaterialCommunityIcons' as const, maleValue: details?.maleWeight ? `${details.maleWeight} kg` : (selectedCouple.weight.male === 'pending' ? 'Pending' : 'Not logged'), femaleValue: details?.femaleWeight ? `${details.femaleWeight} kg` : (selectedCouple.weight.female === 'pending' ? 'Pending' : 'Not logged'), maleStatus: selectedCouple.weight.male, femaleStatus: selectedCouple.weight.female, unit: '' },
       { metric: 'Couple Walking', icon: 'people', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.coupleWalking === 'complete' ? '30 min' : selectedCouple.coupleWalking === 'partial' ? '15 min' : 'Not done', femaleValue: selectedCouple.coupleWalking === 'complete' ? '30 min' : selectedCouple.coupleWalking === 'partial' ? '15 min' : 'Not done', maleStatus: selectedCouple.coupleWalking, femaleStatus: selectedCouple.coupleWalking, unit: '' },
       { metric: 'Feedback', icon: 'chatbubble', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.feedback.male === 'complete' ? 'Submitted' : selectedCouple.feedback.male === 'pending' ? 'Pending' : 'Not submitted', femaleValue: selectedCouple.feedback.female === 'complete' ? 'Submitted' : selectedCouple.feedback.female === 'pending' ? 'Pending' : 'Not submitted', maleStatus: selectedCouple.feedback.male, femaleStatus: selectedCouple.feedback.female, unit: '' },
     ];
@@ -698,7 +651,7 @@ export default function AdminMonitoringScreen() {
 
             <ScrollView style={styles.modalBody}>
               {/* Couple Info Section */}
-              {coupleDetails && (
+              {details && (
                 <View style={styles.coupleInfoSection}>
                   <Text style={styles.sectionLabel}>Couple Information</Text>
                   <View style={styles.infoGrid}>
@@ -707,9 +660,12 @@ export default function AdminMonitoringScreen() {
                         <Ionicons name="male" size={20} color={COLORS.primary} />
                       </View>
                       <View style={styles.infoCardContent}>
-                        <Text style={styles.infoCardTitle}>{coupleDetails.maleName}</Text>
-                        <Text style={styles.infoCardSubtitle}>{coupleDetails.maleEmail}</Text>
-                        <Text style={styles.infoCardSubtitle}>{coupleDetails.malePhone}</Text>
+                        <Text style={styles.infoCardTitle}>{details.maleName}</Text>
+                        <Text style={styles.infoCardSubtitle}>{details.maleEmail}</Text>
+                        <Text style={styles.infoCardSubtitle}>{details.malePhone}</Text>
+                        {details.maleWeight && (
+                          <Text style={styles.infoCardSubtitle}>Last weight: {details.maleWeight} kg ({details.maleLastWeightDate})</Text>
+                        )}
                         <View style={[styles.infoStatusBadge, { backgroundColor: selectedCouple.maleStatus === 'Active' ? COLORS.success + '20' : COLORS.error + '20' }]}>
                           <Text style={[styles.infoStatusText, { color: selectedCouple.maleStatus === 'Active' ? COLORS.success : COLORS.error }]}>
                             {selectedCouple.maleStatus}
@@ -722,9 +678,12 @@ export default function AdminMonitoringScreen() {
                         <Ionicons name="female" size={20} color={COLORS.accentDark} />
                       </View>
                       <View style={styles.infoCardContent}>
-                        <Text style={styles.infoCardTitle}>{coupleDetails.femaleName}</Text>
-                        <Text style={styles.infoCardSubtitle}>{coupleDetails.femaleEmail}</Text>
-                        <Text style={styles.infoCardSubtitle}>{coupleDetails.femalePhone}</Text>
+                        <Text style={styles.infoCardTitle}>{details.femaleName}</Text>
+                        <Text style={styles.infoCardSubtitle}>{details.femaleEmail}</Text>
+                        <Text style={styles.infoCardSubtitle}>{details.femalePhone}</Text>
+                        {details.femaleWeight && (
+                          <Text style={styles.infoCardSubtitle}>Last weight: {details.femaleWeight} kg ({details.femaleLastWeightDate})</Text>
+                        )}
                         <View style={[styles.infoStatusBadge, { backgroundColor: selectedCouple.femaleStatus === 'Active' ? COLORS.success + '20' : COLORS.error + '20' }]}>
                           <Text style={[styles.infoStatusText, { color: selectedCouple.femaleStatus === 'Active' ? COLORS.success : COLORS.error }]}>
                             {selectedCouple.femaleStatus}
@@ -748,7 +707,7 @@ export default function AdminMonitoringScreen() {
                   
                   <View style={styles.enrollmentInfo}>
                     <Ionicons name="calendar" size={16} color={COLORS.textMuted} />
-                    <Text style={styles.enrollmentText}>Enrolled: {coupleDetails.enrollmentDate}</Text>
+                    <Text style={styles.enrollmentText}>Enrolled: {details.enrollmentDate}</Text>
                   </View>
                 </View>
               )}
@@ -913,42 +872,51 @@ export default function AdminMonitoringScreen() {
     <View style={styles.container}>
       {renderHeader()}
 
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.content, !isMobile && styles.contentDesktop]}>
-          {/* Summary Stats */}
-          {renderSummaryStats()}
-
-          {/* Daily Log Grid */}
-          <View style={styles.gridContainer}>
-            <View style={styles.gridTitleRow}>
-              <Text style={styles.sectionTitle}>Daily Log Status</Text>
-              <Text style={styles.gridDate}>{selectedDate}</Text>
-            </View>
-
-            {renderLegend()}
-
-            {/* Grid */}
-            <View style={styles.grid}>
-              {renderMetricHeaders()}
-              {renderGridHeader()}
-              {filteredLogs.map(log => renderLogRow(log))}
-            </View>
-
-            {filteredLogs.length === 0 && (
-              <View style={styles.emptyState}>
-                <Ionicons name="folder-open" size={48} color={COLORS.textMuted} />
-                <Text style={styles.emptyStateText}>No logs found matching your filters</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Export Section */}
-          {renderExportSection()}
+      {isLoading ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={{ marginTop: 16, color: COLORS.textSecondary }}>Loading couples data...</Text>
         </View>
-      </ScrollView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.content, !isMobile && styles.contentDesktop]}>
+            {/* Summary Stats */}
+            {renderSummaryStats()}
+
+            {/* Daily Log Grid */}
+            <View style={styles.gridContainer}>
+              <View style={styles.gridTitleRow}>
+                <Text style={styles.sectionTitle}>Daily Log Status</Text>
+                <Text style={styles.gridDate}>{selectedDate}</Text>
+              </View>
+
+              {renderLegend()}
+
+              {/* Grid */}
+              <View style={styles.grid}>
+                {renderMetricHeaders()}
+                {renderGridHeader()}
+                {filteredLogs.map(log => renderLogRow(log))}
+              </View>
+
+              {filteredLogs.length === 0 && (
+                <View style={styles.emptyState}>
+                  <Ionicons name="folder-open" size={48} color={COLORS.textMuted} />
+                  <Text style={styles.emptyStateText}>
+                    {logs.length === 0 ? 'No couples enrolled yet' : 'No logs found matching your filters'}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Export Section */}
+            {renderExportSection()}
+          </View>
+        </ScrollView>
+      )}
 
       {/* Couple Detail Modal */}
       {renderCoupleDetailModal()}
