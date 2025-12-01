@@ -565,6 +565,7 @@ export interface GlobalSettings {
   dailySteps: number; // Default: 7000 steps
   coupleWalkingMinutes: number; // Default: 60 mins/session
   highKneesMinutes: number; // Default: 30 mins/session
+  dailyCaloriesBurnt: number; // Default: 200 kcal
   
   // Calculated weekly goals (daily * 7)
   weeklySteps: number;

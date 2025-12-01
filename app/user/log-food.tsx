@@ -1,30 +1,31 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
+import { coupleFoodLogService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Animated,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View
 } from 'react-native';
-import { 
-  calculateNutrition, 
-  foodCategories, 
-  foodDatabase, 
-  FoodItemData, 
-  getFoodsByCategory,
-  getFoodsByMealTime,
-  mealTimes, 
-  searchFoods,
-  searchFoodsByMealTime
+import {
+    calculateNutrition,
+    foodCategories,
+    foodDatabase,
+    FoodItemData,
+    getFoodsByMealTime,
+    mealTimes,
+    searchFoods,
+    searchFoodsByMealTime
 } from '../../data/foodDatabase';
 
 const isWeb = Platform.OS === 'web';
@@ -57,6 +58,28 @@ export default function LogFoodScreen() {
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  
+  // Firestore integration states
+  const [isSaving, setIsSaving] = useState(false);
+  const [coupleId, setCoupleId] = useState<string | null>(null);
+  const [userGender, setUserGender] = useState<'male' | 'female'>('male');
+
+  // Load user session data
+  useFocusEffect(
+    useCallback(() => {
+      const loadUserData = async () => {
+        try {
+          const storedCoupleId = await AsyncStorage.getItem('coupleId');
+          const storedGender = await AsyncStorage.getItem('userGender');
+          if (storedCoupleId) setCoupleId(storedCoupleId);
+          if (storedGender) setUserGender(storedGender as 'male' | 'female');
+        } catch (error) {
+          console.error('Error loading user data:', error);
+        }
+      };
+      loadUserData();
+    }, [])
+  );
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -257,17 +280,94 @@ export default function LogFoodScreen() {
     setSelectedFoods(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSaveLog = () => {
+  const handleSaveLog = async () => {
     if (selectedFoods.length === 0) {
       showToast('Please add at least one food item', 'error');
       return;
     }
     
-    // Here you would save to backend/storage
-    showToast('Meal logged successfully!', 'success');
-    setTimeout(() => {
-      router.back();
-    }, 1500);
+    if (!coupleId || !selectedMealTime) {
+      showToast('Session error. Please try again.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Prepare food items for Firestore
+      const foodItems = selectedFoods.map(sf => {
+        const serving = sf.food.commonServings[sf.servingIndex];
+        const isCustomServing = serving.label === 'Custom';
+        
+        let totalGrams: number;
+        let nutrition: { calories: number; protein: number; carbs: number; fat: number };
+        
+        if (isCustomServing) {
+          // For custom serving, customGrams contains grams per serving
+          totalGrams = (sf.customGrams || 0) * sf.quantity;
+          
+          // Get base serving for calculation
+          const baseServing = sf.food.commonServings.find(s => s.label !== 'Custom') || sf.food.commonServings[0];
+          const baseGrams = baseServing.grams;
+          const baseNutrition = calculateNutrition(sf.food, baseGrams);
+          
+          // Calculate nutrition proportionally
+          nutrition = {
+            calories: Math.round((baseNutrition.calories / baseGrams) * totalGrams),
+            protein: parseFloat(((baseNutrition.protein / baseGrams) * totalGrams).toFixed(1)),
+            carbs: parseFloat(((baseNutrition.carbs / baseGrams) * totalGrams).toFixed(1)),
+            fat: parseFloat(((baseNutrition.fat / baseGrams) * totalGrams).toFixed(1)),
+          };
+        } else {
+          totalGrams = serving.grams * sf.quantity;
+          nutrition = calculateNutrition(sf.food, totalGrams);
+        }
+        
+        return {
+          foodId: sf.food.id,
+          name: sf.food.name,
+          nameTamil: sf.food.nameTamil,
+          quantity: sf.customServingCount || sf.quantity,
+          servingSize: serving.label,
+          servingGrams: sf.customGrams || serving.grams,
+          calories: nutrition.calories,
+          protein: nutrition.protein,
+          carbs: nutrition.carbs,
+          fat: nutrition.fat,
+        };
+      });
+
+      // Calculate total grams
+      const totalGrams = selectedFoods.reduce((sum, sf) => {
+        const serving = sf.food.commonServings[sf.servingIndex];
+        const isCustomServing = serving.label === 'Custom';
+        if (isCustomServing) {
+          return sum + ((sf.customGrams || 0) * sf.quantity);
+        } else {
+          return sum + (serving.grams * sf.quantity);
+        }
+      }, 0);
+
+      await coupleFoodLogService.add(coupleId, userGender, {
+        mealType: selectedMealTime,
+        mealLabel: currentMealLabel,
+        foods: foodItems,
+        totalCalories: totalNutrition.calories,
+        totalProtein: totalNutrition.protein,
+        totalCarbs: totalNutrition.carbs,
+        totalFat: totalNutrition.fat,
+        totalGrams: totalGrams,
+      });
+
+      showToast(`${currentMealLabel} logged! ${totalNutrition.calories} cal intake recorded.`, 'success');
+      setTimeout(() => {
+        router.back();
+      }, 2000);
+    } catch (error) {
+      console.error('Error saving meal log:', error);
+      showToast('Failed to save meal. Please try again.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleBack = () => {
@@ -800,17 +900,24 @@ export default function LogFoodScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.saveButton}
+          style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
           onPress={handleSaveLog}
           activeOpacity={0.85}
+          disabled={isSaving}
         >
-          <LinearGradient
-            colors={['#006dab', '#005a8f']}
-            style={styles.saveButtonGradient}
-          >
-            <Text style={styles.saveButtonText}>Save Meal</Text>
-            <Ionicons name="checkmark" size={20} color="#fff" />
-          </LinearGradient>
+          <View style={styles.saveButtonSolid}>
+            {isSaving ? (
+              <>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.saveButtonText}>Saving...</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.saveButtonText}>Save Meal</Text>
+                <Ionicons name="checkmark-circle" size={22} color="#fff" />
+              </>
+            )}
+          </View>
         </TouchableOpacity>
       </View>
     </View>
@@ -1492,16 +1599,21 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 14,
     overflow: 'hidden',
+    backgroundColor: '#006dab',
     shadowColor: '#006dab',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
-  saveButtonGradient: {
+  saveButtonDisabled: {
+    opacity: 0.7,
+  },
+  saveButtonSolid: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#006dab',
     paddingVertical: 16,
     gap: 8,
   },

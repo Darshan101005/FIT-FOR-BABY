@@ -86,6 +86,18 @@ const defaultGoals: Goal[] = [
     max: 60,
     color: COLORS.error,
   },
+  {
+    id: 'daily-calories',
+    title: 'Daily Calories Burnt',
+    description: 'Target calories to burn per day',
+    icon: 'flame',
+    iconFamily: 'Ionicons',
+    value: 200,
+    unit: 'kcal/day',
+    min: 100,
+    max: 1000,
+    color: COLORS.warning,
+  },
 ];
 
 export default function AdminTasksScreen() {
@@ -139,6 +151,8 @@ export default function AdminTasksScreen() {
               return { ...goal, value: settings.coupleWalkingMinutes || goal.value };
             case 'high-knees':
               return { ...goal, value: settings.highKneesMinutes || goal.value };
+            case 'daily-calories':
+              return { ...goal, value: settings.dailyCaloriesBurnt || goal.value };
             default:
               return goal;
           }
@@ -230,12 +244,14 @@ export default function AdminTasksScreen() {
       const dailySteps = goals.find(g => g.id === 'daily-steps')?.value || 7000;
       const coupleWalkingMinutes = goals.find(g => g.id === 'couple-walking')?.value || 60;
       const highKneesMinutes = goals.find(g => g.id === 'high-knees')?.value || 30;
+      const dailyCaloriesBurnt = goals.find(g => g.id === 'daily-calories')?.value || 200;
       
       // Save to Firestore
       await globalSettingsService.saveGoals({
         dailySteps,
         coupleWalkingMinutes,
         highKneesMinutes,
+        dailyCaloriesBurnt,
       });
       
       showToast('Goals updated successfully!', 'success');
@@ -855,7 +871,7 @@ const styles = StyleSheet.create({
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.success,
+    backgroundColor: COLORS.accent,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,

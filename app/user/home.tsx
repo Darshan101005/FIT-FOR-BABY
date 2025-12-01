@@ -1,7 +1,7 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { HomePageSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
-import { coupleExerciseService, coupleService, coupleStepsService, formatDateString, globalSettingsService } from '@/services/firestore.service';
+import { coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, formatDateString, globalSettingsService } from '@/services/firestore.service';
 import { GlobalSettings } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -70,6 +70,7 @@ export default function UserHomeScreen() {
   const [userWeight, setUserWeight] = useState(60); // Default 60kg for calorie calculation
   const [todayExerciseMinutes, setTodayExerciseMinutes] = useState(0);
   const [todayExerciseCalories, setTodayExerciseCalories] = useState(0);
+  const [todayFoodLogCount, setTodayFoodLogCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true); // Loading state for skeleton
   const sidebarAnim = useRef(new Animated.Value(300)).current;
   
@@ -96,6 +97,7 @@ export default function UserHomeScreen() {
   const getProgressDataForDate = (dateIndex: number) => {
     const stepTarget = globalSettings?.dailySteps || 7000;
     const exerciseGoal = globalSettings?.coupleWalkingMinutes || 60;
+    const caloriesGoal = globalSettings?.dailyCaloriesBurnt || 200;
     // Only today (index 3) has real data from storage, past dates will come from Firestore later
     // For now, show 0 for past dates - this will be replaced with real Firestore data
     const isToday = dateIndex === 3;
@@ -109,9 +111,10 @@ export default function UserHomeScreen() {
       exerciseMinutes: totalExerciseMinutes,
       exerciseGoal: exerciseGoal,
       exerciseGoalMet: totalExerciseMinutes >= exerciseGoal,
-      foodLogged: 0, // TODO: Fetch from Firestore
+      foodLogged: isToday ? todayFoodLogCount : 0,
       caloriesBurnt: totalCaloriesBurnt,
-      caloriesGoalMet: totalCaloriesBurnt >= 200, // 200 cal default goal
+      caloriesGoal: caloriesGoal,
+      caloriesGoalMet: totalCaloriesBurnt >= caloriesGoal,
     };
   };
 
@@ -151,6 +154,14 @@ export default function UserHomeScreen() {
             );
             setTodayExerciseMinutes(exerciseTotals.duration);
             setTodayExerciseCalories(exerciseTotals.calories);
+            
+            // Fetch food log count for today
+            const foodLogs = await coupleFoodLogService.getByDate(
+              coupleId, 
+              userGender as 'male' | 'female', 
+              today
+            );
+            setTodayFoodLogCount(foodLogs.length);
             
             // Get user weight for calorie calculation
             const couple = await coupleService.get(coupleId);
@@ -511,12 +522,12 @@ export default function UserHomeScreen() {
                   <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> min</Text>
                 </Text>
                 <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>
-                  Exercise {todayProgress.exerciseGoalMet ? '✓' : `/ ${todayProgress.exerciseGoal}m`}
+                  Exercise {!todayProgress.exerciseGoalMet && `/ ${todayProgress.exerciseGoal}m`}
                 </Text>
               </View>
               {todayProgress.exerciseGoalMet && (
-                <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#22c55e', borderRadius: 10, padding: 2 }}>
-                  <Ionicons name="checkmark" size={12} color="white" />
+                <View style={styles.goalMetBadge}>
+                  <Ionicons name="checkmark-circle" size={20} color="#98be4e" />
                 </View>
               )}
             </View>
@@ -545,8 +556,15 @@ export default function UserHomeScreen() {
                   {todayProgress.caloriesBurnt}
                   <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> kcal</Text>
                 </Text>
-                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>Calories Burnt</Text>
+                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>
+                  Calories Burnt {!todayProgress.caloriesGoalMet && `/ ${todayProgress.caloriesGoal}`}
+                </Text>
               </View>
+              {todayProgress.caloriesGoalMet && (
+                <View style={styles.goalMetBadge}>
+                  <Ionicons name="checkmark-circle" size={20} color="#98be4e" />
+                </View>
+              )}
             </View>
 
             {/* Diet Recommendations */}
@@ -1068,5 +1086,10 @@ const styles = StyleSheet.create({
   },
   activityArrow: {
     marginLeft: 'auto',
+  },
+  goalMetBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
   },
 });

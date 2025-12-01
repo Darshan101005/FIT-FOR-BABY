@@ -12,7 +12,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { CoupleExerciseLog, CoupleStepEntry, CoupleWeightLog, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService, formatDateString } from '../../services/firestore.service';
+import { CoupleExerciseLog, CoupleFoodLog, CoupleStepEntry, CoupleWeightLog, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService, formatDateString } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
 
@@ -36,26 +36,6 @@ const COLORS = {
   borderLight: '#f1f5f9',
 };
 
-// MealLog interface for meal tracking
-interface MealLog {
-  id: string;
-  date: string;
-  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
-  foods: {
-    name: string;
-    nameTamil: string;
-    quantity: string;
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  }[];
-  totalCalories: number;
-  totalProtein: number;
-  totalCarbs: number;
-  totalFat: number;
-}
-
 interface UserData {
   id: string;
   name: string;
@@ -70,76 +50,6 @@ interface UserData {
   dateOfBirth?: string;
   lastWeightDate?: string;
 }
-
-// Mock meal logs
-const mockMealLogs: Record<string, MealLog[]> = {
-  'C_001_M': [
-    {
-      id: 'meal1', date: '2024-11-28', mealType: 'breakfast',
-      foods: [
-        { name: 'Idli', nameTamil: 'இட்லி', quantity: '4 pieces', calories: 160, protein: 4, carbs: 32, fat: 1 },
-        { name: 'Sambar', nameTamil: 'சாம்பார்', quantity: '1 cup', calories: 120, protein: 6, carbs: 18, fat: 3 },
-      ],
-      totalCalories: 280, totalProtein: 10, totalCarbs: 50, totalFat: 4,
-    },
-    {
-      id: 'meal2', date: '2024-11-28', mealType: 'lunch',
-      foods: [
-        { name: 'Rice', nameTamil: 'அரிசி சாதம்', quantity: '2 cups', calories: 400, protein: 8, carbs: 90, fat: 1 },
-        { name: 'Chicken Curry', nameTamil: 'சிக்கன் கறி', quantity: '1 serving', calories: 300, protein: 30, carbs: 8, fat: 16 },
-        { name: 'Raita', nameTamil: 'ரய்தா', quantity: '1 cup', calories: 80, protein: 4, carbs: 8, fat: 3 },
-      ],
-      totalCalories: 780, totalProtein: 42, totalCarbs: 106, totalFat: 20,
-    },
-    {
-      id: 'meal3', date: '2024-11-28', mealType: 'dinner',
-      foods: [
-        { name: 'Chapati', nameTamil: 'சப்பாத்தி', quantity: '3 pieces', calories: 240, protein: 9, carbs: 45, fat: 3 },
-        { name: 'Dal', nameTamil: 'பருப்பு', quantity: '1 cup', calories: 180, protein: 12, carbs: 30, fat: 2 },
-      ],
-      totalCalories: 420, totalProtein: 21, totalCarbs: 75, totalFat: 5,
-    },
-  ],
-  'C_001_F': [
-    {
-      id: 'meal1', date: '2024-11-28', mealType: 'breakfast',
-      foods: [
-        { name: 'Dosa', nameTamil: 'தோசை', quantity: '2 pieces', calories: 200, protein: 4, carbs: 40, fat: 4 },
-        { name: 'Coconut Chutney', nameTamil: 'தேங்காய் சட்னி', quantity: '2 tbsp', calories: 60, protein: 1, carbs: 4, fat: 5 },
-      ],
-      totalCalories: 260, totalProtein: 5, totalCarbs: 44, totalFat: 9,
-    },
-    {
-      id: 'meal2', date: '2024-11-28', mealType: 'lunch',
-      foods: [
-        { name: 'Rice', nameTamil: 'அரிசி சாதம்', quantity: '1.5 cups', calories: 300, protein: 6, carbs: 68, fat: 1 },
-        { name: 'Fish Curry', nameTamil: 'மீன் குழம்பு', quantity: '1 serving', calories: 250, protein: 28, carbs: 5, fat: 12 },
-        { name: 'Vegetables', nameTamil: 'காய்கறிகள்', quantity: '1 cup', calories: 80, protein: 3, carbs: 15, fat: 1 },
-      ],
-      totalCalories: 630, totalProtein: 37, totalCarbs: 88, totalFat: 14,
-    },
-  ],
-  'C_002_M': [
-    {
-      id: 'meal1', date: '2024-11-28', mealType: 'breakfast',
-      foods: [
-        { name: 'Poha', nameTamil: 'அவல்', quantity: '1 plate', calories: 250, protein: 5, carbs: 45, fat: 6 },
-        { name: 'Tea', nameTamil: 'டீ', quantity: '1 cup', calories: 40, protein: 1, carbs: 6, fat: 1 },
-      ],
-      totalCalories: 290, totalProtein: 6, totalCarbs: 51, totalFat: 7,
-    },
-  ],
-  'C_002_F': [
-    {
-      id: 'meal1', date: '2024-11-28', mealType: 'breakfast',
-      foods: [
-        { name: 'Oats', nameTamil: 'ஓட்ஸ்', quantity: '1 bowl', calories: 180, protein: 6, carbs: 32, fat: 3 },
-        { name: 'Banana', nameTamil: 'வாழைப்பழம்', quantity: '1 medium', calories: 105, protein: 1, carbs: 27, fat: 0 },
-      ],
-      totalCalories: 285, totalProtein: 7, totalCarbs: 59, totalFat: 3,
-    },
-  ],
-};
 
 export default function UserDashboardScreen() {
   const router = useRouter();
@@ -162,13 +72,18 @@ export default function UserDashboardScreen() {
   const [femaleStepLogs, setFemaleStepLogs] = useState<CoupleStepEntry[]>([]);
   const [maleExerciseLogs, setMaleExerciseLogs] = useState<CoupleExerciseLog[]>([]);
   const [femaleExerciseLogs, setFemaleExerciseLogs] = useState<CoupleExerciseLog[]>([]);
+  const [maleFoodLogs, setMaleFoodLogs] = useState<CoupleFoodLog[]>([]);
+  const [femaleFoodLogs, setFemaleFoodLogs] = useState<CoupleFoodLog[]>([]);
   const [showWeightHistoryModal, setShowWeightHistoryModal] = useState(false);
   const [showHeightHistoryModal, setShowHeightHistoryModal] = useState(false);
   const [showStepHistoryModal, setShowStepHistoryModal] = useState(false);
   const [selectedGenderForHistory, setSelectedGenderForHistory] = useState<'male' | 'female'>('male');
   const [exerciseDateFilter, setExerciseDateFilter] = useState<'all' | 'today' | 'yesterday' | 'custom'>('all');
   const [customExerciseDate, setCustomExerciseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [mealDateFilter, setMealDateFilter] = useState<'all' | 'today' | 'yesterday' | 'custom'>('all');
+  const [customMealDate, setCustomMealDate] = useState(new Date().toISOString().split('T')[0]);
   const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  const [showMealDatePickerModal, setShowMealDatePickerModal] = useState(false);
   const [tempSelectedDate, setTempSelectedDate] = useState({ year: new Date().getFullYear(), month: new Date().getMonth(), day: new Date().getDate() });
 
   // Format timestamp to 12-hour AM/PM format in IST (Indian Standard Time)
@@ -366,23 +281,43 @@ export default function UserDashboardScreen() {
     loadExerciseLogs();
   }, [coupleId]);
   
-  // Get meal logs (keep using mock for now)
-  const maleMealLogs = mockMealLogs[`${coupleId}_M`] || [];
-  const femaleMealLogs = mockMealLogs[`${coupleId}_F`] || [];
+  // Load food logs from Firestore
+  useEffect(() => {
+    const loadFoodLogs = async () => {
+      if (!coupleId) return;
+      
+      try {
+        const endDate = formatDateString(new Date());
+        const startDate = formatDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+        
+        const [maleLogs, femaleLogs] = await Promise.all([
+          coupleFoodLogService.getByDateRange(coupleId, 'male', startDate, endDate),
+          coupleFoodLogService.getByDateRange(coupleId, 'female', startDate, endDate)
+        ]);
+        
+        setMaleFoodLogs(maleLogs);
+        setFemaleFoodLogs(femaleLogs);
+      } catch (error) {
+        console.error('Error loading food logs:', error);
+      }
+    };
+
+    loadFoodLogs();
+  }, [coupleId]);
 
   // Calculate totals for today - Male
   const todayMaleExerciseLogs = maleExerciseLogs.filter(log => log.date === selectedDate);
-  const todayMaleMealLogs = maleMealLogs.filter(log => log.date === selectedDate);
+  const todayMaleFoodLogs = maleFoodLogs.filter(log => log.date === selectedDate);
   const maleTotalExerciseDuration = todayMaleExerciseLogs.reduce((sum, log) => sum + log.duration, 0);
   const maleTotalExerciseCalories = todayMaleExerciseLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
-  const maleTotalMealCalories = todayMaleMealLogs.reduce((sum, log) => sum + log.totalCalories, 0);
+  const maleTotalMealCalories = todayMaleFoodLogs.reduce((sum, log) => sum + log.totalCalories, 0);
 
   // Calculate totals for today - Female
   const todayFemaleExerciseLogs = femaleExerciseLogs.filter(log => log.date === selectedDate);
-  const todayFemaleMealLogs = femaleMealLogs.filter(log => log.date === selectedDate);
+  const todayFemaleFoodLogs = femaleFoodLogs.filter(log => log.date === selectedDate);
   const femaleTotalExerciseDuration = todayFemaleExerciseLogs.reduce((sum, log) => sum + log.duration, 0);
   const femaleTotalExerciseCalories = todayFemaleExerciseLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
-  const femaleTotalMealCalories = todayFemaleMealLogs.reduce((sum, log) => sum + log.totalCalories, 0);
+  const femaleTotalMealCalories = todayFemaleFoodLogs.reduce((sum, log) => sum + log.totalCalories, 0);
 
   const getIntensityColor = (intensity: string) => {
     switch (intensity) {
@@ -408,16 +343,6 @@ export default function UserDashboardScreen() {
       case 'swimming': return { icon: 'swim', family: 'MaterialCommunityIcons' };
       case 'cycling': return { icon: 'bike', family: 'MaterialCommunityIcons' };
       default: return { icon: 'fitness', family: 'Ionicons' };
-    }
-  };
-
-  const getMealIcon = (mealType: string) => {
-    switch (mealType) {
-      case 'breakfast': return 'sunny-outline';
-      case 'lunch': return 'restaurant-outline';
-      case 'dinner': return 'moon-outline';
-      case 'snack': return 'cafe-outline';
-      default: return 'nutrition-outline';
     }
   };
 
@@ -598,20 +523,20 @@ export default function UserDashboardScreen() {
     );
   };
 
-  // Render meal item with user indicator
-  const renderMealItem = (meal: MealLog, isMale: boolean) => (
+  // Render meal item with user indicator (for overview)
+  const renderMealItem = (meal: CoupleFoodLog, isMale: boolean) => (
     <View key={`${isMale ? 'M' : 'F'}_${meal.id}`} style={styles.recentItem}>
       <View style={[styles.recentIcon, { backgroundColor: COLORS.accent + '15' }]}>
         <Ionicons name={getMealIcon(meal.mealType) as any} size={20} color={COLORS.accent} />
       </View>
       <View style={styles.recentInfo}>
         <View style={styles.exerciseNameWithBadge}>
-          <Text style={styles.recentTitle}>{meal.mealType.charAt(0).toUpperCase() + meal.mealType.slice(1)}</Text>
+          <Text style={styles.recentTitle}>{meal.mealLabel}</Text>
           <View style={[styles.userIndicator, { backgroundColor: isMale ? COLORS.primary + '15' : '#e91e8c15' }]}>
             <Ionicons name={isMale ? 'male' : 'female'} size={12} color={isMale ? COLORS.primary : '#e91e8c'} />
           </View>
         </View>
-        <Text style={styles.recentSubtitle}>{meal.foods.length} items • {meal.totalCalories} cal</Text>
+        <Text style={styles.recentSubtitle}>{meal.foods.length} items • {meal.totalCalories} cal intake</Text>
       </View>
     </View>
   );
@@ -662,7 +587,7 @@ export default function UserDashboardScreen() {
             </View>
             <View>
               <Text style={styles.summaryValue}>{maleTotalMealCalories}</Text>
-              <Text style={styles.summaryLabel}>Intake</Text>
+              <Text style={styles.summaryLabel}>Cal Intake</Text>
             </View>
           </View>
         </View>
@@ -708,7 +633,7 @@ export default function UserDashboardScreen() {
             </View>
             <View>
               <Text style={styles.summaryValue}>{femaleTotalMealCalories}</Text>
-              <Text style={styles.summaryLabel}>Intake</Text>
+              <Text style={styles.summaryLabel}>Cal Intake</Text>
             </View>
           </View>
         </View>
@@ -734,14 +659,14 @@ export default function UserDashboardScreen() {
       {/* Recent Meals - Both Users */}
       <View style={styles.recentSection}>
         <View style={styles.recentHeader}>
-          <Text style={styles.sectionTitle}>Today's Meals</Text>
+          <Text style={styles.sectionTitle}>Today's Meals (Calories Intake)</Text>
           <TouchableOpacity onPress={() => setSelectedTab('meals')}>
             <Text style={styles.viewAllText}>View All</Text>
           </TouchableOpacity>
         </View>
-        {todayMaleMealLogs.slice(0, 2).map((meal) => renderMealItem(meal, true))}
-        {todayFemaleMealLogs.slice(0, 2).map((meal) => renderMealItem(meal, false))}
-        {todayMaleMealLogs.length === 0 && todayFemaleMealLogs.length === 0 && (
+        {todayMaleFoodLogs.slice(0, 2).map((meal) => renderMealItem(meal, true))}
+        {todayFemaleFoodLogs.slice(0, 2).map((meal) => renderMealItem(meal, false))}
+        {todayMaleFoodLogs.length === 0 && todayFemaleFoodLogs.length === 0 && (
           <Text style={styles.noDataText}>No meals logged today</Text>
         )}
       </View>
@@ -985,6 +910,48 @@ export default function UserDashboardScreen() {
     }
   };
 
+  // Get filtered food logs based on meal date filter
+  const getFilteredFoodLogs = (logs: CoupleFoodLog[]) => {
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = getYesterdayDate();
+    
+    switch (mealDateFilter) {
+      case 'today':
+        return logs.filter(log => log.date === today);
+      case 'yesterday':
+        return logs.filter(log => log.date === yesterday);
+      case 'custom':
+        return logs.filter(log => log.date === customMealDate);
+      default:
+        return logs;
+    }
+  };
+
+  const filteredMaleFoodLogs = getFilteredFoodLogs(maleFoodLogs);
+  const filteredFemaleFoodLogs = getFilteredFoodLogs(femaleFoodLogs);
+
+  // Get meal label based on filter
+  const getMealSummaryLabel = () => {
+    switch (mealDateFilter) {
+      case 'today': return 'Today\'s Intake';
+      case 'yesterday': return 'Yesterday\'s Intake';
+      case 'custom': return `${customMealDate} Intake`;
+      default: return 'Total Intake';
+    }
+  };
+
+  // Calculate filtered meal totals
+  const getFilteredMealTotals = (gender: 'male' | 'female') => {
+    const logs = gender === 'male' ? filteredMaleFoodLogs : filteredFemaleFoodLogs;
+    return {
+      calories: logs.reduce((sum, log) => sum + log.totalCalories, 0),
+      protein: logs.reduce((sum, log) => sum + log.totalProtein, 0),
+      carbs: logs.reduce((sum, log) => sum + log.totalCarbs, 0),
+      fat: logs.reduce((sum, log) => sum + log.totalFat, 0),
+      mealCount: logs.length,
+    };
+  };
+
   // Exercise Tab
   const renderExerciseTab = () => (
     <View style={styles.exerciseContainer}>
@@ -1155,52 +1122,204 @@ export default function UserDashboardScreen() {
     </View>
   );
 
-  // Render single meal card with user indicator
-  const renderMealCard = (meal: MealLog, isMale: boolean) => (
-    <View key={`${isMale ? 'M' : 'F'}_${meal.id}`} style={[styles.mealCard, { borderLeftWidth: 4, borderLeftColor: isMale ? COLORS.primary : '#e91e8c' }]}>
-      <View style={styles.mealCardHeader}>
-        <View style={[styles.mealIcon, { backgroundColor: COLORS.accent + '15' }]}>
-          <Ionicons name={getMealIcon(meal.mealType) as any} size={24} color={COLORS.accent} />
-        </View>
-        <View style={styles.mealInfo}>
-          <View style={styles.exerciseNameWithBadge}>
-            <Text style={styles.mealType}>
-              {meal.mealType.charAt(0).toUpperCase() + meal.mealType.slice(1)}
+  // Meals Tab
+  const renderMealsTab = () => {
+    const maleTotals = getFilteredMealTotals('male');
+    const femaleTotals = getFilteredMealTotals('female');
+    
+    return (
+    <View style={styles.mealsContainer}>
+      <Text style={styles.sectionTitle}>Meal Log (Calories Intake)</Text>
+      <Text style={styles.sectionSubtitle}>Track food consumption and nutritional intake</Text>
+
+      {/* Date Filter for Meals */}
+      <View style={styles.dateFilterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateFilterScroll}>
+          {[
+            { id: 'all', label: 'All', icon: null },
+            { id: 'today', label: 'Today', icon: null },
+            { id: 'yesterday', label: 'Yesterday', icon: null },
+          ].map((filter) => (
+            <TouchableOpacity
+              key={filter.id}
+              style={[
+                styles.dateFilterButton,
+                mealDateFilter === filter.id && styles.dateFilterButtonActive
+              ]}
+              onPress={() => setMealDateFilter(filter.id as any)}
+            >
+              <Text style={[
+                styles.dateFilterText,
+                mealDateFilter === filter.id && styles.dateFilterTextActive
+              ]}>{filter.label}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity
+            style={[
+              styles.dateFilterButton,
+              styles.dateFilterButtonWithIcon,
+              mealDateFilter === 'custom' && styles.dateFilterButtonActive
+            ]}
+            onPress={() => {
+              const currentDate = mealDateFilter === 'custom' ? new Date(customMealDate) : new Date();
+              setTempSelectedDate({
+                year: currentDate.getFullYear(),
+                month: currentDate.getMonth(),
+                day: currentDate.getDate()
+              });
+              setShowMealDatePickerModal(true);
+            }}
+          >
+            <Ionicons 
+              name="calendar" 
+              size={16} 
+              color={mealDateFilter === 'custom' ? '#fff' : COLORS.textSecondary} 
+            />
+            <Text style={[
+              styles.dateFilterText,
+              mealDateFilter === 'custom' && styles.dateFilterTextActive
+            ]}>
+              {mealDateFilter === 'custom' ? customMealDate : 'Pick Date'}
             </Text>
-            <View style={[styles.userIndicatorLarge, { backgroundColor: isMale ? COLORS.primary + '15' : '#e91e8c15' }]}>
-              <Ionicons name={isMale ? 'male' : 'female'} size={14} color={isMale ? COLORS.primary : '#e91e8c'} />
-              <Text style={[styles.userIndicatorText, { color: isMale ? COLORS.primary : '#e91e8c' }]}>
-                {isMale ? maleUser?.name.split(' ')[0] : femaleUser?.name.split(' ')[0]}
-              </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
+      {/* Daily Nutrition Summary - Both Users */}
+      <View style={[styles.nutritionSummaryContainer, isMobile && styles.nutritionSummaryContainerMobile]}>
+        {/* Male Nutrition Summary */}
+        <View style={[styles.nutritionSummary, { flex: 1, borderLeftWidth: 4, borderLeftColor: COLORS.primary }]}>
+          <View style={styles.nutritionTitleRow}>
+            <Ionicons name="male" size={16} color={COLORS.primary} />
+            <Text style={[styles.nutritionTitle, { color: COLORS.primary }]}>{maleUser?.name.split(' ')[0]} - {getMealSummaryLabel()}</Text>
+          </View>
+          <View style={styles.nutritionGrid}>
+            <View style={[styles.nutritionItem, { backgroundColor: COLORS.warning + '15' }]}>
+              <Ionicons name="flame" size={18} color={COLORS.warning} />
+              <Text style={styles.nutritionValue}>{maleTotals.calories}</Text>
+              <Text style={styles.nutritionLabel}>Cal Intake</Text>
+            </View>
+            <View style={[styles.nutritionItem, { backgroundColor: COLORS.error + '15' }]}>
+              <MaterialCommunityIcons name="food-steak" size={18} color={COLORS.error} />
+              <Text style={styles.nutritionValue}>{maleTotals.protein}g</Text>
+              <Text style={styles.nutritionLabel}>Protein</Text>
+            </View>
+            <View style={[styles.nutritionItem, { backgroundColor: COLORS.info + '15' }]}>
+              <MaterialCommunityIcons name="bread-slice" size={18} color={COLORS.info} />
+              <Text style={styles.nutritionValue}>{maleTotals.carbs}g</Text>
+              <Text style={styles.nutritionLabel}>Carbs</Text>
+            </View>
+            <View style={[styles.nutritionItem, { backgroundColor: COLORS.accent + '15' }]}>
+              <MaterialCommunityIcons name="oil" size={18} color={COLORS.accent} />
+              <Text style={styles.nutritionValue}>{maleTotals.fat}g</Text>
+              <Text style={styles.nutritionLabel}>Fat</Text>
             </View>
           </View>
+        </View>
+
+        {/* Female Nutrition Summary */}
+        <View style={[styles.nutritionSummary, { flex: 1, borderLeftWidth: 4, borderLeftColor: '#e91e8c' }]}>
+          <View style={styles.nutritionTitleRow}>
+            <Ionicons name="female" size={16} color="#e91e8c" />
+            <Text style={[styles.nutritionTitle, { color: '#e91e8c' }]}>{femaleUser?.name.split(' ')[0]} - {getMealSummaryLabel()}</Text>
+          </View>
+          <View style={styles.nutritionGrid}>
+            <View style={[styles.nutritionItem, { backgroundColor: COLORS.warning + '15' }]}>
+              <Ionicons name="flame" size={18} color={COLORS.warning} />
+              <Text style={styles.nutritionValue}>{femaleTotals.calories}</Text>
+              <Text style={styles.nutritionLabel}>Cal Intake</Text>
+            </View>
+            <View style={[styles.nutritionItem, { backgroundColor: COLORS.error + '15' }]}>
+              <MaterialCommunityIcons name="food-steak" size={18} color={COLORS.error} />
+              <Text style={styles.nutritionValue}>{femaleTotals.protein}g</Text>
+              <Text style={styles.nutritionLabel}>Protein</Text>
+            </View>
+            <View style={[styles.nutritionItem, { backgroundColor: COLORS.info + '15' }]}>
+              <MaterialCommunityIcons name="bread-slice" size={18} color={COLORS.info} />
+              <Text style={styles.nutritionValue}>{femaleTotals.carbs}g</Text>
+              <Text style={styles.nutritionLabel}>Carbs</Text>
+            </View>
+            <View style={[styles.nutritionItem, { backgroundColor: COLORS.accent + '15' }]}>
+              <MaterialCommunityIcons name="oil" size={18} color={COLORS.accent} />
+              <Text style={styles.nutritionValue}>{femaleTotals.fat}g</Text>
+              <Text style={styles.nutritionLabel}>Fat</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {filteredMaleFoodLogs.length === 0 && filteredFemaleFoodLogs.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="nutrition-outline" size={48} color={COLORS.textMuted} />
+          <Text style={styles.emptyText}>{mealDateFilter === 'all' ? 'No meals logged yet' : `No meals for ${mealDateFilter === 'custom' ? customMealDate : mealDateFilter}`}</Text>
+        </View>
+      ) : (
+        <>
+          {/* Male User Meals */}
+          {filteredMaleFoodLogs.length > 0 && (
+            <View style={styles.userMealSection}>
+              <View style={styles.userSummaryHeader}>
+                <Ionicons name="male" size={18} color={COLORS.primary} />
+                <Text style={[styles.userSummaryTitle, { color: COLORS.primary }]}>{maleUser?.name}'s Meals ({filteredMaleFoodLogs.length})</Text>
+              </View>
+              {filteredMaleFoodLogs.map((meal) => renderFoodLogCard(meal, true))}
+            </View>
+          )}
+          
+          {/* Female User Meals */}
+          {filteredFemaleFoodLogs.length > 0 && (
+            <View style={styles.userMealSection}>
+              <View style={styles.userSummaryHeader}>
+                <Ionicons name="female" size={18} color="#e91e8c" />
+                <Text style={[styles.userSummaryTitle, { color: '#e91e8c' }]}>{femaleUser?.name}'s Meals ({filteredFemaleFoodLogs.length})</Text>
+              </View>
+              {filteredFemaleFoodLogs.map((meal) => renderFoodLogCard(meal, false))}
+            </View>
+          )}
+        </>
+      )}
+    </View>
+  );
+  };
+
+  // Render food log card for CoupleFoodLog
+  const renderFoodLogCard = (meal: CoupleFoodLog, isMale: boolean) => (
+    <View key={meal.id} style={[styles.mealCard, { borderLeftColor: isMale ? COLORS.primary : '#e91e8c' }]}>
+      <View style={styles.mealCardHeader}>
+        <View style={[styles.mealIcon, { backgroundColor: (isMale ? COLORS.primary : '#e91e8c') + '15' }]}>
+          <Ionicons 
+            name={getMealIcon(meal.mealType)} 
+            size={20} 
+            color={isMale ? COLORS.primary : '#e91e8c'} 
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.mealType}>{meal.mealLabel}</Text>
           <Text style={styles.mealDate}>{meal.date}</Text>
         </View>
         <View style={styles.mealCalories}>
           <Text style={styles.mealCaloriesValue}>{meal.totalCalories}</Text>
-          <Text style={styles.mealCaloriesLabel}>cal</Text>
+          <Text style={styles.mealCaloriesLabel}>cal intake</Text>
         </View>
       </View>
-
+      
       <View style={styles.foodsList}>
-        {meal.foods.map((food, index) => (
-          <View key={index} style={styles.foodItem}>
+        {meal.foods.map((food, idx) => (
+          <View key={idx} style={styles.foodItem}>
             <View style={styles.foodInfo}>
               <Text style={styles.foodName}>{food.name}</Text>
-              <Text style={styles.foodNameTamil}>{food.nameTamil}</Text>
-              <Text style={styles.foodQuantity}>{food.quantity}</Text>
+              <Text style={styles.foodQuantity}>{food.quantity} × {food.servingSize} ({food.servingGrams}g)</Text>
             </View>
-            <View style={styles.foodNutrition}>
-              <Text style={styles.foodCalories}>{food.calories} cal</Text>
-              <Text style={styles.foodMacros}>
-                P: {food.protein}g | C: {food.carbs}g | F: {food.fat}g
-              </Text>
-            </View>
+            <Text style={[styles.foodCalories, { color: COLORS.warning }]}>{food.calories} cal</Text>
           </View>
         ))}
       </View>
-
+      
       <View style={styles.mealTotals}>
+        <View style={styles.mealTotalItem}>
+          <Text style={styles.mealTotalLabel}>Calories</Text>
+          <Text style={[styles.mealTotalValue, { color: COLORS.warning }]}>{meal.totalCalories}</Text>
+        </View>
         <View style={styles.mealTotalItem}>
           <Text style={styles.mealTotalLabel}>Protein</Text>
           <Text style={styles.mealTotalValue}>{meal.totalProtein}g</Text>
@@ -1217,119 +1336,18 @@ export default function UserDashboardScreen() {
     </View>
   );
 
-  // Meals Tab
-  const renderMealsTab = () => (
-    <View style={styles.mealsContainer}>
-      <Text style={styles.sectionTitle}>Meal Log</Text>
-      <Text style={styles.sectionSubtitle}>Logged meals for both partners with nutritional breakdown</Text>
-
-      {/* Daily Nutrition Summary - Both Users */}
-      <View style={[styles.nutritionSummaryContainer, isMobile && styles.nutritionSummaryContainerMobile]}>
-        {/* Male Nutrition Summary */}
-        <View style={[styles.nutritionSummary, { flex: 1, borderLeftWidth: 4, borderLeftColor: COLORS.primary }]}>
-          <View style={styles.nutritionTitleRow}>
-            <Ionicons name="male" size={16} color={COLORS.primary} />
-            <Text style={[styles.nutritionTitle, { color: COLORS.primary }]}>{maleUser?.name.split(' ')[0]}</Text>
-          </View>
-          <View style={styles.nutritionGrid}>
-            <View style={[styles.nutritionItem, { backgroundColor: COLORS.warning + '15' }]}>
-              <Ionicons name="flame" size={18} color={COLORS.warning} />
-              <Text style={styles.nutritionValue}>{maleTotalMealCalories}</Text>
-              <Text style={styles.nutritionLabel}>Calories</Text>
-            </View>
-            <View style={[styles.nutritionItem, { backgroundColor: COLORS.error + '15' }]}>
-              <MaterialCommunityIcons name="food-steak" size={18} color={COLORS.error} />
-              <Text style={styles.nutritionValue}>
-                {todayMaleMealLogs.reduce((sum, log) => sum + log.totalProtein, 0)}g
-              </Text>
-              <Text style={styles.nutritionLabel}>Protein</Text>
-            </View>
-            <View style={[styles.nutritionItem, { backgroundColor: COLORS.info + '15' }]}>
-              <MaterialCommunityIcons name="bread-slice" size={18} color={COLORS.info} />
-              <Text style={styles.nutritionValue}>
-                {todayMaleMealLogs.reduce((sum, log) => sum + log.totalCarbs, 0)}g
-              </Text>
-              <Text style={styles.nutritionLabel}>Carbs</Text>
-            </View>
-            <View style={[styles.nutritionItem, { backgroundColor: COLORS.accent + '15' }]}>
-              <MaterialCommunityIcons name="oil" size={18} color={COLORS.accent} />
-              <Text style={styles.nutritionValue}>
-                {todayMaleMealLogs.reduce((sum, log) => sum + log.totalFat, 0)}g
-              </Text>
-              <Text style={styles.nutritionLabel}>Fat</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Female Nutrition Summary */}
-        <View style={[styles.nutritionSummary, { flex: 1, borderLeftWidth: 4, borderLeftColor: '#e91e8c' }]}>
-          <View style={styles.nutritionTitleRow}>
-            <Ionicons name="female" size={16} color="#e91e8c" />
-            <Text style={[styles.nutritionTitle, { color: '#e91e8c' }]}>{femaleUser?.name.split(' ')[0]}</Text>
-          </View>
-          <View style={styles.nutritionGrid}>
-            <View style={[styles.nutritionItem, { backgroundColor: COLORS.warning + '15' }]}>
-              <Ionicons name="flame" size={18} color={COLORS.warning} />
-              <Text style={styles.nutritionValue}>{femaleTotalMealCalories}</Text>
-              <Text style={styles.nutritionLabel}>Calories</Text>
-            </View>
-            <View style={[styles.nutritionItem, { backgroundColor: COLORS.error + '15' }]}>
-              <MaterialCommunityIcons name="food-steak" size={18} color={COLORS.error} />
-              <Text style={styles.nutritionValue}>
-                {todayFemaleMealLogs.reduce((sum, log) => sum + log.totalProtein, 0)}g
-              </Text>
-              <Text style={styles.nutritionLabel}>Protein</Text>
-            </View>
-            <View style={[styles.nutritionItem, { backgroundColor: COLORS.info + '15' }]}>
-              <MaterialCommunityIcons name="bread-slice" size={18} color={COLORS.info} />
-              <Text style={styles.nutritionValue}>
-                {todayFemaleMealLogs.reduce((sum, log) => sum + log.totalCarbs, 0)}g
-              </Text>
-              <Text style={styles.nutritionLabel}>Carbs</Text>
-            </View>
-            <View style={[styles.nutritionItem, { backgroundColor: COLORS.accent + '15' }]}>
-              <MaterialCommunityIcons name="oil" size={18} color={COLORS.accent} />
-              <Text style={styles.nutritionValue}>
-                {todayFemaleMealLogs.reduce((sum, log) => sum + log.totalFat, 0)}g
-              </Text>
-              <Text style={styles.nutritionLabel}>Fat</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {maleMealLogs.length === 0 && femaleMealLogs.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="nutrition-outline" size={48} color={COLORS.textMuted} />
-          <Text style={styles.emptyText}>No meals logged yet</Text>
-        </View>
-      ) : (
-        <>
-          {/* Male User Meals */}
-          {maleMealLogs.length > 0 && (
-            <View style={styles.userMealSection}>
-              <View style={styles.userSummaryHeader}>
-                <Ionicons name="male" size={18} color={COLORS.primary} />
-                <Text style={[styles.userSummaryTitle, { color: COLORS.primary }]}>{maleUser?.name}'s Meals</Text>
-              </View>
-              {maleMealLogs.map((meal) => renderMealCard(meal, true))}
-            </View>
-          )}
-          
-          {/* Female User Meals */}
-          {femaleMealLogs.length > 0 && (
-            <View style={styles.userMealSection}>
-              <View style={styles.userSummaryHeader}>
-                <Ionicons name="female" size={18} color="#e91e8c" />
-                <Text style={[styles.userSummaryTitle, { color: '#e91e8c' }]}>{femaleUser?.name}'s Meals</Text>
-              </View>
-              {femaleMealLogs.map((meal) => renderMealCard(meal, false))}
-            </View>
-          )}
-        </>
-      )}
-    </View>
-  );
+  // Get meal icon based on type
+  const getMealIcon = (mealType: string): any => {
+    switch (mealType) {
+      case 'early-morning': return 'sunny-outline';
+      case 'breakfast': return 'cafe-outline';
+      case 'mid-morning': return 'time-outline';
+      case 'lunch': return 'restaurant-outline';
+      case 'evening-snacks': return 'pizza-outline';
+      case 'dinner': return 'moon-outline';
+      default: return 'nutrition-outline';
+    }
+  };
 
   // Render weight history modal
   const renderWeightHistoryModal = () => {
@@ -1847,6 +1865,163 @@ export default function UserDashboardScreen() {
     );
   };
 
+  // Meal Date Picker Modal
+  const renderMealDatePickerModal = () => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                    'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const getDaysInMonth = (year: number, month: number) => {
+      return new Date(year, month + 1, 0).getDate();
+    };
+    
+    const getFirstDayOfMonth = (year: number, month: number) => {
+      return new Date(year, month, 1).getDay();
+    };
+    
+    const daysInMonth = getDaysInMonth(tempSelectedDate.year, tempSelectedDate.month);
+    const firstDay = getFirstDayOfMonth(tempSelectedDate.year, tempSelectedDate.month);
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    
+    const calendarDays = [];
+    for (let i = 0; i < firstDay; i++) {
+      calendarDays.push(null);
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      calendarDays.push(day);
+    }
+    
+    const handleMealDateSelect = (day: number) => {
+      const dateStr = `${tempSelectedDate.year}-${String(tempSelectedDate.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      setCustomMealDate(dateStr);
+      setMealDateFilter('custom');
+      setShowMealDatePickerModal(false);
+    };
+    
+    const goToPreviousMonth = () => {
+      if (tempSelectedDate.month === 0) {
+        setTempSelectedDate({ ...tempSelectedDate, year: tempSelectedDate.year - 1, month: 11 });
+      } else {
+        setTempSelectedDate({ ...tempSelectedDate, month: tempSelectedDate.month - 1 });
+      }
+    };
+    
+    const goToNextMonth = () => {
+      if (tempSelectedDate.month === 11) {
+        setTempSelectedDate({ ...tempSelectedDate, year: tempSelectedDate.year + 1, month: 0 });
+      } else {
+        setTempSelectedDate({ ...tempSelectedDate, month: tempSelectedDate.month + 1 });
+      }
+    };
+    
+    return (
+      <Modal
+        visible={showMealDatePickerModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowMealDatePickerModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.datePickerModalContent, { width: isMobile ? '90%' : 360 }]}>
+            <View style={styles.datePickerHeader}>
+              <Text style={styles.datePickerTitle}>Select Date</Text>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setShowMealDatePickerModal(false)}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.calendarNavigation}>
+              <TouchableOpacity onPress={goToPreviousMonth} style={styles.calendarNavButton}>
+                <Ionicons name="chevron-back" size={24} color={COLORS.primary} />
+              </TouchableOpacity>
+              <View style={styles.calendarMonthYear}>
+                <Text style={styles.calendarMonthText}>{months[tempSelectedDate.month]}</Text>
+                <Text style={styles.calendarYearText}>{tempSelectedDate.year}</Text>
+              </View>
+              <TouchableOpacity onPress={goToNextMonth} style={styles.calendarNavButton}>
+                <Ionicons name="chevron-forward" size={24} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.calendarDayHeaders}>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
+              ))}
+            </View>
+            
+            <View style={styles.calendarGrid}>
+              {calendarDays.map((day, index) => {
+                if (day === null) {
+                  return <View key={`empty-${index}`} style={styles.calendarDayCell} />;
+                }
+                
+                const dateStr = `${tempSelectedDate.year}-${String(tempSelectedDate.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isToday = dateStr === todayStr;
+                const isSelected = dateStr === customMealDate && mealDateFilter === 'custom';
+                const isFuture = new Date(dateStr) > today;
+                
+                return (
+                  <TouchableOpacity
+                    key={day}
+                    style={[
+                      styles.calendarDayCell,
+                      styles.calendarDayCellActive,
+                      isToday && styles.calendarDayCellToday,
+                      isSelected && styles.calendarDayCellSelected,
+                      isFuture && styles.calendarDayCellDisabled,
+                    ]}
+                    onPress={() => !isFuture && handleMealDateSelect(day)}
+                    disabled={isFuture}
+                  >
+                    <Text style={[
+                      styles.calendarDayText,
+                      isToday && styles.calendarDayTextToday,
+                      isSelected && styles.calendarDayTextSelected,
+                      isFuture && styles.calendarDayTextDisabled,
+                    ]}>{day}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            
+            <View style={styles.quickSelectButtons}>
+              <TouchableOpacity 
+                style={styles.quickSelectButton}
+                onPress={() => {
+                  setMealDateFilter('today');
+                  setShowMealDatePickerModal(false);
+                }}
+              >
+                <Text style={styles.quickSelectText}>Today</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.quickSelectButton}
+                onPress={() => {
+                  setMealDateFilter('yesterday');
+                  setShowMealDatePickerModal(false);
+                }}
+              >
+                <Text style={styles.quickSelectText}>Yesterday</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.quickSelectButton}
+                onPress={() => {
+                  setMealDateFilter('all');
+                  setShowMealDatePickerModal(false);
+                }}
+              >
+                <Text style={styles.quickSelectText}>All Logs</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -1863,6 +2038,7 @@ export default function UserDashboardScreen() {
       {renderHeightHistoryModal()}
       {renderStepHistoryModal()}
       {renderDatePickerModal()}
+      {renderMealDatePickerModal()}
       
       <ScrollView
         contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}

@@ -1359,6 +1359,172 @@ export const coupleExerciseService = {
 };
 
 // ============================================
+// COUPLE FOOD LOG OPERATIONS
+// ============================================
+
+export interface CoupleFoodLogItem {
+  foodId: string;
+  name: string;
+  nameTamil: string;
+  quantity: number;
+  servingSize: string;
+  servingGrams: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export interface CoupleFoodLog {
+  id: string;
+  coupleId: string;
+  gender: 'male' | 'female';
+  date: string; // YYYY-MM-DD format
+  mealType: string; // 'early-morning', 'breakfast', 'lunch', etc.
+  mealLabel: string; // Display label
+  foods: CoupleFoodLogItem[];
+  totalCalories: number;
+  totalProtein: number;
+  totalCarbs: number;
+  totalFat: number;
+  totalGrams: number;
+  loggedAt?: Timestamp;
+  createdAt?: Timestamp;
+}
+
+export const coupleFoodLogService = {
+  // Add food log for a couple member
+  async add(coupleId: string, gender: 'male' | 'female', data: {
+    mealType: string;
+    mealLabel: string;
+    foods: CoupleFoodLogItem[];
+    totalCalories: number;
+    totalProtein: number;
+    totalCarbs: number;
+    totalFat: number;
+    totalGrams: number;
+    date?: string;
+  }): Promise<string> {
+    try {
+      // Verify the couple exists
+      const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+      const coupleSnapshot = await getDoc(coupleRef);
+      
+      if (!coupleSnapshot.exists()) {
+        throw new Error(`Couple ${coupleId} not found`);
+      }
+
+      const foodLogsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'foodLogs');
+      const date = data.date || formatDateString(new Date());
+      
+      const docRef = await addDoc(foodLogsRef, {
+        coupleId,
+        gender,
+        date,
+        mealType: data.mealType,
+        mealLabel: data.mealLabel,
+        foods: data.foods,
+        totalCalories: data.totalCalories,
+        totalProtein: data.totalProtein,
+        totalCarbs: data.totalCarbs,
+        totalFat: data.totalFat,
+        totalGrams: data.totalGrams,
+        loggedAt: now(),
+        createdAt: now(),
+      });
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding food log:', error);
+      throw error;
+    }
+  },
+
+  // Get food logs for a date
+  async getByDate(coupleId: string, gender: 'male' | 'female', date: string): Promise<CoupleFoodLog[]> {
+    try {
+      const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'foodLogs');
+      const q = query(logsRef, where('date', '==', date), where('gender', '==', gender));
+      const snapshot = await getDocs(q);
+      const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CoupleFoodLog));
+      return entries.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.()?.getTime() || 0;
+        const bTime = b.createdAt?.toDate?.()?.getTime() || 0;
+        return bTime - aTime;
+      });
+    } catch (error) {
+      console.error('Error getting food logs:', error);
+      return [];
+    }
+  },
+
+  // Get all food logs for a date (both genders)
+  async getAllByDate(coupleId: string, date: string): Promise<CoupleFoodLog[]> {
+    try {
+      const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'foodLogs');
+      const q = query(logsRef, where('date', '==', date));
+      const snapshot = await getDocs(q);
+      const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CoupleFoodLog));
+      return entries.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.()?.getTime() || 0;
+        const bTime = b.createdAt?.toDate?.()?.getTime() || 0;
+        return bTime - aTime;
+      });
+    } catch (error) {
+      console.error('Error getting all food logs:', error);
+      return [];
+    }
+  },
+
+  // Get food logs by date range
+  async getByDateRange(coupleId: string, gender: 'male' | 'female', startDate: string, endDate: string): Promise<CoupleFoodLog[]> {
+    try {
+      const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'foodLogs');
+      const q = query(logsRef, where('gender', '==', gender));
+      const snapshot = await getDocs(q);
+      const entries = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as CoupleFoodLog))
+        .filter(entry => entry.date >= startDate && entry.date <= endDate);
+      return entries.sort((a, b) => b.date.localeCompare(a.date));
+    } catch (error) {
+      console.error('Error getting food logs by date range:', error);
+      return [];
+    }
+  },
+
+  // Get totals for a date
+  async getTotalsForDate(coupleId: string, gender: 'male' | 'female', date: string): Promise<{ 
+    calories: number; 
+    protein: number; 
+    carbs: number; 
+    fat: number;
+    grams: number;
+    mealCount: number;
+  }> {
+    const entries = await this.getByDate(coupleId, gender, date);
+    return {
+      calories: entries.reduce((sum, e) => sum + e.totalCalories, 0),
+      protein: entries.reduce((sum, e) => sum + e.totalProtein, 0),
+      carbs: entries.reduce((sum, e) => sum + e.totalCarbs, 0),
+      fat: entries.reduce((sum, e) => sum + e.totalFat, 0),
+      grams: entries.reduce((sum, e) => sum + e.totalGrams, 0),
+      mealCount: entries.length,
+    };
+  },
+
+  // Delete food log
+  async delete(coupleId: string, logId: string): Promise<void> {
+    try {
+      const logRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'foodLogs', logId);
+      await deleteDoc(logRef);
+    } catch (error) {
+      console.error('Error deleting food log:', error);
+      throw error;
+    }
+  },
+};
+
+// ============================================
 // NURSE VISITS OPERATIONS (Admin managed)
 // ============================================
 
@@ -1547,6 +1713,7 @@ const DEFAULT_GLOBAL_SETTINGS: Omit<GlobalSettings, 'updatedAt'> = {
   dailySteps: 7000,
   coupleWalkingMinutes: 60,
   highKneesMinutes: 30,
+  dailyCaloriesBurnt: 200,
   weeklySteps: 49000,
   weeklyCoupleWalkingMinutes: 420,
   weeklyHighKneesMinutes: 210,
@@ -1624,6 +1791,7 @@ export const globalSettingsService = {
     dailySteps: number;
     coupleWalkingMinutes: number;
     highKneesMinutes: number;
+    dailyCaloriesBurnt: number;
   }, adminId?: string): Promise<void> {
     const settingsRef = doc(db, COLLECTIONS.SETTINGS, 'globalSettings');
     
@@ -1631,6 +1799,7 @@ export const globalSettingsService = {
       dailySteps: goals.dailySteps,
       coupleWalkingMinutes: goals.coupleWalkingMinutes,
       highKneesMinutes: goals.highKneesMinutes,
+      dailyCaloriesBurnt: goals.dailyCaloriesBurnt,
       weeklySteps: goals.dailySteps * 7,
       weeklyCoupleWalkingMinutes: goals.coupleWalkingMinutes * 7,
       weeklyHighKneesMinutes: goals.highKneesMinutes * 7,
@@ -1682,6 +1851,7 @@ export const firestoreServices = {
   coupleWeightLog: coupleWeightLogService,
   exerciseLog: exerciseLogService,
   coupleExercise: coupleExerciseService,
+  coupleFoodLog: coupleFoodLogService,
   appointment: appointmentService,
   admin: adminService,
   nurseVisit: nurseVisitService,
