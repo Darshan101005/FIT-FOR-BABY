@@ -1049,6 +1049,148 @@ export const coupleWeightLogService = {
 };
 
 // ============================================
+// COUPLE STEPS OPERATIONS
+// ============================================
+
+export interface CoupleStepEntry {
+  id: string;
+  coupleId: string;
+  gender: 'male' | 'female';
+  date: string; // YYYY-MM-DD format
+  stepCount: number;
+  proofImageUrl?: string;
+  proofType?: 'camera' | 'gallery';
+  source: 'manual' | 'device';
+  loggedAt?: Timestamp;
+  createdAt?: Timestamp;
+}
+
+export const coupleStepsService = {
+  // Add step entry for a couple member
+  async add(coupleId: string, gender: 'male' | 'female', data: {
+    stepCount: number;
+    proofImageUrl?: string;
+    proofType?: 'camera' | 'gallery';
+    source?: 'manual' | 'device';
+    date?: string;
+  }): Promise<string> {
+    try {
+      // Verify the couple exists
+      const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+      const coupleSnapshot = await getDoc(coupleRef);
+      
+      if (!coupleSnapshot.exists()) {
+        throw new Error(`Couple ${coupleId} not found`);
+      }
+
+      const stepsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'steps');
+      const date = data.date || formatDateString(new Date());
+      
+      const docRef = await addDoc(stepsRef, {
+        coupleId,
+        gender,
+        date,
+        stepCount: data.stepCount,
+        proofImageUrl: data.proofImageUrl || null,
+        proofType: data.proofType || null,
+        source: data.source || 'manual',
+        loggedAt: now(),
+        createdAt: now(),
+      });
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding step entry:', error);
+      throw error;
+    }
+  },
+
+  // Get all step entries for a date
+  async getByDate(coupleId: string, gender: 'male' | 'female', date: string): Promise<CoupleStepEntry[]> {
+    try {
+      const stepsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'steps');
+      // Query by date and gender
+      const q = query(stepsRef, where('date', '==', date), where('gender', '==', gender));
+      const snapshot = await getDocs(q);
+      const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CoupleStepEntry));
+      // Sort client-side by createdAt (most recent first)
+      return entries.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.()?.getTime() || 0;
+        const bTime = b.createdAt?.toDate?.()?.getTime() || 0;
+        return bTime - aTime;
+      });
+    } catch (error) {
+      console.error('Error getting step entries:', error);
+      return [];
+    }
+  },
+
+  // Get total steps for a date
+  async getTotalForDate(coupleId: string, gender: 'male' | 'female', date: string): Promise<number> {
+    const entries = await this.getByDate(coupleId, gender, date);
+    return entries.reduce((total, entry) => total + entry.stepCount, 0);
+  },
+
+  // Get step entries for date range (for history/progress)
+  async getByDateRange(coupleId: string, gender: 'male' | 'female', startDate: string, endDate: string): Promise<CoupleStepEntry[]> {
+    try {
+      const stepsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'steps');
+      // Query by gender only, then filter by date client-side to avoid composite index issues
+      const q = query(
+        stepsRef,
+        where('gender', '==', gender)
+      );
+      const snapshot = await getDocs(q);
+      const entries = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as CoupleStepEntry))
+        .filter(entry => entry.date >= startDate && entry.date <= endDate);
+      // Sort client-side by date (most recent first)
+      return entries.sort((a, b) => b.date.localeCompare(a.date));
+    } catch (error) {
+      console.error('Error getting step entries by date range:', error);
+      return [];
+    }
+  },
+
+  // Delete step entry
+  async delete(coupleId: string, stepId: string): Promise<void> {
+    try {
+      const stepRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'steps', stepId);
+      await deleteDoc(stepRef);
+    } catch (error) {
+      console.error('Error deleting step entry:', error);
+      throw error;
+    }
+  },
+
+  // Subscribe to today's steps (real-time)
+  subscribeToday(coupleId: string, gender: 'male' | 'female', callback: (entries: CoupleStepEntry[]) => void): Unsubscribe {
+    try {
+      const today = formatDateString(new Date());
+      const stepsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'steps');
+      const q = query(stepsRef, where('date', '==', today), orderBy('loggedAt', 'desc'));
+      
+      return onSnapshot(q, 
+        (snapshot) => {
+          const entries = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as CoupleStepEntry))
+            .filter(entry => entry.gender === gender);
+          callback(entries);
+        },
+        (error) => {
+          console.error('Steps subscription error:', error);
+          callback([]);
+        }
+      );
+    } catch (error) {
+      console.error('Failed to setup steps subscription:', error);
+      callback([]);
+      return () => {};
+    }
+  },
+};
+
+// ============================================
 // NURSE VISITS OPERATIONS (Admin managed)
 // ============================================
 
@@ -1366,8 +1508,10 @@ export const globalSettingsService = {
 export const firestoreServices = {
   user: userService,
   steps: stepsService,
+  coupleSteps: coupleStepsService,
   foodLog: foodLogService,
   weightLog: weightLogService,
+  coupleWeightLog: coupleWeightLogService,
   exerciseLog: exerciseLogService,
   appointment: appointmentService,
   admin: adminService,

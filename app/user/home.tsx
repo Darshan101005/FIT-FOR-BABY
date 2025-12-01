@@ -1,7 +1,7 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { HomePageSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
-import { coupleService, globalSettingsService } from '@/services/firestore.service';
+import { coupleService, coupleStepsService, formatDateString, globalSettingsService } from '@/services/firestore.service';
 import { GlobalSettings } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,6 +28,7 @@ interface UserData {
   name: string;
   coupleId: string;
   userId: string;
+  userGender: 'male' | 'female';
   profileImage: string | null;
   unreadNotifications: number;
 }
@@ -66,6 +67,7 @@ export default function UserHomeScreen() {
   const [selectedDateIndex, setSelectedDateIndex] = useState(3); // Today is at index 3
   const [notificationSidebarVisible, setNotificationSidebarVisible] = useState(false);
   const [todayStepsFromStorage, setTodayStepsFromStorage] = useState(0);
+  const [userWeight, setUserWeight] = useState(60); // Default 60kg for calorie calculation
   const [isLoading, setIsLoading] = useState(true); // Loading state for skeleton
   const sidebarAnim = useRef(new Animated.Value(300)).current;
   
@@ -78,17 +80,28 @@ export default function UserHomeScreen() {
   const dates = generateDates(isMobile);
   const todayIndex = isMobile ? 3 : 3; // Today is always at index 3
 
+  // Calculate time from steps (100 steps per minute for normal walking)
+  const calculateTimeFromSteps = (steps: number): number => {
+    return Math.round(steps / 100);
+  };
+
+  // Calculate calories from steps (0.0004 × weight × steps)
+  const calculateCaloriesFromSteps = (steps: number, weight: number): number => {
+    return Math.round(0.0004 * weight * steps);
+  };
+
   // Progress data for different dates - no mock data, only real data
   const getProgressDataForDate = (dateIndex: number) => {
     const stepTarget = globalSettings?.dailySteps || 7000;
     // Only today (index 3) has real data from storage, past dates will come from Firestore later
     // For now, show 0 for past dates - this will be replaced with real Firestore data
     const isToday = dateIndex === 3;
+    const currentSteps = isToday ? todayStepsFromStorage : 0;
     return {
-      steps: { current: isToday ? todayStepsFromStorage : 0, target: stepTarget },
-      exerciseMinutes: 0, // TODO: Fetch from Firestore
+      steps: { current: currentSteps, target: stepTarget },
+      exerciseMinutes: calculateTimeFromSteps(currentSteps), // Time from steps
       foodLogged: 0, // TODO: Fetch from Firestore
-      caloriesBurnt: 0, // TODO: Fetch from Firestore
+      caloriesBurnt: calculateCaloriesFromSteps(currentSteps, userWeight), // Calories from steps
     };
   };
 
@@ -99,25 +112,41 @@ export default function UserHomeScreen() {
         setIsLoading(true);
         try {
           // Load all data in parallel
-          const [coupleId, userGender, userName, userId, savedSteps, settings] = await Promise.all([
+          const [coupleId, userGender, userName, userId, settings] = await Promise.all([
             AsyncStorage.getItem('coupleId'),
             AsyncStorage.getItem('userGender'),
             AsyncStorage.getItem('userName'),
             AsyncStorage.getItem('userId'),
-            AsyncStorage.getItem(STEPS_STORAGE_KEY),
             globalSettingsService.get(),
           ]);
 
           // Set global settings
           setGlobalSettings(settings);
 
-          // Set steps from storage
-          if (savedSteps) {
-            const parsed = JSON.parse(savedSteps);
-            const today = new Date().toDateString();
-            if (parsed.date === today && parsed.totalSteps) {
-              setTodayStepsFromStorage(parsed.totalSteps);
+          // Fetch real step data from Firestore
+          if (coupleId && userGender) {
+            const today = formatDateString(new Date());
+            const totalSteps = await coupleStepsService.getTotalForDate(
+              coupleId, 
+              userGender as 'male' | 'female', 
+              today
+            );
+            setTodayStepsFromStorage(totalSteps);
+            
+            // Get user weight for calorie calculation
+            const couple = await coupleService.get(coupleId);
+            if (couple) {
+              const user = couple[userGender as 'male' | 'female'];
+              if (user.weight) {
+                setUserWeight(user.weight);
+              }
             }
+
+            // Also update AsyncStorage for quick access
+            await AsyncStorage.setItem(STEPS_STORAGE_KEY, JSON.stringify({
+              date: new Date().toDateString(),
+              totalSteps: totalSteps
+            }));
           }
 
           // Set user data
@@ -129,6 +158,7 @@ export default function UserHomeScreen() {
                 name: user.name || userName || 'User',
                 coupleId: coupleId,
                 userId: userId || user.id,
+                userGender: userGender as 'male' | 'female',
                 profileImage: user.profileImage || null,
                 unreadNotifications: 0,
               });
@@ -138,6 +168,7 @@ export default function UserHomeScreen() {
                 name: userName || 'User',
                 coupleId: coupleId || '',
                 userId: userId || '',
+                userGender: userGender as 'male' | 'female',
                 profileImage: null,
                 unreadNotifications: 0,
               });
@@ -148,6 +179,7 @@ export default function UserHomeScreen() {
               name: userName || 'User',
               coupleId: '',
               userId: userId || '',
+              userGender: 'male',
               profileImage: null,
               unreadNotifications: 0,
             });
@@ -159,6 +191,7 @@ export default function UserHomeScreen() {
             name: 'User',
             coupleId: '',
             userId: '',
+            userGender: 'male',
             profileImage: null,
             unreadNotifications: 0,
           });

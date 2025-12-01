@@ -13,7 +13,7 @@ import {
     View,
     useWindowDimensions
 } from 'react-native';
-import { CoupleData, coupleService, coupleWeightLogService } from '../../services/firestore.service';
+import { CoupleData, CoupleStepEntry, coupleService, coupleStepsService, coupleWeightLogService, formatDateString } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
 
@@ -45,7 +45,7 @@ interface DailyLog {
   maleStatus: string;
   femaleStatus: string;
   date: string;
-  steps: { male: LogStatus; female: LogStatus };
+  steps: { male: LogStatus; female: LogStatus; maleCount: number; femaleCount: number };
   exercise: { male: LogStatus; female: LogStatus };
   diet: { male: LogStatus; female: LogStatus };
   weight: { male: LogStatus; female: LogStatus };
@@ -68,6 +68,8 @@ interface CoupleDetails {
   femaleWeight?: number;
   maleLastWeightDate?: string;
   femaleLastWeightDate?: string;
+  maleStepEntries?: CoupleStepEntry[];
+  femaleStepEntries?: CoupleStepEntry[];
 }
 
 interface DetailedLogEntry {
@@ -107,6 +109,7 @@ export default function AdminMonitoringScreen() {
   const [selectedCouple, setSelectedCouple] = useState<DailyLog | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showPastLogs, setShowPastLogs] = useState(false);
+  const [showStepHistory, setShowStepHistory] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load couples data from Firestore
@@ -146,7 +149,7 @@ export default function AdminMonitoringScreen() {
           maleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
           femaleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
           date: selectedDate,
-          steps: { male: 'pending', female: 'pending' },
+          steps: { male: 'pending', female: 'pending', maleCount: 0, femaleCount: 0 },
           exercise: { male: 'pending', female: 'pending' },
           diet: { male: 'pending', female: 'pending' },
           weight: { male: 'pending', female: 'pending' },
@@ -159,14 +162,40 @@ export default function AdminMonitoringScreen() {
       setLogs(dailyLogs);
       setIsLoading(false);
       
-      // Load weight data for each couple
+      // Load weight and step data for each couple
       couplesData.forEach(async couple => {
         const coupleId = couple.id || '';
         try {
+          // Load weight data
           const [maleWeight, femaleWeight] = await Promise.all([
             coupleWeightLogService.getLatest(coupleId, 'male'),
             coupleWeightLogService.getLatest(coupleId, 'female')
           ]);
+          
+          // Load step data for the selected date
+          const [maleSteps, femaleSteps] = await Promise.all([
+            coupleStepsService.getByDate(coupleId, 'male', selectedDate),
+            coupleStepsService.getByDate(coupleId, 'female', selectedDate)
+          ]);
+          
+          const maleStepCount = maleSteps.reduce((sum, entry) => sum + entry.stepCount, 0);
+          const femaleStepCount = femaleSteps.reduce((sum, entry) => sum + entry.stepCount, 0);
+          
+          // Step goal (default 7000)
+          const stepGoal = 7000;
+          
+          // Determine step status
+          const getMaleStepStatus = (): LogStatus => {
+            if (maleStepCount >= stepGoal) return 'complete';
+            if (maleStepCount > 0) return 'partial';
+            return 'pending';
+          };
+          
+          const getFemaleStepStatus = (): LogStatus => {
+            if (femaleStepCount >= stepGoal) return 'complete';
+            if (femaleStepCount > 0) return 'partial';
+            return 'pending';
+          };
           
           setCoupleDetails(prev => ({
             ...prev,
@@ -176,25 +205,33 @@ export default function AdminMonitoringScreen() {
               maleLastWeightDate: maleWeight?.date,
               femaleWeight: femaleWeight?.weight,
               femaleLastWeightDate: femaleWeight?.date,
+              maleStepEntries: maleSteps,
+              femaleStepEntries: femaleSteps,
             }
           }));
           
-          // Update log status based on weight data
+          // Update log status based on weight and step data
           const today = new Date().toISOString().split('T')[0];
           setLogs(prevLogs => prevLogs.map(log => {
             if (log.coupleId === coupleId) {
               return {
                 ...log,
+                steps: {
+                  male: getMaleStepStatus(),
+                  female: getFemaleStepStatus(),
+                  maleCount: maleStepCount,
+                  femaleCount: femaleStepCount,
+                },
                 weight: {
-                  male: maleWeight?.date === today ? 'complete' : (maleWeight ? 'partial' : 'pending'),
-                  female: femaleWeight?.date === today ? 'complete' : (femaleWeight ? 'partial' : 'pending'),
+                  male: maleWeight?.date === selectedDate ? 'complete' : (maleWeight ? 'partial' : 'pending'),
+                  female: femaleWeight?.date === selectedDate ? 'complete' : (femaleWeight ? 'partial' : 'pending'),
                 }
               };
             }
             return log;
           }));
         } catch (error) {
-          console.error('Error loading weight data for', coupleId, error);
+          console.error('Error loading data for', coupleId, error);
         }
       });
     });
@@ -598,9 +635,22 @@ export default function AdminMonitoringScreen() {
     
     const details = coupleDetails[selectedCouple.coupleId];
     
+    // Close modal handler
+    const handleCloseModal = () => {
+      setShowDetailModal(false);
+      setShowStepHistory(false);
+      setShowPastLogs(false);
+    };
+    
+    // Format step count for display
+    const formatStepCount = (count: number, status: LogStatus): string => {
+      if (status === 'pending' || count === 0) return 'Not logged';
+      return count.toLocaleString() + ' steps';
+    };
+    
     // Generate logs based on actual data
     const logsToShow: DetailedLogEntry[] = [
-      { metric: 'Steps', icon: 'walk', iconFamily: 'MaterialCommunityIcons' as const, maleValue: selectedCouple.steps.male === 'complete' ? '7,000+' : selectedCouple.steps.male === 'partial' ? '3,500' : 'Not logged', femaleValue: selectedCouple.steps.female === 'complete' ? '7,000+' : selectedCouple.steps.female === 'partial' ? '3,500' : 'Not logged', maleStatus: selectedCouple.steps.male, femaleStatus: selectedCouple.steps.female, unit: 'steps' },
+      { metric: 'Steps', icon: 'walk', iconFamily: 'MaterialCommunityIcons' as const, maleValue: formatStepCount(selectedCouple.steps.maleCount, selectedCouple.steps.male), femaleValue: formatStepCount(selectedCouple.steps.femaleCount, selectedCouple.steps.female), maleStatus: selectedCouple.steps.male, femaleStatus: selectedCouple.steps.female, unit: 'steps' },
       { metric: 'Exercise', icon: 'fitness', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.exercise.male === 'complete' ? '45 min' : selectedCouple.exercise.male === 'partial' ? '20 min' : 'Not logged', femaleValue: selectedCouple.exercise.female === 'complete' ? '45 min' : selectedCouple.exercise.female === 'partial' ? '20 min' : 'Not logged', maleStatus: selectedCouple.exercise.male, femaleStatus: selectedCouple.exercise.female, unit: '' },
       { metric: 'Diet Log', icon: 'nutrition', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.diet.male === 'complete' ? '3 meals' : selectedCouple.diet.male === 'partial' ? '1 meal' : 'Not logged', femaleValue: selectedCouple.diet.female === 'complete' ? '3 meals' : selectedCouple.diet.female === 'partial' ? '1 meal' : 'Not logged', maleStatus: selectedCouple.diet.male, femaleStatus: selectedCouple.diet.female, unit: '' },
       { metric: 'Weight', icon: 'scale-bathroom', iconFamily: 'MaterialCommunityIcons' as const, maleValue: details?.maleWeight ? `${details.maleWeight} kg` : (selectedCouple.weight.male === 'pending' ? 'Pending' : 'Not logged'), femaleValue: details?.femaleWeight ? `${details.femaleWeight} kg` : (selectedCouple.weight.female === 'pending' ? 'Pending' : 'Not logged'), maleStatus: selectedCouple.weight.male, femaleStatus: selectedCouple.weight.female, unit: '' },
@@ -622,7 +672,7 @@ export default function AdminMonitoringScreen() {
         visible={showDetailModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowDetailModal(false)}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, isMobile && styles.modalContentMobile]}>
@@ -644,7 +694,7 @@ export default function AdminMonitoringScreen() {
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => setShowDetailModal(false)}>
+              <TouchableOpacity onPress={handleCloseModal}>
                 <Ionicons name="close" size={24} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -697,7 +747,7 @@ export default function AdminMonitoringScreen() {
                   <TouchableOpacity 
                     style={styles.viewCoupleDashboardButton}
                     onPress={() => {
-                      setShowDetailModal(false);
+                      handleCloseModal();
                       router.push(`/admin/user-dashboard?coupleId=${selectedCouple.coupleId}` as any);
                     }}
                   >
@@ -771,6 +821,108 @@ export default function AdminMonitoringScreen() {
                       </View>
                     </View>
                   ))}
+                  
+                  {/* Step History Expandable Section */}
+                  {(details?.maleStepEntries?.length > 0 || details?.femaleStepEntries?.length > 0) && (
+                    <View style={styles.stepHistorySection}>
+                      <TouchableOpacity 
+                        style={styles.stepHistoryToggle}
+                        onPress={() => setShowStepHistory(!showStepHistory)}
+                      >
+                        <View style={styles.stepHistoryHeader}>
+                          <MaterialCommunityIcons name="walk" size={20} color={COLORS.primary} />
+                          <Text style={styles.stepHistoryTitle}>Step Log History</Text>
+                        </View>
+                        <Ionicons 
+                          name={showStepHistory ? 'chevron-up' : 'chevron-down'} 
+                          size={20} 
+                          color={COLORS.textSecondary} 
+                        />
+                      </TouchableOpacity>
+                      
+                      {showStepHistory && (
+                        <View style={styles.stepHistoryContent}>
+                          {/* Male Step Entries */}
+                          {details?.maleStepEntries && details.maleStepEntries.length > 0 && (
+                            <View style={styles.stepEntryGroup}>
+                              <View style={styles.stepEntryGroupHeader}>
+                                <Ionicons name="male" size={16} color={COLORS.primary} />
+                                <Text style={styles.stepEntryGroupTitle}>Male Partner</Text>
+                              </View>
+                              {details.maleStepEntries.map((entry, idx) => (
+                                <View key={idx} style={styles.stepEntryRow}>
+                                  <View style={styles.stepEntryInfo}>
+                                    <Text style={styles.stepEntryCount}>
+                                      {entry.stepCount.toLocaleString()} steps
+                                    </Text>
+                                    <Text style={styles.stepEntrySource}>
+                                      via {entry.source || 'manual'}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.stepEntryTime}>
+                                    <Text style={styles.stepEntryTimeText}>
+                                      {entry.loggedAt?.toDate ? 
+                                        new Date(entry.loggedAt.toDate()).toLocaleTimeString('en-US', { 
+                                          hour: '2-digit', 
+                                          minute: '2-digit' 
+                                        }) : 
+                                        '--:--'
+                                      }
+                                    </Text>
+                                    {entry.proofImageUrl && (
+                                      <Ionicons name="image" size={14} color={COLORS.success} />
+                                    )}
+                                  </View>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                          
+                          {/* Female Step Entries */}
+                          {details?.femaleStepEntries && details.femaleStepEntries.length > 0 && (
+                            <View style={styles.stepEntryGroup}>
+                              <View style={styles.stepEntryGroupHeader}>
+                                <Ionicons name="female" size={16} color={COLORS.accent} />
+                                <Text style={styles.stepEntryGroupTitle}>Female Partner</Text>
+                              </View>
+                              {details.femaleStepEntries.map((entry, idx) => (
+                                <View key={idx} style={styles.stepEntryRow}>
+                                  <View style={styles.stepEntryInfo}>
+                                    <Text style={styles.stepEntryCount}>
+                                      {entry.stepCount.toLocaleString()} steps
+                                    </Text>
+                                    <Text style={styles.stepEntrySource}>
+                                      via {entry.source || 'manual'}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.stepEntryTime}>
+                                    <Text style={styles.stepEntryTimeText}>
+                                      {entry.loggedAt?.toDate ? 
+                                        new Date(entry.loggedAt.toDate()).toLocaleTimeString('en-US', { 
+                                          hour: '2-digit', 
+                                          minute: '2-digit' 
+                                        }) : 
+                                        '--:--'
+                                      }
+                                    </Text>
+                                    {entry.proofImageUrl && (
+                                      <Ionicons name="image" size={14} color={COLORS.success} />
+                                    )}
+                                  </View>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                          
+                          {/* Empty State */}
+                          {(!details?.maleStepEntries || details.maleStepEntries.length === 0) && 
+                           (!details?.femaleStepEntries || details.femaleStepEntries.length === 0) && (
+                            <Text style={styles.noStepEntries}>No step entries logged today</Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  )}
                 </View>
               ) : (
                 <View style={styles.pastLogsSection}>
@@ -857,7 +1009,7 @@ export default function AdminMonitoringScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalPrimaryButton}
-                onPress={() => setShowDetailModal(false)}
+                onPress={handleCloseModal}
               >
                 <Text style={styles.modalPrimaryButtonText}>Close</Text>
               </TouchableOpacity>
@@ -1763,6 +1915,88 @@ const styles = StyleSheet.create({
   legendNote: {
     fontSize: 10,
     color: COLORS.textMuted,
+    fontStyle: 'italic',
+  },
+  // Step History Styles
+  stepHistorySection: {
+    marginTop: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    overflow: 'hidden',
+  },
+  stepHistoryToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    backgroundColor: COLORS.primary + '08',
+  },
+  stepHistoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  stepHistoryTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  stepHistoryContent: {
+    padding: 14,
+    gap: 16,
+  },
+  stepEntryGroup: {
+    gap: 8,
+  },
+  stepEntryGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  stepEntryGroupTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  stepEntryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  stepEntryInfo: {
+    flex: 1,
+  },
+  stepEntryCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  stepEntrySource: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  stepEntryTime: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  stepEntryTimeText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  noStepEntries: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    paddingVertical: 12,
     fontStyle: 'italic',
   },
 });

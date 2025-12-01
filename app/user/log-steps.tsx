@@ -1,12 +1,13 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
+import { coupleStepsService, CoupleStepEntry, formatDateString } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
 import {
     Animated,
     KeyboardAvoidingView,
@@ -42,9 +43,9 @@ const COLORS = {
 
 interface StepEntry {
   id: string;
-  steps: number;
-  timestamp: Date;
-  imageUri?: string;
+  stepCount: number;
+  loggedAt: Date;
+  proofImageUrl?: string;
 }
 
 const STEPS_STORAGE_KEY = '@fitforbaby_steps_today';
@@ -58,45 +59,52 @@ export default function LogStepsScreen() {
   const [stepEntries, setStepEntries] = useState<StepEntry[]>([]);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [coupleId, setCoupleId] = useState<string | null>(null);
+  const [userGender, setUserGender] = useState<'male' | 'female'>('male');
   const toastAnim = useRef(new Animated.Value(-100)).current;
 
-  // Load saved entries on mount
-  useEffect(() => {
-    loadSavedEntries();
-  }, []);
-
-  const loadSavedEntries = async () => {
-    try {
-      const savedData = await AsyncStorage.getItem(STEPS_STORAGE_KEY);
-      if (savedData) {
-        const parsed = JSON.parse(savedData);
-        // Check if saved data is from today
-        const today = new Date().toDateString();
-        if (parsed.date === today && parsed.entries) {
-          setStepEntries(parsed.entries.map((e: any) => ({
-            ...e,
-            timestamp: new Date(e.timestamp)
-          })));
+  // Load user data and step entries on focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadData = async () => {
+        setIsLoading(true);
+        try {
+          const [storedCoupleId, storedGender] = await Promise.all([
+            AsyncStorage.getItem('coupleId'),
+            AsyncStorage.getItem('userGender'),
+          ]);
+          
+          if (storedCoupleId && storedGender) {
+            setCoupleId(storedCoupleId);
+            setUserGender(storedGender as 'male' | 'female');
+            
+            // Load today's step entries from Firestore
+            const today = formatDateString(new Date());
+            const entries = await coupleStepsService.getByDate(storedCoupleId, storedGender as 'male' | 'female', today);
+            
+            // Convert Firestore entries to local format
+            const localEntries: StepEntry[] = entries.map(entry => ({
+              id: entry.id,
+              stepCount: entry.stepCount,
+              loggedAt: entry.loggedAt?.toDate() || new Date(),
+              proofImageUrl: entry.proofImageUrl,
+            }));
+            
+            setStepEntries(localEntries);
+          }
+        } catch (error) {
+          console.error('Error loading step data:', error);
+          showToast('Failed to load step entries', 'error');
+        } finally {
+          setIsLoading(false);
         }
-      }
-    } catch (error) {
-      console.error('Error loading saved entries:', error);
-    }
-  };
-
-  const saveEntriesToStorage = async (entries: StepEntry[]) => {
-    try {
-      const today = new Date().toDateString();
-      const totalSteps = entries.reduce((sum, entry) => sum + entry.steps, 0);
-      await AsyncStorage.setItem(STEPS_STORAGE_KEY, JSON.stringify({
-        date: today,
-        entries: entries,
-        totalSteps: totalSteps
-      }));
-    } catch (error) {
-      console.error('Error saving entries:', error);
-    }
-  };
+      };
+      
+      loadData();
+    }, [])
+  );
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -163,36 +171,82 @@ export default function LogStepsScreen() {
       return;
     }
 
-    if (!imageUri) {
-      showToast('Please upload or take a photo of your step count', 'error');
+    if (!coupleId) {
+      showToast('User session not found. Please login again.', 'error');
       return;
     }
 
-    const newEntry: StepEntry = {
-      id: Date.now().toString(),
-      steps: parseInt(stepCount),
-      timestamp: new Date(),
-      imageUri: imageUri,
-    };
+    setIsSaving(true);
+    try {
+      const stepsToAdd = parseInt(stepCount);
+      
+      // Save to Firestore
+      const entryId = await coupleStepsService.add(coupleId, userGender, {
+        stepCount: stepsToAdd,
+        proofImageUrl: imageUri || undefined,
+        proofType: imageUri ? 'gallery' : undefined,
+        source: 'manual',
+      });
 
-    const updatedEntries = [newEntry, ...stepEntries];
-    setStepEntries(updatedEntries);
-    await saveEntriesToStorage(updatedEntries);
-    
-    setStepCount('');
-    setImageUri(null);
-    showToast(`${parseInt(stepCount).toLocaleString()} steps logged!`, 'success');
+      // Add to local state
+      const newEntry: StepEntry = {
+        id: entryId,
+        stepCount: stepsToAdd,
+        loggedAt: new Date(),
+        proofImageUrl: imageUri || undefined,
+      };
+
+      const updatedEntries = [newEntry, ...stepEntries];
+      setStepEntries(updatedEntries);
+      
+      // Also update AsyncStorage for home page quick access
+      const totalSteps = updatedEntries.reduce((sum, e) => sum + e.stepCount, 0);
+      await AsyncStorage.setItem(STEPS_STORAGE_KEY, JSON.stringify({
+        date: new Date().toDateString(),
+        totalSteps: totalSteps
+      }));
+      
+      setStepCount('');
+      setImageUri(null);
+      showToast(`${stepsToAdd.toLocaleString()} steps added! Total: ${totalSteps.toLocaleString()}`, 'success');
+    } catch (error) {
+      console.error('Error adding steps:', error);
+      showToast('Failed to save steps. Please try again.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getTotalSteps = () => {
-    return stepEntries.reduce((sum, entry) => sum + entry.steps, 0);
+    return stepEntries.reduce((sum, entry) => sum + entry.stepCount, 0);
   };
 
   const handleRemoveEntry = async (id: string) => {
-    const updatedEntries = stepEntries.filter(entry => entry.id !== id);
-    setStepEntries(updatedEntries);
-    await saveEntriesToStorage(updatedEntries);
-    showToast('Entry deleted', 'success');
+    if (!coupleId) {
+      showToast('User session not found', 'error');
+      return;
+    }
+
+    try {
+      // Delete from Firestore
+      await coupleStepsService.delete(coupleId, id);
+      
+      // Remove from local state
+      const updatedEntries = stepEntries.filter(entry => entry.id !== id);
+      setStepEntries(updatedEntries);
+      
+      // Update AsyncStorage
+      const totalSteps = updatedEntries.reduce((sum, entry) => sum + entry.stepCount, 0);
+      await AsyncStorage.setItem(STEPS_STORAGE_KEY, JSON.stringify({
+        date: new Date().toDateString(),
+        totalSteps: totalSteps
+      }));
+      
+      showToast('Entry deleted', 'success');
+    } catch (error) {
+      console.error('Error deleting entry:', error);
+      showToast('Failed to delete entry', 'error');
+    }
   };
 
   const formatTime = (date: Date) => {
@@ -211,21 +265,6 @@ export default function LogStepsScreen() {
       year: 'numeric'
     };
     return new Date().toLocaleDateString('en-US', options);
-  };
-
-  const handleSaveAll = async () => {
-    if (stepEntries.length === 0) {
-      showToast('Please add at least one step entry', 'error');
-      return;
-    }
-
-    const totalSteps = getTotalSteps();
-    await saveEntriesToStorage(stepEntries);
-    showToast(`Total ${totalSteps.toLocaleString()} steps saved!`, 'success');
-    
-    setTimeout(() => {
-      router.back();
-    }, 1500);
   };
 
   return (
@@ -286,12 +325,12 @@ export default function LogStepsScreen() {
 
             <Text style={styles.stepTitle}>Log Your Steps</Text>
             <Text style={styles.stepDescription}>
-              Upload a screenshot or photo of your step counter
+              Enter your step count and optionally upload proof
             </Text>
 
-            {/* Image Upload Section */}
+            {/* Image Upload Section - Optional */}
             <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Step Counter Image</Text>
+              <Text style={styles.inputLabel}>Step Counter Image (Optional)</Text>
               
               {imageUri ? (
                 <View style={styles.imagePreviewContainer}>
@@ -347,7 +386,7 @@ export default function LogStepsScreen() {
                 <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.textSecondary} />
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Enter step count from image"
+                  placeholder="Enter your step count"
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="number-pad"
                   value={stepCount}
@@ -357,19 +396,25 @@ export default function LogStepsScreen() {
               </View>
             </View>
 
-            {/* Submit Button */}
+            {/* Submit Button - Now works without image */}
             <TouchableOpacity
-              style={[styles.submitButton, (!stepCount || !imageUri) && styles.submitButtonDisabled]}
+              style={[styles.submitButton, (!stepCount || isSaving) && styles.submitButtonDisabled]}
               onPress={handleAddSteps}
               activeOpacity={0.85}
-              disabled={!stepCount || !imageUri}
+              disabled={!stepCount || isSaving}
             >
               <LinearGradient
-                colors={(!stepCount || !imageUri) ? ['#94a3b8', '#64748b'] : [COLORS.accent, COLORS.accentDark]}
+                colors={(!stepCount || isSaving) ? ['#94a3b8', '#64748b'] : [COLORS.accent, COLORS.accentDark]}
                 style={styles.submitButtonGradient}
               >
-                <Ionicons name="add-circle" size={20} color="#ffffff" />
-                <Text style={styles.submitButtonText}>Add Steps</Text>
+                {isSaving ? (
+                  <Text style={styles.submitButtonText}>Saving...</Text>
+                ) : (
+                  <>
+                    <Ionicons name="add-circle" size={20} color="#ffffff" />
+                    <Text style={styles.submitButtonText}>Add Steps</Text>
+                  </>
+                )}
               </LinearGradient>
             </TouchableOpacity>
 
@@ -390,22 +435,16 @@ export default function LogStepsScreen() {
                           <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.accent} />
                         </View>
                         <View style={styles.entryInfo}>
-                          <Text style={styles.entrySteps}>{entry.steps.toLocaleString()} steps</Text>
-                          <Text style={styles.entryTime}>{formatTime(entry.timestamp)}</Text>
+                          <Text style={styles.entrySteps}>{entry.stepCount.toLocaleString()} steps</Text>
+                          <Text style={styles.entryTime}>{formatTime(entry.loggedAt)}</Text>
                         </View>
                       </View>
-                      {index === 0 ? (
-                        <TouchableOpacity 
-                          style={styles.deleteButton}
-                          onPress={() => handleRemoveEntry(entry.id)}
-                        >
-                          <Ionicons name="trash-outline" size={20} color={COLORS.error} />
-                        </TouchableOpacity>
-                      ) : (
-                        <View style={styles.checkmarkContainer}>
-                          <Ionicons name="checkmark-circle" size={24} color={COLORS.accent} />
-                        </View>
-                      )}
+                      <TouchableOpacity 
+                        style={styles.deleteButton}
+                        onPress={() => handleRemoveEntry(entry.id)}
+                      >
+                        <Ionicons name="trash-outline" size={20} color={COLORS.error} />
+                      </TouchableOpacity>
                     </View>
                   </View>
                 ))}
@@ -417,7 +456,7 @@ export default function LogStepsScreen() {
               <View style={styles.emptyState}>
                 <MaterialCommunityIcons name="shoe-print" size={48} color={COLORS.border} />
                 <Text style={styles.emptyStateText}>No steps logged yet</Text>
-                <Text style={styles.emptyStateHint}>Upload an image and enter your step count</Text>
+                <Text style={styles.emptyStateHint}>Enter your step count to get started</Text>
               </View>
             )}
 
@@ -425,28 +464,9 @@ export default function LogStepsScreen() {
             <View style={styles.infoCard}>
               <Ionicons name="information-circle" size={24} color={COLORS.primary} />
               <Text style={styles.infoText}>
-                Upload a screenshot or photo of your step counter (fitness app, smartwatch, etc.) and enter the step count shown.
+                Enter your step count from your fitness tracker or phone. Optionally, you can upload a screenshot as proof.
               </Text>
             </View>
-
-            {/* Save Button */}
-            {stepEntries.length > 0 && (
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={handleSaveAll}
-                activeOpacity={0.85}
-              >
-                <LinearGradient
-                  colors={[COLORS.primary, COLORS.primaryDark]}
-                  style={styles.saveButtonGradient}
-                >
-                  <Ionicons name="checkmark-circle" size={20} color="#ffffff" />
-                  <Text style={styles.saveButtonText}>
-                    Save {getTotalSteps().toLocaleString()} Steps
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -776,26 +796,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.primaryDark,
     lineHeight: 20,
-  },
-  saveButton: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  saveButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    gap: 10,
-  },
-  saveButtonText: {
-    color: '#ffffff',
-    fontSize: 17,
-    fontWeight: '700',
   },
 });

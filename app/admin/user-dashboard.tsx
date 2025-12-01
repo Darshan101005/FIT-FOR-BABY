@@ -12,7 +12,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { CoupleWeightLog, coupleService, coupleWeightLogService } from '../../services/firestore.service';
+import { CoupleStepEntry, CoupleWeightLog, coupleService, coupleStepsService, coupleWeightLogService, formatDateString } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
 
@@ -195,8 +195,11 @@ export default function UserDashboardScreen() {
   const [femaleUser, setFemaleUser] = useState<UserData | null>(null);
   const [maleWeightLogs, setMaleWeightLogs] = useState<CoupleWeightLog[]>([]);
   const [femaleWeightLogs, setFemaleWeightLogs] = useState<CoupleWeightLog[]>([]);
+  const [maleStepLogs, setMaleStepLogs] = useState<CoupleStepEntry[]>([]);
+  const [femaleStepLogs, setFemaleStepLogs] = useState<CoupleStepEntry[]>([]);
   const [showWeightHistoryModal, setShowWeightHistoryModal] = useState(false);
   const [showHeightHistoryModal, setShowHeightHistoryModal] = useState(false);
+  const [showStepHistoryModal, setShowStepHistoryModal] = useState(false);
   const [selectedGenderForHistory, setSelectedGenderForHistory] = useState<'male' | 'female'>('male');
 
   // Format timestamp to 12-hour AM/PM format in IST (Indian Standard Time)
@@ -343,6 +346,31 @@ export default function UserDashboardScreen() {
 
     loadWeightLogs();
   }, [coupleId]);
+
+  // Load step logs from Firestore
+  useEffect(() => {
+    if (!coupleId) return;
+
+    const loadStepLogs = async () => {
+      try {
+        // Get past 30 days date range
+        const endDate = formatDateString(new Date());
+        const startDate = formatDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+        
+        const [maleLogs, femaleLogs] = await Promise.all([
+          coupleStepsService.getByDateRange(coupleId, 'male', startDate, endDate),
+          coupleStepsService.getByDateRange(coupleId, 'female', startDate, endDate)
+        ]);
+        
+        setMaleStepLogs(maleLogs);
+        setFemaleStepLogs(femaleLogs);
+      } catch (error) {
+        console.error('Error loading step logs:', error);
+      }
+    };
+
+    loadStepLogs();
+  }, [coupleId]);
   
   // Get exercise and meal logs for both users (keep using mock for now)
   const maleExerciseLogs = mockExerciseLogs[`${coupleId}_M`] || [];
@@ -473,7 +501,7 @@ export default function UserDashboardScreen() {
       </View>
       <View style={styles.userStatsRow}>
         <View style={styles.userStatItem}>
-          <Text style={styles.userStatValue}>{user?.age || '-'}</Text>
+          <Text style={[styles.userStatValue, { color: COLORS.primary }]}>{user?.age || '-'}</Text>
           <Text style={styles.userStatLabel}>Age</Text>
         </View>
         <View style={styles.userStatDivider} />
@@ -496,8 +524,8 @@ export default function UserDashboardScreen() {
           onPress={() => openHeightHistory(isMale ? 'male' : 'female')}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={[styles.userStatValue, { color: COLORS.accent }]}>{user?.height || '-'} cm</Text>
-            <Ionicons name="chevron-forward" size={14} color={COLORS.accent} style={{ marginLeft: 2 }} />
+            <Text style={[styles.userStatValue, { color: COLORS.primary }]}>{user?.height || '-'} cm</Text>
+            <Ionicons name="chevron-forward" size={14} color={COLORS.primary} style={{ marginLeft: 2 }} />
           </View>
           <Text style={styles.userStatLabel}>Height</Text>
         </TouchableOpacity>
@@ -613,7 +641,7 @@ export default function UserDashboardScreen() {
               <Ionicons name="fitness" size={20} color={COLORS.success} />
             </View>
             <View>
-              <Text style={styles.summaryValue}>{maleTotalExerciseDuration} min</Text>
+              <Text style={styles.summaryValue}>{maleTotalExerciseDuration + calculateTimeFromSteps(getTodaySteps('male'))} min</Text>
               <Text style={styles.summaryLabel}>Exercise</Text>
             </View>
           </View>
@@ -622,8 +650,17 @@ export default function UserDashboardScreen() {
               <Ionicons name="flame" size={20} color={COLORS.warning} />
             </View>
             <View>
-              <Text style={styles.summaryValue}>{maleTotalExerciseCalories}</Text>
+              <Text style={styles.summaryValue}>{maleTotalExerciseCalories + calculateCaloriesFromSteps(getTodaySteps('male'), getUserWeight('male'))}</Text>
               <Text style={styles.summaryLabel}>Burned</Text>
+            </View>
+          </View>
+          <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary }]}>
+            <View style={[styles.summaryIcon, { backgroundColor: COLORS.success + '15' }]}>
+              <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.success} />
+            </View>
+            <View>
+              <Text style={styles.summaryValue}>{getTodaySteps('male').toLocaleString()}</Text>
+              <Text style={styles.summaryLabel}>Steps</Text>
             </View>
           </View>
           <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary }]}>
@@ -633,15 +670,6 @@ export default function UserDashboardScreen() {
             <View>
               <Text style={styles.summaryValue}>{maleTotalMealCalories}</Text>
               <Text style={styles.summaryLabel}>Intake</Text>
-            </View>
-          </View>
-          <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary }]}>
-            <View style={[styles.summaryIcon, { backgroundColor: COLORS.primary + '15' }]}>
-              <MaterialCommunityIcons name="chart-bar" size={20} color={COLORS.primary} />
-            </View>
-            <View>
-              <Text style={styles.summaryValue}>{todayMaleExerciseLogs.length}</Text>
-              <Text style={styles.summaryLabel}>Workouts</Text>
             </View>
           </View>
         </View>
@@ -659,7 +687,7 @@ export default function UserDashboardScreen() {
               <Ionicons name="fitness" size={20} color={COLORS.success} />
             </View>
             <View>
-              <Text style={styles.summaryValue}>{femaleTotalExerciseDuration} min</Text>
+              <Text style={styles.summaryValue}>{femaleTotalExerciseDuration + calculateTimeFromSteps(getTodaySteps('female'))} min</Text>
               <Text style={styles.summaryLabel}>Exercise</Text>
             </View>
           </View>
@@ -668,8 +696,17 @@ export default function UserDashboardScreen() {
               <Ionicons name="flame" size={20} color={COLORS.warning} />
             </View>
             <View>
-              <Text style={styles.summaryValue}>{femaleTotalExerciseCalories}</Text>
+              <Text style={styles.summaryValue}>{femaleTotalExerciseCalories + calculateCaloriesFromSteps(getTodaySteps('female'), getUserWeight('female'))}</Text>
               <Text style={styles.summaryLabel}>Burned</Text>
+            </View>
+          </View>
+          <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c' }]}>
+            <View style={[styles.summaryIcon, { backgroundColor: COLORS.success + '15' }]}>
+              <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.success} />
+            </View>
+            <View>
+              <Text style={styles.summaryValue}>{getTodaySteps('female').toLocaleString()}</Text>
+              <Text style={styles.summaryLabel}>Steps</Text>
             </View>
           </View>
           <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c' }]}>
@@ -679,15 +716,6 @@ export default function UserDashboardScreen() {
             <View>
               <Text style={styles.summaryValue}>{femaleTotalMealCalories}</Text>
               <Text style={styles.summaryLabel}>Intake</Text>
-            </View>
-          </View>
-          <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c' }]}>
-            <View style={[styles.summaryIcon, { backgroundColor: '#e91e8c15' }]}>
-              <MaterialCommunityIcons name="chart-bar" size={20} color="#e91e8c" />
-            </View>
-            <View>
-              <Text style={styles.summaryValue}>{todayFemaleExerciseLogs.length}</Text>
-              <Text style={styles.summaryLabel}>Workouts</Text>
             </View>
           </View>
         </View>
@@ -820,10 +848,166 @@ export default function UserDashboardScreen() {
     );
   };
 
+  // Calculate step totals for display
+  const getTodaySteps = (gender: 'male' | 'female') => {
+    const logs = gender === 'male' ? maleStepLogs : femaleStepLogs;
+    const todayLogs = logs.filter(log => log.date === selectedDate);
+    return todayLogs.reduce((sum, log) => sum + log.stepCount, 0);
+  };
+
+  const getTotalSteps = (gender: 'male' | 'female') => {
+    const logs = gender === 'male' ? maleStepLogs : femaleStepLogs;
+    return logs.reduce((sum, log) => sum + log.stepCount, 0);
+  };
+
+  // Calculate time from steps (100 steps per minute for normal walking)
+  const calculateTimeFromSteps = (steps: number): number => {
+    return Math.round(steps / 100);
+  };
+
+  // Calculate calories from steps (0.0004 × weight × steps)
+  const calculateCaloriesFromSteps = (steps: number, weight: number): number => {
+    return Math.round(0.0004 * weight * steps);
+  };
+
+  // Get user weight for calorie calculation
+  const getUserWeight = (gender: 'male' | 'female'): number => {
+    const user = gender === 'male' ? maleUser : femaleUser;
+    return user?.weight || 60; // Default 60kg
+  };
+
+  // Render Step Log Card
+  const renderStepCard = (log: CoupleStepEntry, isMale: boolean) => {
+    const weight = getUserWeight(isMale ? 'male' : 'female');
+    const timeMinutes = calculateTimeFromSteps(log.stepCount);
+    const caloriesBurned = calculateCaloriesFromSteps(log.stepCount, weight);
+    
+    return (
+    <View key={log.id} style={[styles.exerciseCard, { borderLeftWidth: 4, borderLeftColor: isMale ? COLORS.primary : '#e91e8c' }]}>
+      <View style={styles.exerciseCardHeader}>
+        <View style={[styles.exerciseIcon, { backgroundColor: COLORS.success + '15' }]}>
+          <MaterialCommunityIcons name="shoe-print" size={24} color={COLORS.success} />
+        </View>
+        <View style={styles.exerciseInfo}>
+          <View style={styles.exerciseNameWithBadge}>
+            <Text style={styles.exerciseName}>Step Log</Text>
+            <View style={[styles.userIndicatorLarge, { backgroundColor: isMale ? COLORS.primary + '15' : '#e91e8c15' }]}>
+              <Ionicons name={isMale ? 'male' : 'female'} size={14} color={isMale ? COLORS.primary : '#e91e8c'} />
+              <Text style={[styles.userIndicatorText, { color: isMale ? COLORS.primary : '#e91e8c' }]}>
+                {isMale ? maleUser?.name.split(' ')[0] : femaleUser?.name.split(' ')[0]}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.exerciseDate}>{log.date}</Text>
+        </View>
+      </View>
+
+      <View style={styles.exerciseStats}>
+        <View style={styles.exerciseStat}>
+          <MaterialCommunityIcons name="shoe-print" size={16} color={COLORS.success} />
+          <Text style={styles.stepsText}>{log.stepCount.toLocaleString()} steps</Text>
+        </View>
+        <View style={styles.exerciseStat}>
+          <Ionicons name="time-outline" size={16} color={COLORS.primary} />
+          <Text style={styles.exerciseStatText}>{timeMinutes} min</Text>
+        </View>
+        <View style={styles.exerciseStat}>
+          <Ionicons name="flame" size={16} color={COLORS.warning} />
+          <Text style={styles.exerciseStatText}>{caloriesBurned} cal</Text>
+        </View>
+        {log.proofImageUrl && (
+          <View style={styles.exerciseStat}>
+            <Ionicons name="image" size={16} color={COLORS.info} />
+            <Text style={styles.exerciseStatText}>Proof</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+  };
+
   // Exercise Tab
   const renderExerciseTab = () => (
     <View style={styles.exerciseContainer}>
-      <Text style={styles.sectionTitle}>Exercise Log</Text>
+      {/* Step Count Section */}
+      <Text style={styles.sectionTitle}>Step Count Log</Text>
+      <Text style={styles.sectionSubtitle}>All recorded step counts for both partners</Text>
+
+      {maleStepLogs.length === 0 && femaleStepLogs.length === 0 ? (
+        <View style={[styles.emptyState, { marginBottom: 24 }]}>
+          <MaterialCommunityIcons name="shoe-print" size={48} color={COLORS.textMuted} />
+          <Text style={styles.emptyText}>No steps logged yet</Text>
+        </View>
+      ) : (
+        <>
+          {/* Male User Step Summary */}
+          {maleStepLogs.length > 0 && (
+            <View style={styles.userExerciseSection}>
+              <View style={styles.userSummaryHeader}>
+                <Ionicons name="male" size={18} color={COLORS.primary} />
+                <Text style={[styles.userSummaryTitle, { color: COLORS.primary }]}>{maleUser?.name}'s Steps</Text>
+                <TouchableOpacity 
+                  style={styles.viewHistoryButton}
+                  onPress={() => {
+                    setSelectedGenderForHistory('male');
+                    setShowStepHistoryModal(true);
+                  }}
+                >
+                  <Text style={styles.viewHistoryText}>View History</Text>
+                  <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.stepSummaryCard}>
+                <View style={styles.stepSummaryItem}>
+                  <Text style={styles.stepSummaryLabel}>Today</Text>
+                  <Text style={styles.stepSummaryValue}>{getTodaySteps('male').toLocaleString()}</Text>
+                </View>
+                <View style={styles.stepSummaryDivider} />
+                <View style={styles.stepSummaryItem}>
+                  <Text style={styles.stepSummaryLabel}>30 Day Total</Text>
+                  <Text style={styles.stepSummaryValue}>{getTotalSteps('male').toLocaleString()}</Text>
+                </View>
+              </View>
+              {maleStepLogs.filter(log => log.date === selectedDate).slice(0, 2).map((log) => renderStepCard(log, true))}
+            </View>
+          )}
+          
+          {/* Female User Step Summary */}
+          {femaleStepLogs.length > 0 && (
+            <View style={styles.userExerciseSection}>
+              <View style={styles.userSummaryHeader}>
+                <Ionicons name="female" size={18} color="#e91e8c" />
+                <Text style={[styles.userSummaryTitle, { color: '#e91e8c' }]}>{femaleUser?.name}'s Steps</Text>
+                <TouchableOpacity 
+                  style={styles.viewHistoryButton}
+                  onPress={() => {
+                    setSelectedGenderForHistory('female');
+                    setShowStepHistoryModal(true);
+                  }}
+                >
+                  <Text style={[styles.viewHistoryText, { color: '#e91e8c' }]}>View History</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#e91e8c" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.stepSummaryCard}>
+                <View style={styles.stepSummaryItem}>
+                  <Text style={styles.stepSummaryLabel}>Today</Text>
+                  <Text style={[styles.stepSummaryValue, { color: '#e91e8c' }]}>{getTodaySteps('female').toLocaleString()}</Text>
+                </View>
+                <View style={styles.stepSummaryDivider} />
+                <View style={styles.stepSummaryItem}>
+                  <Text style={styles.stepSummaryLabel}>30 Day Total</Text>
+                  <Text style={[styles.stepSummaryValue, { color: '#e91e8c' }]}>{getTotalSteps('female').toLocaleString()}</Text>
+                </View>
+              </View>
+              {femaleStepLogs.filter(log => log.date === selectedDate).slice(0, 2).map((log) => renderStepCard(log, false))}
+            </View>
+          )}
+        </>
+      )}
+
+      {/* Exercise Log Section */}
+      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Exercise Log</Text>
       <Text style={styles.sectionSubtitle}>All recorded exercises for both partners</Text>
 
       {maleExerciseLogs.length === 0 && femaleExerciseLogs.length === 0 ? (
@@ -1270,6 +1454,125 @@ export default function UserDashboardScreen() {
     );
   };
 
+  // Render step history modal
+  const renderStepHistoryModal = () => {
+    const stepLogs = selectedGenderForHistory === 'male' ? maleStepLogs : femaleStepLogs;
+    const selectedUser = selectedGenderForHistory === 'male' ? maleUser : femaleUser;
+    const totalSteps = stepLogs.reduce((sum, log) => sum + log.stepCount, 0);
+    const todayLogs = stepLogs.filter(log => log.date === selectedDate);
+    const todayTotal = todayLogs.reduce((sum, log) => sum + log.stepCount, 0);
+    
+    return (
+      <Modal
+        visible={showStepHistoryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowStepHistoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%', width: isMobile ? '95%' : 600 }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.userAvatar, { 
+                  backgroundColor: selectedGenderForHistory === 'male' ? COLORS.primary : '#e91e8c',
+                  width: 36,
+                  height: 36,
+                }]}>
+                  <MaterialCommunityIcons name="shoe-print" size={20} color="#fff" />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Step History</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 13 }}>
+                    {selectedUser?.name}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setShowStepHistoryModal(false)}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={{ flex: 1 }}>
+              {stepLogs.length === 0 ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <MaterialCommunityIcons name="shoe-print" size={48} color={COLORS.textMuted} />
+                  <Text style={{ marginTop: 12, color: COLORS.textSecondary, fontSize: 15 }}>
+                    No step logs recorded yet
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ padding: 16 }}>
+                  {/* Summary card */}
+                  <View style={[styles.summaryCard, { marginBottom: 16 }]}>
+                    <View style={styles.summaryRow}>
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>Today's Steps</Text>
+                        <Text style={styles.summaryValue}>{todayTotal.toLocaleString()}</Text>
+                      </View>
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>30 Day Total</Text>
+                        <Text style={styles.summaryValue}>{totalSteps.toLocaleString()}</Text>
+                      </View>
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>Total Logs</Text>
+                        <Text style={styles.summaryValue}>{stepLogs.length}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  {/* History list */}
+                  {stepLogs.map((log, index) => (
+                    <View key={log.id} style={[styles.historyItem, log.date === selectedDate && { borderColor: COLORS.success }]}>
+                      <View style={styles.historyDate}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={styles.historyDateText}>{log.date}</Text>
+                          {log.date === selectedDate && (
+                            <View style={[styles.latestBadge, { backgroundColor: COLORS.success + '20' }]}>
+                              <Text style={[styles.latestBadgeText, { color: COLORS.success }]}>Today</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.historyTimeText}>
+                          {log.loggedAt?.toDate ? new Date(log.loggedAt.toDate()).toLocaleTimeString('en-IN', { 
+                            hour: '2-digit', 
+                            minute: '2-digit', 
+                            hour12: true,
+                            timeZone: 'Asia/Kolkata'
+                          }) : '--:--'}
+                        </Text>
+                      </View>
+                      <View style={styles.historyStats}>
+                        <View style={styles.historyStatItem}>
+                          <MaterialCommunityIcons name="shoe-print" size={18} color={COLORS.success} />
+                          <Text style={[styles.historyStatValue, { fontSize: 16, fontWeight: '700' }]}>
+                            {log.stepCount.toLocaleString()} steps
+                          </Text>
+                        </View>
+                        <View style={styles.historyStatItem}>
+                          <Ionicons name="phone-portrait-outline" size={16} color={COLORS.textMuted} />
+                          <Text style={styles.historyStatValue}>{log.source || 'manual'}</Text>
+                        </View>
+                        {log.proofImageUrl && (
+                          <View style={styles.historyStatItem}>
+                            <Ionicons name="image" size={16} color={COLORS.info} />
+                            <Text style={styles.historyStatValue}>Proof attached</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -1284,6 +1587,7 @@ export default function UserDashboardScreen() {
       {renderHeader()}
       {renderWeightHistoryModal()}
       {renderHeightHistoryModal()}
+      {renderStepHistoryModal()}
       
       <ScrollView
         contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
@@ -2038,5 +2342,70 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     fontStyle: 'italic',
+  },
+  
+  // Exercise Stats
+  exerciseStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
+  exerciseStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  exerciseStatText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  
+  // Step Summary
+  stepSummaryCard: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  stepSummaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  stepSummaryLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginBottom: 4,
+  },
+  stepSummaryValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  stepSummaryDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 16,
+  },
+  
+  // View History Button
+  viewHistoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 'auto',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  viewHistoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+    marginRight: 2,
   },
 });
