@@ -534,43 +534,55 @@ export const coupleService = {
     coupleId: string;
     enrollmentDate: string;
     enrolledBy: string;
+    enrolledByName?: string;
     male: { name: string; email?: string; phone?: string; age?: number };
     female: { name: string; email?: string; phone?: string; age?: number };
   }): Promise<{ coupleId: string; maleTempPassword: string; femaleTempPassword: string }> {
     const maleTempPassword = generateTempPassword();
     const femaleTempPassword = generateTempPassword();
     
-    const coupleData = {
+    // Build male user object - only include non-empty values
+    const maleData: Record<string, any> = {
+      id: `${data.coupleId}_M`,
+      name: data.male.name,
+      status: 'pending' as const,
+      isPasswordReset: false,
+      isPinSet: false,
+      tempPassword: maleTempPassword,
+    };
+    if (data.male.email) maleData.email = data.male.email;
+    if (data.male.phone) maleData.phone = data.male.phone;
+    if (data.male.age) maleData.age = data.male.age;
+
+    // Build female user object - only include non-empty values
+    const femaleData: Record<string, any> = {
+      id: `${data.coupleId}_F`,
+      name: data.female.name,
+      status: 'pending' as const,
+      isPasswordReset: false,
+      isPinSet: false,
+      tempPassword: femaleTempPassword,
+    };
+    if (data.female.email) femaleData.email = data.female.email;
+    if (data.female.phone) femaleData.phone = data.female.phone;
+    if (data.female.age) femaleData.age = data.female.age;
+    
+    const coupleData: Record<string, any> = {
       id: data.coupleId,
       coupleId: data.coupleId,
       enrollmentDate: data.enrollmentDate,
       enrolledBy: data.enrolledBy,
       status: 'active' as const,
-      male: {
-        id: `${data.coupleId}_M`,
-        name: data.male.name,
-        email: data.male.email || '',
-        phone: data.male.phone || '',
-        age: data.male.age || 0,
-        status: 'pending' as const,
-        isPasswordReset: false,
-        isPinSet: false,
-        tempPassword: maleTempPassword, // Individual temp password
-      },
-      female: {
-        id: `${data.coupleId}_F`,
-        name: data.female.name,
-        email: data.female.email || '',
-        phone: data.female.phone || '',
-        age: data.female.age || 0,
-        status: 'pending' as const,
-        isPasswordReset: false,
-        isPinSet: false,
-        tempPassword: femaleTempPassword, // Individual temp password
-      },
+      male: maleData,
+      female: femaleData,
       createdAt: now(),
       updatedAt: now(),
     };
+    
+    // Add enrolledByName if provided
+    if (data.enrolledByName) {
+      coupleData.enrolledByName = data.enrolledByName;
+    }
     
     const coupleRef = doc(db, COLLECTIONS.COUPLES, data.coupleId);
     await setDoc(coupleRef, coupleData);
@@ -786,6 +798,64 @@ export const coupleService = {
     await updateDoc(coupleRef, updateData);
   },
 
+  // Update specific user field (for personal info edits)
+  async updateUserField(coupleId: string, gender: 'male' | 'female', data: Record<string, any>): Promise<void> {
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    
+    // Filter out null/undefined values
+    const cleanData: Record<string, any> = { updatedAt: now() };
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        cleanData[key] = value;
+      }
+    });
+    
+    await updateDoc(coupleRef, cleanData);
+  },
+
+  // Update user profile with Firestore-safe data (no null values)
+  async updateProfile(coupleId: string, gender: 'male' | 'female', profileData: {
+    email?: string;
+    phone?: string;
+    dateOfBirth?: string;
+    address?: {
+      addressLine1?: string;
+      addressLine2?: string;
+      city?: string;
+      state?: string;
+      pincode?: string;
+      country?: string;
+    };
+  }): Promise<void> {
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    const updateData: Record<string, any> = { updatedAt: now() };
+    
+    // Only add non-empty values
+    if (profileData.email) {
+      updateData[`${gender}.email`] = profileData.email;
+    }
+    if (profileData.phone) {
+      updateData[`${gender}.phone`] = profileData.phone;
+    }
+    if (profileData.dateOfBirth) {
+      updateData[`${gender}.dateOfBirth`] = profileData.dateOfBirth;
+    }
+    if (profileData.address) {
+      // Clean address object - remove empty values
+      const cleanAddress: Record<string, string> = {};
+      Object.entries(profileData.address).forEach(([key, value]) => {
+        if (value && value.trim()) {
+          cleanAddress[key] = value.trim();
+        }
+      });
+      if (Object.keys(cleanAddress).length > 0) {
+        updateData[`${gender}.address`] = cleanAddress;
+      }
+    }
+    
+    await updateDoc(coupleRef, updateData);
+  },
+
   // Force password reset for user
   async forcePasswordReset(coupleId: string, gender: 'male' | 'female'): Promise<string> {
     const newTempPassword = generateTempPassword();
@@ -793,7 +863,8 @@ export const coupleService = {
     await updateDoc(coupleRef, {
       [`${gender}.password`]: '',
       [`${gender}.isPasswordReset`]: false,
-      tempPassword: newTempPassword,
+      [`${gender}.tempPassword`]: newTempPassword, // Store at user level, not couple level
+      [`${gender}.status`]: 'pending', // Reset status to pending
       updatedAt: now(),
     });
     return newTempPassword;

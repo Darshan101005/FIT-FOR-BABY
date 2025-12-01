@@ -1,4 +1,4 @@
-import { coupleService } from '@/services/firestore.service';
+import { adminService, coupleService } from '@/services/firestore.service';
 import { Couple as FirestoreCouple } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -76,6 +76,7 @@ export default function AdminUsersScreen() {
 
   // State
   const [couples, setCouples] = useState<Couple[]>([]);
+  const [adminsMap, setAdminsMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -124,6 +125,16 @@ export default function AdminUsersScreen() {
         if (isMounted) {
           setNextCoupleId(nextId);
           setEnrollForm(prev => ({ ...prev, coupleId: nextId }));
+        }
+        
+        // Load all admins to map UID to names
+        const allAdmins = await adminService.getAll();
+        if (isMounted) {
+          const map: Record<string, string> = {};
+          allAdmins.forEach(admin => {
+            map[admin.uid] = admin.name || admin.email || 'Admin';
+          });
+          setAdminsMap(map);
         }
       } catch (error) {
         console.error('Error loading initial data:', error);
@@ -241,11 +252,15 @@ export default function AdminUsersScreen() {
       setActionLoading(true);
       
       try {
+        // Get current admin name
+        const currentAdminName = adminsMap[currentAdminUid] || 'Admin';
+        
         // Create couple in Firestore
         const result = await coupleService.create({
           coupleId: enrollForm.coupleId,
           enrollmentDate: enrollForm.enrollmentDate,
           enrolledBy: currentAdminUid,
+          enrolledByName: currentAdminName,
           male: {
             name: enrollForm.maleName.trim(),
             email: enrollForm.maleEmail.trim() || undefined,
@@ -434,7 +449,14 @@ export default function AdminUsersScreen() {
             <Text style={styles.coupleNames}>
               {couple.male.name} & {couple.female.name}
             </Text>
-            <Text style={styles.enrollmentDate}>Enrolled: {couple.enrollmentDate}</Text>
+            <Text style={styles.enrollmentDate}>
+              Enrolled: {couple.enrollmentDate}
+              {couple.enrolledBy && (
+                <Text style={styles.enrolledByText}>
+                  {' • by '}{couple.enrolledByName || adminsMap[couple.enrolledBy] || 'Admin'}
+                </Text>
+              )}
+            </Text>
           </View>
 
           <Ionicons
@@ -464,41 +486,56 @@ export default function AdminUsersScreen() {
                   <Ionicons name="person" size={14} color={COLORS.textMuted} />
                   <Text style={styles.userDetailText}>{couple.male.name}</Text>
                 </View>
-                <View style={styles.userDetailRow}>
-                  <Ionicons name="calendar" size={14} color={COLORS.textMuted} />
-                  <Text style={styles.userDetailText}>Age: {couple.male.age} years</Text>
-                </View>
-                <View style={styles.userDetailRow}>
-                  <Ionicons name="call" size={14} color={COLORS.textMuted} />
-                  <Text style={styles.userDetailText}>{couple.male.phone}</Text>
-                </View>
-                {couple.male.email && (
+                {couple.male.age ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="calendar" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>Age: {couple.male.age} years</Text>
+                  </View>
+                ) : null}
+                {couple.male.phone ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="call" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>{couple.male.phone}</Text>
+                  </View>
+                ) : null}
+                {couple.male.email ? (
                   <View style={styles.userDetailRow}>
                     <Ionicons name="mail" size={14} color={COLORS.textMuted} />
                     <Text style={styles.userDetailText}>{couple.male.email}</Text>
                   </View>
+                ) : null}
+                {/* Health Metrics - only show if at least one value exists */}
+                {(couple.male.weight || couple.male.height || couple.male.bmi) && (
+                  <View style={styles.healthMetricsRow}>
+                    {couple.male.weight ? (
+                      <View style={styles.healthMetric}>
+                        <Ionicons name="fitness" size={14} color={COLORS.primary} />
+                        <Text style={styles.healthMetricLabel}>Weight</Text>
+                        <Text style={styles.healthMetricValue}>{couple.male.weight} kg</Text>
+                      </View>
+                    ) : null}
+                    {couple.male.height ? (
+                      <View style={styles.healthMetric}>
+                        <Ionicons name="resize-outline" size={14} color={COLORS.accent} />
+                        <Text style={styles.healthMetricLabel}>Height</Text>
+                        <Text style={styles.healthMetricValue}>{couple.male.height} cm</Text>
+                      </View>
+                    ) : null}
+                    {couple.male.bmi ? (
+                      <View style={styles.healthMetric}>
+                        <Ionicons name="body" size={14} color={COLORS.info} />
+                        <Text style={styles.healthMetricLabel}>BMI</Text>
+                        <Text style={styles.healthMetricValue}>{couple.male.bmi}</Text>
+                      </View>
+                    ) : null}
+                  </View>
                 )}
-                <View style={styles.healthMetricsRow}>
-                  <View style={styles.healthMetric}>
-                    <Ionicons name="fitness" size={14} color={COLORS.primary} />
-                    <Text style={styles.healthMetricLabel}>Weight</Text>
-                    <Text style={styles.healthMetricValue}>{couple.male.weight} kg</Text>
+                {couple.male.lastActive ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="time" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>Last Login: {couple.male.lastActive}</Text>
                   </View>
-                  <View style={styles.healthMetric}>
-                    <Ionicons name="resize-outline" size={14} color={COLORS.accent} />
-                    <Text style={styles.healthMetricLabel}>Height</Text>
-                    <Text style={styles.healthMetricValue}>{couple.male.height} cm</Text>
-                  </View>
-                  <View style={styles.healthMetric}>
-                    <Ionicons name="body" size={14} color={COLORS.info} />
-                    <Text style={styles.healthMetricLabel}>BMI</Text>
-                    <Text style={styles.healthMetricValue}>{couple.male.bmi}</Text>
-                  </View>
-                </View>
-                <View style={styles.userDetailRow}>
-                  <Ionicons name="time" size={14} color={COLORS.textMuted} />
-                  <Text style={styles.userDetailText}>Last Login: {couple.male.lastActive}</Text>
-                </View>
+                ) : null}
                 
                 {/* Setup Status & Temp Password */}
                 <View style={styles.setupStatusRow}>
@@ -570,41 +607,56 @@ export default function AdminUsersScreen() {
                   <Ionicons name="person" size={14} color={COLORS.textMuted} />
                   <Text style={styles.userDetailText}>{couple.female.name}</Text>
                 </View>
-                <View style={styles.userDetailRow}>
-                  <Ionicons name="calendar" size={14} color={COLORS.textMuted} />
-                  <Text style={styles.userDetailText}>Age: {couple.female.age} years</Text>
-                </View>
-                <View style={styles.userDetailRow}>
-                  <Ionicons name="call" size={14} color={COLORS.textMuted} />
-                  <Text style={styles.userDetailText}>{couple.female.phone}</Text>
-                </View>
-                {couple.female.email && (
+                {couple.female.age ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="calendar" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>Age: {couple.female.age} years</Text>
+                  </View>
+                ) : null}
+                {couple.female.phone ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="call" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>{couple.female.phone}</Text>
+                  </View>
+                ) : null}
+                {couple.female.email ? (
                   <View style={styles.userDetailRow}>
                     <Ionicons name="mail" size={14} color={COLORS.textMuted} />
                     <Text style={styles.userDetailText}>{couple.female.email}</Text>
                   </View>
+                ) : null}
+                {/* Health Metrics - only show if at least one value exists */}
+                {(couple.female.weight || couple.female.height || couple.female.bmi) && (
+                  <View style={styles.healthMetricsRow}>
+                    {couple.female.weight ? (
+                      <View style={styles.healthMetric}>
+                        <Ionicons name="fitness" size={14} color={COLORS.primary} />
+                        <Text style={styles.healthMetricLabel}>Weight</Text>
+                        <Text style={styles.healthMetricValue}>{couple.female.weight} kg</Text>
+                      </View>
+                    ) : null}
+                    {couple.female.height ? (
+                      <View style={styles.healthMetric}>
+                        <Ionicons name="resize-outline" size={14} color={COLORS.accent} />
+                        <Text style={styles.healthMetricLabel}>Height</Text>
+                        <Text style={styles.healthMetricValue}>{couple.female.height} cm</Text>
+                      </View>
+                    ) : null}
+                    {couple.female.bmi ? (
+                      <View style={styles.healthMetric}>
+                        <Ionicons name="body" size={14} color={COLORS.info} />
+                        <Text style={styles.healthMetricLabel}>BMI</Text>
+                        <Text style={styles.healthMetricValue}>{couple.female.bmi}</Text>
+                      </View>
+                    ) : null}
+                  </View>
                 )}
-                <View style={styles.healthMetricsRow}>
-                  <View style={styles.healthMetric}>
-                    <Ionicons name="fitness" size={14} color={COLORS.primary} />
-                    <Text style={styles.healthMetricLabel}>Weight</Text>
-                    <Text style={styles.healthMetricValue}>{couple.female.weight} kg</Text>
+                {couple.female.lastActive ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="time" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>Last Login: {couple.female.lastActive}</Text>
                   </View>
-                  <View style={styles.healthMetric}>
-                    <Ionicons name="resize-outline" size={14} color={COLORS.accent} />
-                    <Text style={styles.healthMetricLabel}>Height</Text>
-                    <Text style={styles.healthMetricValue}>{couple.female.height} cm</Text>
-                  </View>
-                  <View style={styles.healthMetric}>
-                    <Ionicons name="body" size={14} color={COLORS.info} />
-                    <Text style={styles.healthMetricLabel}>BMI</Text>
-                    <Text style={styles.healthMetricValue}>{couple.female.bmi}</Text>
-                  </View>
-                </View>
-                <View style={styles.userDetailRow}>
-                  <Ionicons name="time" size={14} color={COLORS.textMuted} />
-                  <Text style={styles.userDetailText}>Last Login: {couple.female.lastActive}</Text>
-                </View>
+                ) : null}
                 
                 {/* Setup Status & Temp Password */}
                 <View style={styles.setupStatusRow}>
@@ -947,71 +999,90 @@ export default function AdminUsersScreen() {
   );
 
   // Temp Password Modal
-  const renderTempPasswordModal = () => (
-    <Modal
-      visible={showTempPasswordModal}
-      animationType="fade"
-      transparent={true}
-      onRequestClose={() => setShowTempPasswordModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.tempPasswordModal, isMobile && styles.modalContentMobile]}>
-          <View style={styles.tempPasswordHeader}>
-            <View style={[styles.tempPasswordIcon, { backgroundColor: COLORS.success + '15' }]}>
-              <Ionicons name="checkmark-circle" size={48} color={COLORS.success} />
+  const renderTempPasswordModal = () => {
+    // Determine if this is a single user reset or enrollment (both users)
+    const isSingleUserReset = !tempPasswordInfo.maleTempPassword || !tempPasswordInfo.femaleTempPassword;
+    
+    return (
+      <Modal
+        visible={showTempPasswordModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowTempPasswordModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.tempPasswordModal, isMobile && styles.modalContentMobile]}>
+            <View style={styles.tempPasswordHeader}>
+              <View style={[styles.tempPasswordIcon, { backgroundColor: COLORS.success + '15' }]}>
+                <Ionicons name={isSingleUserReset ? "key" : "checkmark-circle"} size={48} color={isSingleUserReset ? COLORS.warning : COLORS.success} />
+              </View>
+              <Text style={styles.tempPasswordTitle}>
+                {isSingleUserReset ? 'Password Reset Successful!' : 'Enrollment Successful!'}
+              </Text>
+              <Text style={styles.tempPasswordSubtitle}>
+                {isSingleUserReset 
+                  ? 'Share this new password with the user'
+                  : 'Share these credentials with each user individually'}
+              </Text>
             </View>
-            <Text style={styles.tempPasswordTitle}>Enrollment Successful!</Text>
-            <Text style={styles.tempPasswordSubtitle}>
-              Share these credentials with each user individually
-            </Text>
-          </View>
 
-          <View style={styles.credentialBox}>
-            <Text style={styles.credentialLabel}>Couple ID</Text>
-            <View style={styles.credentialValue}>
-              <Text style={styles.credentialText}>{tempPasswordInfo.coupleId}</Text>
+            <View style={styles.credentialBox}>
+              <Text style={styles.credentialLabel}>Couple ID</Text>
+              <View style={styles.credentialValue}>
+                <Text style={styles.credentialText}>{tempPasswordInfo.coupleId}</Text>
+              </View>
             </View>
-          </View>
 
-          {/* Male User Credentials */}
-          <View style={[styles.credentialBox, { borderLeftColor: COLORS.primary, borderLeftWidth: 3 }]}>
-            <View style={styles.credentialUserHeader}>
-              <Ionicons name="male" size={16} color={COLORS.primary} />
-              <Text style={[styles.credentialLabel, { color: COLORS.primary }]}>{tempPasswordInfo.maleName} ({tempPasswordInfo.coupleId}_M)</Text>
-            </View>
-            <View style={styles.credentialValue}>
-              <Text style={[styles.credentialText, styles.passwordText]}>{tempPasswordInfo.maleTempPassword}</Text>
-            </View>
-          </View>
+            {/* Male User Credentials - show only if has password */}
+            {tempPasswordInfo.maleTempPassword && (
+              <View style={[styles.credentialBox, { borderLeftColor: COLORS.primary, borderLeftWidth: 3 }]}>
+                <View style={styles.credentialUserHeader}>
+                  <Ionicons name="male" size={16} color={COLORS.primary} />
+                  <Text style={[styles.credentialLabel, { color: COLORS.primary }]}>
+                    {tempPasswordInfo.maleName} ({tempPasswordInfo.coupleId}_M)
+                  </Text>
+                </View>
+                <View style={styles.credentialValue}>
+                  <Text style={[styles.credentialText, styles.passwordText]}>{tempPasswordInfo.maleTempPassword}</Text>
+                </View>
+              </View>
+            )}
 
-          {/* Female User Credentials */}
-          <View style={[styles.credentialBox, { borderLeftColor: COLORS.accent, borderLeftWidth: 3 }]}>
-            <View style={styles.credentialUserHeader}>
-              <Ionicons name="female" size={16} color={COLORS.accentDark} />
-              <Text style={[styles.credentialLabel, { color: COLORS.accentDark }]}>{tempPasswordInfo.femaleName} ({tempPasswordInfo.coupleId}_F)</Text>
-            </View>
-            <View style={styles.credentialValue}>
-              <Text style={[styles.credentialText, styles.passwordText]}>{tempPasswordInfo.femaleTempPassword}</Text>
-            </View>
-          </View>
+            {/* Female User Credentials - show only if has password */}
+            {tempPasswordInfo.femaleTempPassword && (
+              <View style={[styles.credentialBox, { borderLeftColor: COLORS.accent, borderLeftWidth: 3 }]}>
+                <View style={styles.credentialUserHeader}>
+                  <Ionicons name="female" size={16} color={COLORS.accentDark} />
+                  <Text style={[styles.credentialLabel, { color: COLORS.accentDark }]}>
+                    {tempPasswordInfo.femaleName} ({tempPasswordInfo.coupleId}_F)
+                  </Text>
+                </View>
+                <View style={styles.credentialValue}>
+                  <Text style={[styles.credentialText, styles.passwordText]}>{tempPasswordInfo.femaleTempPassword}</Text>
+                </View>
+              </View>
+            )}
 
-          <View style={styles.tempPasswordNote}>
-            <Ionicons name="information-circle" size={16} color={COLORS.info} />
-            <Text style={styles.tempPasswordNoteText}>
-              Each user must login with their own ID/Phone/Email and reset their password individually.
-            </Text>
-          </View>
+            <View style={styles.tempPasswordNote}>
+              <Ionicons name="information-circle" size={16} color={COLORS.info} />
+              <Text style={styles.tempPasswordNoteText}>
+                {isSingleUserReset
+                  ? 'The user must login with their ID/Phone/Email and reset their password.'
+                  : 'Each user must login with their own ID/Phone/Email and reset their password individually.'}
+              </Text>
+            </View>
 
-          <TouchableOpacity
-            style={styles.tempPasswordButton}
-            onPress={() => setShowTempPasswordModal(false)}
-          >
-            <Text style={styles.tempPasswordButtonText}>Done</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.tempPasswordButton}
+              onPress={() => setShowTempPasswordModal(false)}
+            >
+              <Text style={styles.tempPasswordButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </Modal>
-  );
+      </Modal>
+    );
+  };
 
   // Loading state
   if (loading) {
@@ -1287,6 +1358,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 2,
+  },
+  enrolledByText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
 
   // Expanded Content Styles

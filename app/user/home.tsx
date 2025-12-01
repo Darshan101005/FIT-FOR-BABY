@@ -1,25 +1,34 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
+import { coupleService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  Animated,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
+const isWeb = Platform.OS === 'web';
 const STEPS_STORAGE_KEY = '@fitforbaby_steps_today';
 
-const isWeb = Platform.OS === 'web';
+// User data interface
+interface UserData {
+  name: string;
+  coupleId: string;
+  userId: string;
+  profileImage: string | null;
+  unreadNotifications: number;
+}
 
 // Generate dates for selector (3 days before, today, 3 days after)
 const generateDates = (isMobile: boolean = false) => {
@@ -57,12 +66,65 @@ export default function UserHomeScreen() {
   const [todayStepsFromStorage, setTodayStepsFromStorage] = useState(0);
   const sidebarAnim = useRef(new Animated.Value(300)).current;
   
+  // User data state - fetched from Firestore
+  const [userData, setUserData] = useState<UserData>({
+    name: 'User',
+    coupleId: '',
+    userId: '',
+    profileImage: null,
+    unreadNotifications: 0,
+  });
+  
   const dates = generateDates(isMobile);
   const todayIndex = isMobile ? 3 : 3; // Today is always at index 3
 
-  // Load steps from AsyncStorage when screen comes into focus
+  // Progress data for different dates - uses stored steps for today
+  const getProgressDataForDate = (dateIndex: number) => {
+    const dataByDate: { [key: number]: { steps: { current: number; target: number }; exerciseMinutes: number; foodLogged: number; caloriesBurnt: number } } = {
+      0: { steps: { current: 6200, target: 7000 }, exerciseMinutes: 60, foodLogged: 3, caloriesBurnt: 380 },
+      1: { steps: { current: 4800, target: 7000 }, exerciseMinutes: 30, foodLogged: 2, caloriesBurnt: 250 },
+      2: { steps: { current: 7100, target: 7000 }, exerciseMinutes: 55, foodLogged: 3, caloriesBurnt: 420 },
+      3: { steps: { current: todayStepsFromStorage, target: 7000 }, exerciseMinutes: 45, foodLogged: 3, caloriesBurnt: 320 },
+      4: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 },
+      5: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 },
+      6: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 },
+    };
+    return dataByDate[dateIndex] || dataByDate[3];
+  };
+
+  // Load user data and steps when screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      const loadUserData = async () => {
+        try {
+          // Get user info from AsyncStorage (set during login)
+          const coupleId = await AsyncStorage.getItem('coupleId');
+          const userGender = await AsyncStorage.getItem('userGender');
+          const userName = await AsyncStorage.getItem('userName');
+          const userId = await AsyncStorage.getItem('userId');
+          
+          if (coupleId && userGender) {
+            // Fetch fresh data from Firestore
+            const couple = await coupleService.get(coupleId);
+            if (couple) {
+              const user = couple[userGender as 'male' | 'female'];
+              setUserData({
+                name: user.name || userName || 'User',
+                coupleId: coupleId,
+                userId: userId || user.id,
+                profileImage: user.profileImage || null,
+                unreadNotifications: 0, // TODO: Fetch from notifications collection
+              });
+            }
+          } else if (userName) {
+            // Fallback to stored name
+            setUserData(prev => ({ ...prev, name: userName }));
+          }
+        } catch (error) {
+          console.error('Error loading user data:', error);
+        }
+      };
+      
       const loadStepsFromStorage = async () => {
         try {
           const savedData = await AsyncStorage.getItem(STEPS_STORAGE_KEY);
@@ -79,32 +141,11 @@ export default function UserHomeScreen() {
           console.error('Error loading steps:', error);
         }
       };
+      
+      loadUserData();
       loadStepsFromStorage();
     }, [])
   );
-
-  // Mock user data
-  const userData = {
-    name: 'Priya',
-    coupleId: 'C_001',
-    profileImage: null,
-    unreadNotifications: 3,
-  };
-
-  // Progress data for different dates - uses stored steps for today
-  const getProgressDataForDate = (dateIndex: number) => {
-    // Generate different mock data based on date index
-    const dataByDate: { [key: number]: { steps: { current: number; target: number }; exerciseMinutes: number; foodLogged: number; caloriesBurnt: number } } = {
-      0: { steps: { current: 6200, target: 7000 }, exerciseMinutes: 60, foodLogged: 3, caloriesBurnt: 380 },
-      1: { steps: { current: 4800, target: 7000 }, exerciseMinutes: 30, foodLogged: 2, caloriesBurnt: 250 },
-      2: { steps: { current: 7100, target: 7000 }, exerciseMinutes: 55, foodLogged: 3, caloriesBurnt: 420 },
-      3: { steps: { current: todayStepsFromStorage, target: 7000 }, exerciseMinutes: 45, foodLogged: 3, caloriesBurnt: 320 }, // Today - uses stored steps
-      4: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 }, // Future
-      5: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 }, // Future
-      6: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 }, // Future
-    };
-    return dataByDate[dateIndex] || dataByDate[3];
-  };
 
   // Get progress data based on selected date
   const todayProgress = getProgressDataForDate(selectedDateIndex);

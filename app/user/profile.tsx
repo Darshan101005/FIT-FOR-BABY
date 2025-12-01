@@ -1,21 +1,34 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
+import { coupleService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-  Animated,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
+
+// User profile data interface
+interface ProfileData {
+  name: string;
+  email: string;
+  coupleId: string;
+  userId: string;
+  partnerName: string;
+  partnerUserId: string;
+  initials: string;
+}
 
 // Custom Toggle Component for consistent styling across platforms
 const CustomToggle = ({ 
@@ -105,6 +118,73 @@ export default function ProfileScreen() {
   const [dataSync, setDataSync] = useState(true);
   const [stepTracking, setStepTracking] = useState(true);
   const [partnerSync, setPartnerSync] = useState(true);
+  
+  // Profile data from Firestore
+  const [profileData, setProfileData] = useState<ProfileData>({
+    name: 'User',
+    email: '',
+    coupleId: '',
+    userId: '',
+    partnerName: '',
+    partnerUserId: '',
+    initials: 'U',
+  });
+  
+  // Profile stats
+  const [profileStats, setProfileStats] = useState({
+    daysActive: 0,
+    goalsAchieved: 0,
+    currentStreak: 0,
+  });
+
+  // Fetch profile data when screen loads
+  useFocusEffect(
+    useCallback(() => {
+      const loadProfileData = async () => {
+        try {
+          const coupleId = await AsyncStorage.getItem('coupleId');
+          const userGender = await AsyncStorage.getItem('userGender');
+          
+          if (coupleId && userGender) {
+            const couple = await coupleService.get(coupleId);
+            if (couple) {
+              const user = couple[userGender as 'male' | 'female'];
+              const partner = couple[userGender === 'male' ? 'female' : 'male'];
+              
+              // Get initials from name
+              const nameParts = (user.name || 'User').split(' ');
+              const initials = nameParts.length > 1 
+                ? `${nameParts[0][0]}${nameParts[nameParts.length-1][0]}`.toUpperCase()
+                : (user.name || 'U')[0].toUpperCase();
+              
+              setProfileData({
+                name: user.name || 'User',
+                email: user.email || '',
+                coupleId: coupleId,
+                userId: user.id || '',
+                partnerName: partner.name || '',
+                partnerUserId: partner.id || '',
+                initials,
+              });
+              
+              // Calculate days active (from enrollment date)
+              if (couple.enrollmentDate) {
+                const enrollDate = new Date(couple.enrollmentDate);
+                const today = new Date();
+                const diffTime = Math.abs(today.getTime() - enrollDate.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                setProfileStats(prev => ({ ...prev, daysActive: diffDays }));
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error loading profile data:', error);
+        }
+      };
+      
+      loadProfileData();
+    }, [])
+  );
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -121,11 +201,22 @@ export default function ProfileScreen() {
     }, 2500);
   };
 
-  const handleLogout = () => {
-    showToast('Logged out successfully', 'success');
-    setTimeout(() => {
+  const handleLogout = async () => {
+    try {
+      // Clear all user-related storage
+      await AsyncStorage.multiRemove([
+        'userRole', 'coupleId', 'userGender', 'userId', 'userName',
+        'quickAccessMode', 'pendingProfileSelection',
+        'isSuperAdmin', 'adminUid', 'adminEmail', 'adminName'
+      ]);
+      showToast('Logged out successfully', 'success');
+      setTimeout(() => {
+        router.replace('/login');
+      }, 1500);
+    } catch (error) {
+      console.error('Logout error:', error);
       router.replace('/login');
-    }, 1500);
+    }
   };
 
   const handleDarkModeToggle = () => {
@@ -147,19 +238,21 @@ export default function ProfileScreen() {
       <View style={styles.profileCard}>
         <View style={styles.avatarContainer}>
           <View style={[styles.avatar, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[styles.avatarText, { color: colors.primary }]}>JD</Text>
+            <Text style={[styles.avatarText, { color: colors.primary }]}>{profileData.initials}</Text>
           </View>
           <TouchableOpacity style={[styles.cameraButton, { backgroundColor: colors.cardBackground }]}>
             <Ionicons name="camera" size={16} color={colors.primary} />
           </TouchableOpacity>
         </View>
         <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>John Doe</Text>
-          <Text style={styles.profileEmail}>john.doe@example.com</Text>
-          <View style={styles.partnerBadge}>
-            <Ionicons name="heart" size={14} color="#ef4444" />
-            <Text style={styles.partnerText}>Connected with Sarah Doe</Text>
-          </View>
+          <Text style={styles.profileName}>{profileData.name}</Text>
+          <Text style={styles.profileEmail}>{profileData.email || profileData.userId}</Text>
+          {profileData.partnerName && (
+            <View style={styles.partnerBadge}>
+              <Ionicons name="heart" size={14} color="#ef4444" />
+              <Text style={styles.partnerText}>Connected with {profileData.partnerName}</Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -201,19 +294,21 @@ export default function ProfileScreen() {
       <View style={styles.webProfileRow}>
         <View style={styles.avatarContainer}>
           <View style={[styles.avatar, { backgroundColor: colors.primary + '15' }]}>
-            <Text style={[styles.avatarText, { color: colors.primary }]}>JD</Text>
+            <Text style={[styles.avatarText, { color: colors.primary }]}>{profileData.initials}</Text>
           </View>
           <TouchableOpacity style={[styles.cameraButton, { backgroundColor: colors.cardBackground, borderWidth: 1, borderColor: colors.border }]}>
             <Ionicons name="camera" size={14} color={colors.primary} />
           </TouchableOpacity>
         </View>
         <View style={styles.webProfileInfo}>
-          <Text style={[styles.webProfileName, { color: colors.text }]}>John Doe</Text>
-          <Text style={[styles.webProfileEmail, { color: colors.textSecondary }]}>john.doe@example.com</Text>
-          <View style={[styles.webPartnerBadge, { backgroundColor: '#ef444415' }]}>
-            <Ionicons name="heart" size={12} color="#ef4444" />
-            <Text style={styles.webPartnerText}>Connected with Sarah Doe</Text>
-          </View>
+          <Text style={[styles.webProfileName, { color: colors.text }]}>{profileData.name}</Text>
+          <Text style={[styles.webProfileEmail, { color: colors.textSecondary }]}>{profileData.email || profileData.userId}</Text>
+          {profileData.partnerName && (
+            <View style={[styles.webPartnerBadge, { backgroundColor: '#ef444415' }]}>
+              <Ionicons name="heart" size={12} color="#ef4444" />
+              <Text style={styles.webPartnerText}>Connected with {profileData.partnerName}</Text>
+            </View>
+          )}
         </View>
       </View>
       <View style={[styles.webStatsRow, { borderTopColor: colors.borderLight }]}>

@@ -609,11 +609,22 @@ export interface CoupleUser {
   email?: string;
   phone?: string;
   age?: number;
+  dateOfBirth?: string; // YYYY-MM-DD
   
   // Physical Stats (entered later by user)
   weight?: number;
   height?: number;
   bmi?: number;
+  
+  // Address (India-specific)
+  address?: {
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    country?: string;
+  };
   
   // Authentication (Firestore-based, no Firebase Auth)
   tempPassword?: string; // Initial 8-char password, cleared after reset
@@ -637,6 +648,7 @@ export interface Couple {
   // Enrollment
   enrollmentDate: string; // YYYY-MM-DD
   enrolledBy: string; // Admin UID who enrolled
+  enrolledByName?: string; // Admin name for display
   
   // Status
   status: 'active' | 'inactive';

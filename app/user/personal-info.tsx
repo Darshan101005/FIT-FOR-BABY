@@ -1,14 +1,18 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
+import { coupleService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
 import {
     Animated,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
@@ -21,53 +25,46 @@ import {
 
 const isWeb = Platform.OS === 'web';
 
+// Indian States list
+const INDIAN_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
+  'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
+  'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
+  'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
+  'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
+];
+
+// Address structure
+interface Address {
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+}
+
 interface UserPersonalInfo {
-  // Basic Info (Non-editable - set by admin)
   name: string;
   gender: 'male' | 'female';
   dateOfBirth: string;
   profileImage: string | null;
-  
-  // IDs (Non-editable)
-  odisId: string;
-  userId: string; // Format: C_001_M or C_001_F
-  
-  // Editable fields
+  userId: string;
+  coupleId: string;
   email: string;
   phone: string;
-  address: string;
-  
-  // Partner details (Non-editable)
+  address: Address;
   partner: {
     name: string;
     gender: 'male' | 'female';
-    odisId: string;
     userId: string;
     email: string;
     phone: string;
   };
 }
-
-// Mock data - In production this would come from Firebase/Context
-const mockUserData: UserPersonalInfo = {
-  name: 'John Doe',
-  gender: 'male',
-  dateOfBirth: '1990-05-15',
-  profileImage: null,
-  odisId: 'C_001',
-  userId: 'C_001_M',
-  email: 'john.doe@example.com',
-  phone: '+91 98765 43210',
-  address: '123, Anna Nagar East, Chennai - 600102, Tamil Nadu',
-  partner: {
-    name: 'Sarah Doe',
-    gender: 'female',
-    odisId: 'C_001',
-    userId: 'C_001_F',
-    email: 'sarah.doe@example.com',
-    phone: '+91 98765 43211',
-  },
-};
 
 export default function PersonalInfoScreen() {
   const router = useRouter();
@@ -77,18 +74,99 @@ export default function PersonalInfoScreen() {
   
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
-  const [profileImage, setProfileImage] = useState<string | null>(mockUserData.profileImage);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   
-  // Editable fields state with individual editing
-  const [editingField, setEditingField] = useState<'email' | 'phone' | 'address' | null>(null);
-  const [email, setEmail] = useState(mockUserData.email);
-  const [phone, setPhone] = useState(mockUserData.phone);
-  const [address, setAddress] = useState(mockUserData.address);
+  // User data
+  const [userData, setUserData] = useState<UserPersonalInfo>({
+    name: '',
+    gender: 'male',
+    dateOfBirth: '',
+    profileImage: null,
+    userId: '',
+    coupleId: '',
+    email: '',
+    phone: '',
+    address: {
+      addressLine1: '',
+      addressLine2: '',
+      city: '',
+      state: '',
+      pincode: '',
+      country: 'India',
+    },
+    partner: {
+      name: '',
+      gender: 'female',
+      userId: '',
+      email: '',
+      phone: '',
+    },
+  });
   
-  // Temp values while editing
-  const [tempEmail, setTempEmail] = useState(mockUserData.email);
-  const [tempPhone, setTempPhone] = useState(mockUserData.phone);
-  const [tempAddress, setTempAddress] = useState(mockUserData.address);
+  // Editing state
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [tempValue, setTempValue] = useState<any>(null);
+  
+  // Date picker state
+  const [showDobPicker, setShowDobPicker] = useState(false);
+  
+  // State picker modal
+  const [showStatePicker, setShowStatePicker] = useState(false);
+  
+  // Fetch user data
+  useFocusEffect(
+    useCallback(() => {
+      const loadUserData = async () => {
+        try {
+          const coupleId = await AsyncStorage.getItem('coupleId');
+          const userGender = await AsyncStorage.getItem('userGender') as 'male' | 'female';
+          
+          if (coupleId && userGender) {
+            const couple = await coupleService.get(coupleId);
+            if (couple) {
+              const user = couple[userGender];
+              const partner = couple[userGender === 'male' ? 'female' : 'male'];
+              
+              setUserData({
+                name: user.name || '',
+                gender: userGender,
+                dateOfBirth: user.dateOfBirth || '',
+                profileImage: user.profileImage || null,
+                userId: user.id || '',
+                coupleId: coupleId,
+                email: user.email || '',
+                phone: user.phone || '',
+                address: user.address || {
+                  addressLine1: '',
+                  addressLine2: '',
+                  city: '',
+                  state: '',
+                  pincode: '',
+                  country: 'India',
+                },
+                partner: {
+                  name: partner.name || '',
+                  gender: userGender === 'male' ? 'female' : 'male',
+                  userId: partner.id || '',
+                  email: partner.email || '',
+                  phone: partner.phone || '',
+                },
+              });
+              setProfileImage(user.profileImage || null);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading user data:', error);
+          showToast('Failed to load profile data', 'error');
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      loadUserData();
+    }, [])
+  );
 
   const showToast = (message: string, type: 'error' | 'success' | 'info') => {
     setToast({ visible: true, message, type });
@@ -105,46 +183,90 @@ export default function PersonalInfoScreen() {
     }, 2500);
   };
 
-  const handleStartEdit = (field: 'email' | 'phone' | 'address') => {
+  const handleStartEdit = (field: string, currentValue: any) => {
     setEditingField(field);
-    if (field === 'email') setTempEmail(email);
-    if (field === 'phone') setTempPhone(phone);
-    if (field === 'address') setTempAddress(address);
+    setTempValue(currentValue);
   };
 
   const handleCancelEdit = () => {
     setEditingField(null);
-    setTempEmail(email);
-    setTempPhone(phone);
-    setTempAddress(address);
+    setTempValue(null);
   };
 
-  const handleSaveField = (field: 'email' | 'phone' | 'address') => {
-    // Validation
-    if (field === 'email' && !tempEmail.includes('@')) {
-      showToast('Please enter a valid email address', 'error');
-      return;
+  const handleSaveField = async (field: string) => {
+    try {
+      const userGender = await AsyncStorage.getItem('userGender') as 'male' | 'female';
+      
+      // Validation
+      if (field === 'email' && tempValue && !tempValue.includes('@')) {
+        showToast('Please enter a valid email address', 'error');
+        return;
+      }
+      if (field === 'phone' && tempValue && tempValue.replace(/\D/g, '').length < 10) {
+        showToast('Please enter a valid phone number', 'error');
+        return;
+      }
+      if (field === 'pincode' && tempValue && !/^\d{6}$/.test(tempValue)) {
+        showToast('Pincode must be 6 digits', 'error');
+        return;
+      }
+      
+      // Build update object
+      let updateData: any = {};
+      
+      if (field === 'email' || field === 'phone' || field === 'dateOfBirth') {
+        updateData[`${userGender}.${field}`] = tempValue;
+        setUserData(prev => ({ ...prev, [field]: tempValue }));
+      } else if (['addressLine1', 'addressLine2', 'city', 'state', 'pincode'].includes(field)) {
+        // Address field
+        const newAddress = { ...userData.address, [field]: tempValue };
+        updateData[`${userGender}.address`] = newAddress;
+        setUserData(prev => ({ ...prev, address: newAddress }));
+      }
+      
+      // Save to Firestore
+      await coupleService.updateUserField(userData.coupleId, userGender, updateData);
+      
+      setEditingField(null);
+      setTempValue(null);
+      showToast(`Updated successfully`, 'success');
+    } catch (error: any) {
+      console.error('Save error:', error);
+      showToast(error.message || 'Failed to save', 'error');
     }
-    if (field === 'phone' && tempPhone.replace(/\D/g, '').length < 10) {
-      showToast('Please enter a valid phone number', 'error');
-      return;
+  };
+
+  // DOB picker handler
+  const handleDobChange = async (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDobPicker(false);
     }
-    if (field === 'address' && tempAddress.trim().length < 10) {
-      showToast('Please enter a complete address', 'error');
+    
+    if (event.type === 'dismissed') {
+      setShowDobPicker(false);
       return;
     }
     
-    // Save the value
-    if (field === 'email') setEmail(tempEmail);
-    if (field === 'phone') setPhone(tempPhone);
-    if (field === 'address') setAddress(tempAddress);
-    
-    setEditingField(null);
-    showToast(`${field.charAt(0).toUpperCase() + field.slice(1)} updated successfully`, 'success');
+    if (selectedDate) {
+      try {
+        const userGender = await AsyncStorage.getItem('userGender') as 'male' | 'female';
+        const dateString = selectedDate.toISOString().split('T')[0];
+        
+        await coupleService.updateUserField(userData.coupleId, userGender, {
+          [`${userGender}.dateOfBirth`]: dateString,
+        });
+        
+        setUserData(prev => ({ ...prev, dateOfBirth: dateString }));
+        setShowDobPicker(false);
+        showToast('Date of birth updated', 'success');
+      } catch (error) {
+        console.error('Save DOB error:', error);
+        showToast('Failed to update date of birth', 'error');
+      }
+    }
   };
 
   const pickImage = async () => {
-    // Request permission
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
@@ -152,7 +274,6 @@ export default function PersonalInfoScreen() {
       return;
     }
     
-    // Open image picker
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -163,10 +284,12 @@ export default function PersonalInfoScreen() {
     if (!result.canceled && result.assets[0]) {
       setProfileImage(result.assets[0].uri);
       showToast('Profile photo updated', 'success');
+      // TODO: Upload to Firebase Storage and save URL
     }
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'Not set';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', {
       day: 'numeric',
@@ -183,6 +306,14 @@ export default function PersonalInfoScreen() {
     return gender === 'male' ? '#3b82f6' : '#ec4899';
   };
 
+  const getInitials = () => {
+    if (!userData.name) return 'U';
+    const parts = userData.name.split(' ');
+    return parts.length > 1 
+      ? `${parts[0][0]}${parts[parts.length-1][0]}`.toUpperCase()
+      : userData.name[0].toUpperCase();
+  };
+
   const renderHeader = () => (
     <LinearGradient colors={colors.headerBackground as [string, string]} style={styles.header}>
       <View style={styles.headerTop}>
@@ -193,7 +324,6 @@ export default function PersonalInfoScreen() {
         <View style={{ width: 40 }} />
       </View>
       
-      {/* User Avatar & Basic Info */}
       <View style={styles.profileSummary}>
         <TouchableOpacity 
           style={styles.avatarLargeContainer}
@@ -206,19 +336,17 @@ export default function PersonalInfoScreen() {
             </View>
           ) : (
             <View style={styles.avatarLarge}>
-              <Text style={styles.avatarTextLarge}>
-                {mockUserData.name.split(' ').map(n => n[0]).join('')}
-              </Text>
+              <Text style={styles.avatarTextLarge}>{getInitials()}</Text>
             </View>
           )}
           <View style={[styles.cameraOverlay, { backgroundColor: colors.primary }]}>
             <Ionicons name="camera" size={16} color="#fff" />
           </View>
         </TouchableOpacity>
-        <Text style={styles.userName}>{mockUserData.name}</Text>
+        <Text style={styles.userName}>{userData.name || 'User'}</Text>
         <View style={styles.userIdBadge}>
           <MaterialCommunityIcons name="identifier" size={16} color="#fff" />
-          <Text style={styles.userIdText}>User ID: {mockUserData.userId}</Text>
+          <Text style={styles.userIdText}>User ID: {userData.userId}</Text>
         </View>
       </View>
     </LinearGradient>
@@ -236,23 +364,21 @@ export default function PersonalInfoScreen() {
       </View>
       <View style={styles.fieldContent}>
         <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
-        <Text style={[styles.fieldValue, { color: colors.text }]}>{value}</Text>
+        <Text style={[styles.fieldValue, { color: colors.text }]}>{value || 'Not set'}</Text>
       </View>
     </View>
   );
 
   const renderEditableField = (
-    fieldKey: 'email' | 'phone' | 'address',
+    fieldKey: string,
     label: string,
     value: string,
-    tempValue: string,
-    setTempValue: (text: string) => void,
     icon: string,
     iconColor: string,
-    multiline: boolean = false,
-    keyboardType: 'default' | 'email-address' | 'phone-pad' = 'default'
+    keyboardType: 'default' | 'email-address' | 'phone-pad' | 'numeric' = 'default',
+    placeholder: string = ''
   ) => {
-    const isCurrentlyEditing = editingField === fieldKey;
+    const isEditing = editingField === fieldKey;
     
     return (
       <View style={[styles.editableFieldContainer, { backgroundColor: colors.cardBackground }]}>
@@ -262,7 +388,7 @@ export default function PersonalInfoScreen() {
           </View>
           <View style={styles.fieldContent}>
             <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
-            {isCurrentlyEditing ? (
+            {isEditing ? (
               <TextInput
                 style={[
                   styles.fieldInput, 
@@ -271,31 +397,29 @@ export default function PersonalInfoScreen() {
                     backgroundColor: colors.inputBackground,
                     borderColor: colors.primary,
                   },
-                  multiline && styles.fieldInputMultiline,
                 ]}
-                value={tempValue}
+                value={tempValue || ''}
                 onChangeText={setTempValue}
-                multiline={multiline}
-                numberOfLines={multiline ? 3 : 1}
                 keyboardType={keyboardType}
+                placeholder={placeholder}
                 placeholderTextColor={colors.textMuted}
                 autoFocus
               />
             ) : (
-              <Text style={[styles.fieldValue, { color: colors.text }]}>{value}</Text>
+              <Text style={[styles.fieldValue, { color: colors.text }]}>{value || 'Not set'}</Text>
             )}
           </View>
-          {!isCurrentlyEditing && (
+          {!isEditing && (
             <TouchableOpacity 
               style={[styles.editFieldButton, { backgroundColor: colors.inputBackground }]}
-              onPress={() => handleStartEdit(fieldKey)}
+              onPress={() => handleStartEdit(fieldKey, value)}
             >
               <Ionicons name="pencil" size={16} color={colors.primary} />
             </TouchableOpacity>
           )}
         </View>
         
-        {isCurrentlyEditing && (
+        {isEditing && (
           <View style={styles.editFieldActions}>
             <TouchableOpacity 
               style={[styles.editFieldCancelBtn, { borderColor: colors.border }]}
@@ -317,6 +441,165 @@ export default function PersonalInfoScreen() {
     );
   };
 
+  // State Picker Modal
+  const renderStatePicker = () => (
+    <Modal
+      visible={showStatePicker}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowStatePicker(false)}
+    >
+      <View style={styles.statePickerOverlay}>
+        <View style={[styles.statePickerContent, { backgroundColor: colors.cardBackground }]}>
+          <View style={styles.statePickerHeader}>
+            <Text style={[styles.statePickerTitle, { color: colors.text }]}>Select State</Text>
+            <TouchableOpacity onPress={() => setShowStatePicker(false)}>
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.stateList}>
+            {INDIAN_STATES.map((state) => (
+              <TouchableOpacity
+                key={state}
+                style={[
+                  styles.stateItem,
+                  { borderBottomColor: colors.border },
+                  userData.address.state === state && { backgroundColor: colors.primary + '15' },
+                ]}
+                onPress={async () => {
+                  const newAddress = { ...userData.address, state };
+                  setUserData(prev => ({ ...prev, address: newAddress }));
+                  setShowStatePicker(false);
+                  
+                  try {
+                    const userGender = await AsyncStorage.getItem('userGender') as 'male' | 'female';
+                    await coupleService.updateUserField(userData.coupleId, userGender, {
+                      [`${userGender}.address`]: newAddress,
+                    });
+                    showToast('State updated', 'success');
+                  } catch (error) {
+                    showToast('Failed to save', 'error');
+                  }
+                }}
+              >
+                <Text style={[
+                  styles.stateItemText, 
+                  { color: colors.text },
+                  userData.address.state === state && { color: colors.primary, fontWeight: '700' },
+                ]}>
+                  {state}
+                </Text>
+                {userData.address.state === state && (
+                  <Ionicons name="checkmark" size={20} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Address Section
+  const renderAddressSection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <View style={[styles.sectionIcon, { backgroundColor: '#f59e0b15' }]}>
+          <Ionicons name="location" size={18} color="#f59e0b" />
+        </View>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Address</Text>
+      </View>
+      <View style={[styles.sectionContent, { backgroundColor: colors.cardBackground }]}>
+        {/* Country - Fixed to India */}
+        <View style={[styles.infoField]}>
+          <View style={[styles.fieldIcon, { backgroundColor: '#22c55e15' }]}>
+            <Ionicons name="globe-outline" size={20} color="#22c55e" />
+          </View>
+          <View style={styles.fieldContent}>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Country</Text>
+            <Text style={[styles.fieldValue, { color: colors.text }]}>🇮🇳 India</Text>
+          </View>
+        </View>
+        
+        <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
+        
+        {/* Address Line 1 */}
+        {renderEditableField(
+          'addressLine1',
+          'Address Line 1',
+          userData.address.addressLine1,
+          'home-outline',
+          '#3b82f6',
+          'default',
+          'House/Flat No, Building Name'
+        )}
+        
+        <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
+        
+        {/* Address Line 2 */}
+        {renderEditableField(
+          'addressLine2',
+          'Address Line 2',
+          userData.address.addressLine2,
+          'location-outline',
+          '#3b82f6',
+          'default',
+          'Street, Area, Landmark'
+        )}
+        
+        <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
+        
+        {/* City */}
+        {renderEditableField(
+          'city',
+          'City',
+          userData.address.city,
+          'business-outline',
+          '#8b5cf6',
+          'default',
+          'Enter city name'
+        )}
+        
+        <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
+        
+        {/* State - Dropdown */}
+        <TouchableOpacity
+          style={[styles.editableFieldContainer, { backgroundColor: colors.cardBackground }]}
+          onPress={() => setShowStatePicker(true)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.editableFieldTop}>
+            <View style={[styles.fieldIcon, { backgroundColor: '#ec489915' }]}>
+              <Ionicons name="map-outline" size={20} color="#ec4899" />
+            </View>
+            <View style={styles.fieldContent}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>State</Text>
+              <Text style={[styles.fieldValue, { color: colors.text }]}>
+                {userData.address.state || 'Select state'}
+              </Text>
+            </View>
+            <View style={[styles.editFieldButton, { backgroundColor: colors.inputBackground }]}>
+              <Ionicons name="chevron-down" size={16} color={colors.primary} />
+            </View>
+          </View>
+        </TouchableOpacity>
+        
+        <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
+        
+        {/* Pincode */}
+        {renderEditableField(
+          'pincode',
+          'Pincode',
+          userData.address.pincode,
+          'keypad-outline',
+          '#f59e0b',
+          'numeric',
+          '6-digit pincode'
+        )}
+      </View>
+    </View>
+  );
+
   const renderSection = (
     title: string, 
     icon: string, 
@@ -336,51 +619,66 @@ export default function PersonalInfoScreen() {
     </View>
   );
 
-  const renderPartnerCard = () => (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <View style={[styles.sectionIcon, { backgroundColor: '#ef444415' }]}>
-          <Ionicons name="heart" size={18} color="#ef4444" />
+  const renderPartnerCard = () => {
+    const partnerInitials = userData.partner.name 
+      ? userData.partner.name.split(' ').map(n => n[0]).join('').toUpperCase()
+      : 'P';
+    
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <View style={[styles.sectionIcon, { backgroundColor: '#ef444415' }]}>
+            <Ionicons name="heart" size={18} color="#ef4444" />
+          </View>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Partner Details</Text>
         </View>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Partner Details</Text>
-      </View>
-      <View style={[styles.partnerCard, { backgroundColor: colors.cardBackground }]}>
-        <View style={styles.partnerHeader}>
-          <View style={[styles.partnerAvatar, { backgroundColor: getGenderColor(mockUserData.partner.gender) + '20' }]}>
-            <Text style={[styles.partnerAvatarText, { color: getGenderColor(mockUserData.partner.gender) }]}>
-              {mockUserData.partner.name.split(' ').map(n => n[0]).join('')}
-            </Text>
-            <View style={[styles.partnerGenderBadge, { backgroundColor: getGenderColor(mockUserData.partner.gender) }]}>
-              <Ionicons name={getGenderIcon(mockUserData.partner.gender)} size={12} color="#fff" />
+        <View style={[styles.partnerCard, { backgroundColor: colors.cardBackground }]}>
+          <View style={styles.partnerHeader}>
+            <View style={[styles.partnerAvatar, { backgroundColor: getGenderColor(userData.partner.gender) + '20' }]}>
+              <Text style={[styles.partnerAvatarText, { color: getGenderColor(userData.partner.gender) }]}>
+                {partnerInitials}
+              </Text>
+              <View style={[styles.partnerGenderBadge, { backgroundColor: getGenderColor(userData.partner.gender) }]}>
+                <Ionicons name={getGenderIcon(userData.partner.gender)} size={12} color="#fff" />
+              </View>
+            </View>
+            <View style={styles.partnerInfo}>
+              <Text style={[styles.partnerName, { color: colors.text }]}>{userData.partner.name || 'Partner'}</Text>
+              <Text style={[styles.partnerId, { color: colors.textSecondary }]}>
+                User ID: {userData.partner.userId || 'Not set'}
+              </Text>
             </View>
           </View>
-          <View style={styles.partnerInfo}>
-            <Text style={[styles.partnerName, { color: colors.text }]}>{mockUserData.partner.name}</Text>
-            <Text style={[styles.partnerId, { color: colors.textSecondary }]}>
-              User ID: {mockUserData.partner.userId}
-            </Text>
-          </View>
-        </View>
-        
-        <View style={[styles.partnerDivider, { backgroundColor: colors.border }]} />
-        
-        <View style={styles.partnerDetails}>
-          <View style={styles.partnerDetailItem}>
-            <Ionicons name="mail-outline" size={16} color={colors.textSecondary} />
-            <Text style={[styles.partnerDetailText, { color: colors.textSecondary }]}>
-              {mockUserData.partner.email}
-            </Text>
-          </View>
-          <View style={styles.partnerDetailItem}>
-            <Ionicons name="call-outline" size={16} color={colors.textSecondary} />
-            <Text style={[styles.partnerDetailText, { color: colors.textSecondary }]}>
-              {mockUserData.partner.phone}
-            </Text>
+          
+          <View style={[styles.partnerDivider, { backgroundColor: colors.border }]} />
+          
+          <View style={styles.partnerDetails}>
+            {userData.partner.email ? (
+              <View style={styles.partnerDetailItem}>
+                <Ionicons name="mail-outline" size={16} color={colors.textSecondary} />
+                <Text style={[styles.partnerDetailText, { color: colors.textSecondary }]}>
+                  {userData.partner.email}
+                </Text>
+              </View>
+            ) : null}
+            {userData.partner.phone ? (
+              <View style={styles.partnerDetailItem}>
+                <Ionicons name="call-outline" size={16} color={colors.textSecondary} />
+                <Text style={[styles.partnerDetailText, { color: colors.textSecondary }]}>
+                  {userData.partner.phone}
+                </Text>
+              </View>
+            ) : null}
+            {!userData.partner.email && !userData.partner.phone && (
+              <Text style={[styles.partnerDetailText, { color: colors.textMuted }]}>
+                No contact information available
+              </Text>
+            )}
           </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -423,7 +721,7 @@ export default function PersonalInfoScreen() {
                     <Text style={[styles.idLabel, { color: colors.textSecondary }]}>User ID</Text>
                     <View style={[styles.idValueContainer, { backgroundColor: colors.inputBackground }]}>
                       <MaterialCommunityIcons name="identifier" size={18} color={colors.primary} />
-                      <Text style={[styles.idValue, { color: colors.text }]}>{mockUserData.userId}</Text>
+                      <Text style={[styles.idValue, { color: colors.text }]}>{userData.coupleId}</Text>
                     </View>
                   </View>
                 </View>
@@ -433,16 +731,55 @@ export default function PersonalInfoScreen() {
             {/* Basic Information (Non-editable) */}
             {renderSection('Basic Information', 'person', '#8b5cf6', (
               <>
-                {renderInfoField('Full Name', mockUserData.name, 'person-outline', '#8b5cf6')}
+                {renderInfoField('Full Name', userData.name, 'person-outline', '#8b5cf6')}
                 <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
                 {renderInfoField(
                   'Gender', 
-                  mockUserData.gender === 'male' ? 'Male' : 'Female', 
-                  getGenderIcon(mockUserData.gender), 
-                  getGenderColor(mockUserData.gender)
+                  userData.gender === 'male' ? 'Male' : 'Female', 
+                  getGenderIcon(userData.gender), 
+                  getGenderColor(userData.gender)
                 )}
                 <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
-                {renderInfoField('Date of Birth', formatDate(mockUserData.dateOfBirth), 'calendar-outline', '#f59e0b')}
+                
+                {/* Date of Birth with Picker */}
+                <TouchableOpacity
+                  style={[styles.editableFieldContainer, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => setShowDobPicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.editableFieldTop}>
+                    <View style={[styles.fieldIcon, { backgroundColor: '#f59e0b15' }]}>
+                      <Ionicons name="calendar-outline" size={20} color="#f59e0b" />
+                    </View>
+                    <View style={styles.fieldContent}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Date of Birth</Text>
+                      <Text style={[styles.fieldValue, { color: colors.text }]}>
+                        {userData.dateOfBirth 
+                          ? new Date(userData.dateOfBirth).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'long',
+                              year: 'numeric',
+                            })
+                          : 'Select date of birth'
+                        }
+                      </Text>
+                    </View>
+                    <View style={[styles.editFieldButton, { backgroundColor: colors.inputBackground }]}>
+                      <Ionicons name="calendar" size={16} color={colors.primary} />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+                
+                {showDobPicker && (
+                  <DateTimePicker
+                    value={userData.dateOfBirth ? new Date(userData.dateOfBirth) : new Date(1990, 0, 1)}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    maximumDate={new Date()}
+                    minimumDate={new Date(1950, 0, 1)}
+                    onChange={handleDobChange}
+                  />
+                )}
               </>
             ))}
 
@@ -458,39 +795,30 @@ export default function PersonalInfoScreen() {
                 {renderEditableField(
                   'email',
                   'Email Address', 
-                  email,
-                  tempEmail,
-                  setTempEmail,
+                  userData.email,
                   'mail-outline', 
                   '#3b82f6',
-                  false,
-                  'email-address'
+                  'email-address',
+                  'Enter email address'
                 )}
                 <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
                 {renderEditableField(
                   'phone',
                   'Phone Number', 
-                  phone,
-                  tempPhone,
-                  setTempPhone,
+                  userData.phone,
                   'call-outline', 
                   '#22c55e',
-                  false,
-                  'phone-pad'
-                )}
-                <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
-                {renderEditableField(
-                  'address',
-                  'Address', 
-                  address,
-                  tempAddress,
-                  setTempAddress,
-                  'location-outline', 
-                  '#f59e0b',
-                  true
+                  'phone-pad',
+                  'Enter phone number'
                 )}
               </View>
             </View>
+
+            {/* Address Section */}
+            {renderAddressSection()}
+
+            {/* State Picker Modal */}
+            {renderStatePicker()}
 
             {/* Partner Details */}
             {renderPartnerCard()}
@@ -499,7 +827,7 @@ export default function PersonalInfoScreen() {
             <View style={[styles.infoNote, { backgroundColor: isDarkMode ? colors.primaryLight : '#eff6ff' }]}>
               <Ionicons name="information-circle" size={20} color={colors.primary} />
               <Text style={[styles.infoNoteText, { color: colors.textSecondary }]}>
-                Name, Gender, Date of Birth, and IDs are managed by your study administrator. 
+                Name, Gender, and IDs are managed by your study administrator. 
                 Contact support if you need to update these details.
               </Text>
             </View>
@@ -953,5 +1281,46 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     lineHeight: 20,
+  },
+  // State Picker Modal Styles
+  statePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  statePickerContent: {
+    maxHeight: '70%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  statePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  statePickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  stateList: {
+    paddingHorizontal: 8,
+  },
+  stateItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginHorizontal: 8,
+    marginVertical: 2,
+    borderRadius: 10,
+  },
+  stateItemText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
 });
