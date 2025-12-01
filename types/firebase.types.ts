@@ -556,6 +556,43 @@ export interface AppSetting {
 // - maintenance_mode: false
 
 // ============================================
+// GLOBAL SETTINGS (Admin managed goals)
+// Path: /settings/globalSettings
+// ============================================
+
+export interface GlobalSettings {
+  // Exercise Goals (applies to both male and female)
+  dailySteps: number; // Default: 7000 steps
+  coupleWalkingMinutes: number; // Default: 60 mins/session
+  highKneesMinutes: number; // Default: 30 mins/session
+  
+  // Calculated weekly goals (daily * 7)
+  weeklySteps: number;
+  weeklyCoupleWalkingMinutes: number;
+  weeklyHighKneesMinutes: number;
+  
+  // Data Collection Periods (optional)
+  dataCollectionPeriods?: {
+    dietLogging?: {
+      startDate: string; // YYYY-MM-DD
+      endDate: string;
+    };
+    exerciseFrequency?: {
+      frequency: string; // 'daily', 'weekly'
+      startDate: string;
+    };
+    weightTracking?: {
+      frequency: string; // 'daily', 'weekly', 'monthly'
+      reminderEnabled: boolean;
+    };
+  };
+  
+  // Timestamps
+  updatedAt: Timestamp;
+  updatedBy?: string; // Admin UID who updated
+}
+
+// ============================================
 // FAQ COLLECTION
 // Path: /faqs/{faqId}
 // ============================================

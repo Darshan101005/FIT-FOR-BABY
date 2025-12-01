@@ -1,20 +1,22 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { HomePageSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
-import { coupleService } from '@/services/firestore.service';
+import { coupleService, globalSettingsService } from '@/services/firestore.service';
+import { GlobalSettings } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import {
-    Animated,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Animated,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
@@ -64,47 +66,62 @@ export default function UserHomeScreen() {
   const [selectedDateIndex, setSelectedDateIndex] = useState(3); // Today is at index 3
   const [notificationSidebarVisible, setNotificationSidebarVisible] = useState(false);
   const [todayStepsFromStorage, setTodayStepsFromStorage] = useState(0);
+  const [isLoading, setIsLoading] = useState(true); // Loading state for skeleton
   const sidebarAnim = useRef(new Animated.Value(300)).current;
   
   // User data state - fetched from Firestore
-  const [userData, setUserData] = useState<UserData>({
-    name: 'User',
-    coupleId: '',
-    userId: '',
-    profileImage: null,
-    unreadNotifications: 0,
-  });
+  const [userData, setUserData] = useState<UserData | null>(null);
+  
+  // Global settings from Firestore
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
   
   const dates = generateDates(isMobile);
   const todayIndex = isMobile ? 3 : 3; // Today is always at index 3
 
-  // Progress data for different dates - uses stored steps for today
+  // Progress data for different dates - no mock data, only real data
   const getProgressDataForDate = (dateIndex: number) => {
-    const dataByDate: { [key: number]: { steps: { current: number; target: number }; exerciseMinutes: number; foodLogged: number; caloriesBurnt: number } } = {
-      0: { steps: { current: 6200, target: 7000 }, exerciseMinutes: 60, foodLogged: 3, caloriesBurnt: 380 },
-      1: { steps: { current: 4800, target: 7000 }, exerciseMinutes: 30, foodLogged: 2, caloriesBurnt: 250 },
-      2: { steps: { current: 7100, target: 7000 }, exerciseMinutes: 55, foodLogged: 3, caloriesBurnt: 420 },
-      3: { steps: { current: todayStepsFromStorage, target: 7000 }, exerciseMinutes: 45, foodLogged: 3, caloriesBurnt: 320 },
-      4: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 },
-      5: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 },
-      6: { steps: { current: 0, target: 7000 }, exerciseMinutes: 0, foodLogged: 0, caloriesBurnt: 0 },
+    const stepTarget = globalSettings?.dailySteps || 7000;
+    // Only today (index 3) has real data from storage, past dates will come from Firestore later
+    // For now, show 0 for past dates - this will be replaced with real Firestore data
+    const isToday = dateIndex === 3;
+    return {
+      steps: { current: isToday ? todayStepsFromStorage : 0, target: stepTarget },
+      exerciseMinutes: 0, // TODO: Fetch from Firestore
+      foodLogged: 0, // TODO: Fetch from Firestore
+      caloriesBurnt: 0, // TODO: Fetch from Firestore
     };
-    return dataByDate[dateIndex] || dataByDate[3];
   };
 
   // Load user data and steps when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      const loadUserData = async () => {
+      const loadAllData = async () => {
+        setIsLoading(true);
         try {
-          // Get user info from AsyncStorage (set during login)
-          const coupleId = await AsyncStorage.getItem('coupleId');
-          const userGender = await AsyncStorage.getItem('userGender');
-          const userName = await AsyncStorage.getItem('userName');
-          const userId = await AsyncStorage.getItem('userId');
-          
+          // Load all data in parallel
+          const [coupleId, userGender, userName, userId, savedSteps, settings] = await Promise.all([
+            AsyncStorage.getItem('coupleId'),
+            AsyncStorage.getItem('userGender'),
+            AsyncStorage.getItem('userName'),
+            AsyncStorage.getItem('userId'),
+            AsyncStorage.getItem(STEPS_STORAGE_KEY),
+            globalSettingsService.get(),
+          ]);
+
+          // Set global settings
+          setGlobalSettings(settings);
+
+          // Set steps from storage
+          if (savedSteps) {
+            const parsed = JSON.parse(savedSteps);
+            const today = new Date().toDateString();
+            if (parsed.date === today && parsed.totalSteps) {
+              setTodayStepsFromStorage(parsed.totalSteps);
+            }
+          }
+
+          // Set user data
           if (coupleId && userGender) {
-            // Fetch fresh data from Firestore
             const couple = await coupleService.get(coupleId);
             if (couple) {
               const user = couple[userGender as 'male' | 'female'];
@@ -113,37 +130,44 @@ export default function UserHomeScreen() {
                 coupleId: coupleId,
                 userId: userId || user.id,
                 profileImage: user.profileImage || null,
-                unreadNotifications: 0, // TODO: Fetch from notifications collection
+                unreadNotifications: 0,
+              });
+            } else {
+              // Fallback if couple not found
+              setUserData({
+                name: userName || 'User',
+                coupleId: coupleId || '',
+                userId: userId || '',
+                profileImage: null,
+                unreadNotifications: 0,
               });
             }
-          } else if (userName) {
-            // Fallback to stored name
-            setUserData(prev => ({ ...prev, name: userName }));
+          } else {
+            // Fallback to basic data
+            setUserData({
+              name: userName || 'User',
+              coupleId: '',
+              userId: userId || '',
+              profileImage: null,
+              unreadNotifications: 0,
+            });
           }
         } catch (error) {
-          console.error('Error loading user data:', error);
+          console.error('Error loading data:', error);
+          // Set fallback user data on error
+          setUserData({
+            name: 'User',
+            coupleId: '',
+            userId: '',
+            profileImage: null,
+            unreadNotifications: 0,
+          });
+        } finally {
+          setIsLoading(false);
         }
       };
       
-      const loadStepsFromStorage = async () => {
-        try {
-          const savedData = await AsyncStorage.getItem(STEPS_STORAGE_KEY);
-          if (savedData) {
-            const parsed = JSON.parse(savedData);
-            const today = new Date().toDateString();
-            if (parsed.date === today && parsed.totalSteps) {
-              setTodayStepsFromStorage(parsed.totalSteps);
-            } else {
-              setTodayStepsFromStorage(0);
-            }
-          }
-        } catch (error) {
-          console.error('Error loading steps:', error);
-        }
-      };
-      
-      loadUserData();
-      loadStepsFromStorage();
+      loadAllData();
     }, [])
   );
 
@@ -255,6 +279,16 @@ export default function UserHomeScreen() {
       </View>
     );
   };
+
+  // Show skeleton while loading
+  if (isLoading || !userData) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <HomePageSkeleton isMobile={isMobile} />
+        <BottomNavBar />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

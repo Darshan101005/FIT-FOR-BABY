@@ -1,17 +1,19 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useWindowDimensions,
-    View
+  ActivityIndicator,
+  Animated,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
 } from 'react-native';
 import { foodDatabase, FoodItemData } from '../../data/foodDatabase';
+import { globalSettingsService } from '../../services/firestore.service';
 
 // Fit for Baby Color Palette
 const COLORS = {
@@ -62,24 +64,24 @@ const defaultGoals: Goal[] = [
   },
   {
     id: 'couple-walking',
-    title: 'Couple Walking',
-    description: 'Minutes of walking together (3 days/week)',
+    title: 'Daily Couple Walking',
+    description: 'Minutes of walking together daily',
     icon: 'people',
     iconFamily: 'Ionicons',
     value: 60,
-    unit: 'mins/session',
+    unit: 'mins/day',
     min: 15,
     max: 120,
     color: COLORS.primary,
   },
   {
     id: 'high-knees',
-    title: 'High Knees Exercise',
-    description: 'High knees exercise duration (3 days/week)',
+    title: 'Daily High Knees',
+    description: 'High knees exercise duration daily',
     icon: 'run-fast',
     iconFamily: 'MaterialCommunityIcons',
     value: 30,
-    unit: 'mins/session',
+    unit: 'mins/day',
     min: 10,
     max: 60,
     color: COLORS.error,
@@ -92,6 +94,8 @@ export default function AdminTasksScreen() {
   const toastAnim = useRef(new Animated.Value(-100)).current;
 
   const [goals, setGoals] = useState(defaultGoals);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [isSavingGoals, setIsSavingGoals] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
 
   // Diet Recommendations state
@@ -118,6 +122,37 @@ export default function AdminTasksScreen() {
     { id: 'C_004', name: 'Chris & Anna Brown' },
     { id: 'C_005', name: 'James & Olivia Davis' },
   ];
+
+  // Load global settings from Firestore on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        setIsLoadingSettings(true);
+        const settings = await globalSettingsService.get();
+        
+        // Update goals with Firestore values
+        setGoals(prev => prev.map(goal => {
+          switch (goal.id) {
+            case 'daily-steps':
+              return { ...goal, value: settings.dailySteps || goal.value };
+            case 'couple-walking':
+              return { ...goal, value: settings.coupleWalkingMinutes || goal.value };
+            case 'high-knees':
+              return { ...goal, value: settings.highKneesMinutes || goal.value };
+            default:
+              return goal;
+          }
+        }));
+      } catch (error) {
+        console.error('Error loading global settings:', error);
+        showToast('Failed to load settings', 'error');
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+
+    loadSettings();
+  }, []);
 
   const filteredUsers = mockUsers.filter(user =>
     user.name.toLowerCase().includes(dietUserSearch.toLowerCase()) ||
@@ -187,8 +222,29 @@ export default function AdminTasksScreen() {
     );
   };
 
-  const handleSaveGoals = () => {
-    showToast('Goals updated successfully!', 'success');
+  const handleSaveGoals = async () => {
+    try {
+      setIsSavingGoals(true);
+      
+      // Get current goal values
+      const dailySteps = goals.find(g => g.id === 'daily-steps')?.value || 7000;
+      const coupleWalkingMinutes = goals.find(g => g.id === 'couple-walking')?.value || 60;
+      const highKneesMinutes = goals.find(g => g.id === 'high-knees')?.value || 30;
+      
+      // Save to Firestore
+      await globalSettingsService.saveGoals({
+        dailySteps,
+        coupleWalkingMinutes,
+        highKneesMinutes,
+      });
+      
+      showToast('Goals updated successfully!', 'success');
+    } catch (error) {
+      console.error('Error saving goals:', error);
+      showToast('Failed to save goals', 'error');
+    } finally {
+      setIsSavingGoals(false);
+    }
   };
 
   const handleSaveCollectionPeriods = () => {
@@ -200,8 +256,8 @@ export default function AdminTasksScreen() {
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <View>
-          <Text style={styles.headerTitle}>Study Configuration</Text>
-          <Text style={styles.headerSubtitle}>Manage tasks and configure study parameters</Text>
+          <Text style={styles.headerTitle}>Tasks & Goals</Text>
+          <Text style={styles.headerSubtitle}>Manage tasks and configure parameters</Text>
         </View>
       </View>
     </View>
@@ -217,12 +273,28 @@ export default function AdminTasksScreen() {
             <Ionicons name="flag" size={22} color={COLORS.primary} />
             <Text style={styles.configTitle}>Global Goal Settings</Text>
           </View>
-          <TouchableOpacity style={styles.saveButton} onPress={handleSaveGoals}>
-            <Ionicons name="checkmark" size={18} color="#fff" />
-            <Text style={styles.saveButtonText}>Save</Text>
+          <TouchableOpacity 
+            style={[styles.saveButton, isSavingGoals && styles.saveButtonDisabled]} 
+            onPress={handleSaveGoals}
+            disabled={isSavingGoals}
+          >
+            {isSavingGoals ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark" size={18} color="#fff" />
+                <Text style={styles.saveButtonText}>Save</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
+        {isLoadingSettings ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading settings...</Text>
+          </View>
+        ) : (
         <View style={styles.goalsContainer}>
           {goals.map(goal => (
             <View key={goal.id} style={styles.goalItem}>
@@ -278,6 +350,7 @@ export default function AdminTasksScreen() {
             </View>
           ))}
         </View>
+        )}
       </View>
 
       {/* Data Collection Periods */}
@@ -787,11 +860,28 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     gap: 6,
+    minWidth: 80,
+    justifyContent: 'center',
+  },
+  saveButtonDisabled: {
+    backgroundColor: COLORS.textMuted,
   },
   saveButtonText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#fff',
+  },
+
+  // Loading Styles
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
   },
 
   // Goals Styles

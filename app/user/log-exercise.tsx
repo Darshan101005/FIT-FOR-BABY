@@ -14,7 +14,6 @@ import {
     View,
     useWindowDimensions
 } from 'react-native';
-
 const isWeb = Platform.OS === 'web';
 
 interface ExerciseType {

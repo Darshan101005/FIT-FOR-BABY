@@ -1,4 +1,5 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { PersonalInfoSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
 import { coupleService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,17 +11,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  Animated,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -741,6 +742,16 @@ export default function PersonalInfoScreen() {
       </View>
     );
   };
+
+  // Show skeleton while loading
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <PersonalInfoSkeleton isMobile={isMobile} />
+        <BottomNavBar />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

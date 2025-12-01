@@ -1,18 +1,21 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
+import { globalSettingsService } from '@/services/firestore.service';
+import { GlobalSettings } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -27,16 +30,6 @@ interface WeeklyData {
 interface WeightData {
   date: string;
   weight: number;
-}
-
-interface GoalProgress {
-  id: string;
-  title: string;
-  current: number;
-  target: number;
-  unit: string;
-  icon: string;
-  color: string;
 }
 
 // Weekly data
@@ -86,12 +79,6 @@ const weightHistory: WeightData[] = [
   { date: 'Week 8', weight: 86.8 },
 ];
 
-const goalProgress: GoalProgress[] = [
-  { id: '1', title: 'Weekly Steps', current: 58900, target: 70000, unit: 'steps', icon: 'walk', color: '#98be4e' },
-  { id: '2', title: 'Weekly Exercise', current: 210, target: 270, unit: 'min', icon: 'run-fast', color: '#f59e0b' },
-  { id: '3', title: 'Couple Walks', current: 2, target: 3, unit: 'days', icon: 'account-group', color: '#8b5cf6' },
-];
-
 const timeRanges = [
   { id: 'week', label: 'This Week' },
   { id: 'month', label: 'This Month' },
@@ -107,6 +94,26 @@ export default function ProgressScreen() {
 
   const [selectedRange, setSelectedRange] = useState('week');
   const [selectedMetric, setSelectedMetric] = useState<'steps' | 'calories' | 'exercise'>('steps');
+  
+  // Global settings from Firestore
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+
+  // Load global settings on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        setIsLoadingSettings(true);
+        const settings = await globalSettingsService.get();
+        setGlobalSettings(settings);
+      } catch (error) {
+        console.error('Error loading global settings:', error);
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+    loadSettings();
+  }, []);
 
   // Get data based on selected range
   const getCurrentData = () => {
@@ -416,49 +423,113 @@ export default function ProgressScreen() {
     );
   };
 
-  const renderGoalProgress = () => (
-    <View style={styles.goalsSection}>
-      <Text style={styles.sectionTitle}>Goal Progress</Text>
-      
-      {goalProgress.map((goal) => {
-        const percent = Math.min((goal.current / goal.target) * 100, 100);
+  const renderGoalProgress = () => {
+    // Calculate goal progress based on Firestore settings
+    // Using mock current values - these would come from actual logged data
+    const stepsTarget = globalSettings?.weeklySteps || 49000;
+    const currentSteps = totalSteps; // Use actual weekly total
+    const stepsPercent = Math.min((currentSteps / stepsTarget) * 100, 100);
+
+    const coupleWalkingTarget = 3; // 3 days/week
+    const currentCoupleWalks = 2; // Mock - would come from exercise logs
+    const coupleWalkingPercent = Math.min((currentCoupleWalks / coupleWalkingTarget) * 100, 100);
+
+    const highKneesTarget = 3; // 3 days/week
+    const currentHighKnees = 2; // Mock - would come from exercise logs
+    const highKneesPercent = Math.min((currentHighKnees / highKneesTarget) * 100, 100);
+
+    if (isLoadingSettings) {
+      return (
+        <View style={styles.goalsSection}>
+          <Text style={styles.sectionTitle}>Weekly Goals</Text>
+          <View style={styles.goalsLoadingContainer}>
+            <ActivityIndicator size="small" color="#006dab" />
+            <Text style={styles.goalsLoadingText}>Loading goals...</Text>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.goalsSection}>
+        <Text style={styles.sectionTitle}>Weekly Goals</Text>
         
-        return (
-          <View key={goal.id} style={styles.goalCard}>
-            <View style={styles.goalHeader}>
-              <View style={[styles.goalIcon, { backgroundColor: goal.color + '20' }]}>
-                <MaterialCommunityIcons 
-                  name={goal.icon as any} 
-                  size={24} 
-                  color={goal.color} 
-                />
-              </View>
-              <View style={styles.goalInfo}>
-                <Text style={styles.goalTitle}>{goal.title}</Text>
-                <Text style={styles.goalStats}>
-                  <Text style={{ color: goal.color, fontWeight: '800' }}>
-                    {goal.current}
-                  </Text>
-                  {' / '}{goal.target} {goal.unit}
+        {/* Steps Goal */}
+        <View style={styles.goalCard}>
+          <View style={styles.goalHeader}>
+            <View style={[styles.goalIcon, { backgroundColor: '#98be4e20' }]}>
+              <MaterialCommunityIcons name="walk" size={24} color="#98be4e" />
+            </View>
+            <View style={styles.goalInfo}>
+              <Text style={styles.goalTitle}>Weekly Steps</Text>
+              <Text style={styles.goalStats}>
+                <Text style={{ color: '#98be4e', fontWeight: '800' }}>
+                  {currentSteps.toLocaleString()}
                 </Text>
-              </View>
-              <Text style={[styles.goalPercent, { color: goal.color }]}>
-                {Math.round(percent)}%
+                {' / '}{stepsTarget.toLocaleString()} steps
               </Text>
             </View>
-            <View style={styles.goalProgressBar}>
-              <View 
-                style={[
-                  styles.goalProgressFill,
-                  { width: `${percent}%`, backgroundColor: goal.color }
-                ]} 
-              />
-            </View>
+            <Text style={[styles.goalPercent, { color: '#98be4e' }]}>
+              {Math.round(stepsPercent)}%
+            </Text>
           </View>
-        );
-      })}
-    </View>
-  );
+          <View style={styles.goalProgressBar}>
+            <View style={[styles.goalProgressFill, { width: `${stepsPercent}%`, backgroundColor: '#98be4e' }]} />
+          </View>
+        </View>
+
+        {/* Couple Walking Goal */}
+        <View style={styles.goalCard}>
+          <View style={styles.goalHeader}>
+            <View style={[styles.goalIcon, { backgroundColor: '#3b82f620' }]}>
+              <Ionicons name="people" size={24} color="#3b82f6" />
+            </View>
+            <View style={styles.goalInfo}>
+              <Text style={styles.goalTitle}>Couple Walking</Text>
+              <Text style={styles.goalStats}>
+                <Text style={{ color: '#3b82f6', fontWeight: '800' }}>
+                  {currentCoupleWalks}
+                </Text>
+                {' / '}{coupleWalkingTarget} days
+                <Text style={styles.goalSubtext}> ({globalSettings?.coupleWalkingMinutes || 60} mins/session)</Text>
+              </Text>
+            </View>
+            <Text style={[styles.goalPercent, { color: '#3b82f6' }]}>
+              {Math.round(coupleWalkingPercent)}%
+            </Text>
+          </View>
+          <View style={styles.goalProgressBar}>
+            <View style={[styles.goalProgressFill, { width: `${coupleWalkingPercent}%`, backgroundColor: '#3b82f6' }]} />
+          </View>
+        </View>
+
+        {/* High Knees Goal */}
+        <View style={styles.goalCard}>
+          <View style={styles.goalHeader}>
+            <View style={[styles.goalIcon, { backgroundColor: '#f59e0b20' }]}>
+              <MaterialCommunityIcons name="run-fast" size={24} color="#f59e0b" />
+            </View>
+            <View style={styles.goalInfo}>
+              <Text style={styles.goalTitle}>High Knees Exercise</Text>
+              <Text style={styles.goalStats}>
+                <Text style={{ color: '#f59e0b', fontWeight: '800' }}>
+                  {currentHighKnees}
+                </Text>
+                {' / '}{highKneesTarget} days
+                <Text style={styles.goalSubtext}> ({globalSettings?.highKneesMinutes || 30} mins/session)</Text>
+              </Text>
+            </View>
+            <Text style={[styles.goalPercent, { color: '#f59e0b' }]}>
+              {Math.round(highKneesPercent)}%
+            </Text>
+          </View>
+          <View style={styles.goalProgressBar}>
+            <View style={[styles.goalProgressFill, { width: `${highKneesPercent}%`, backgroundColor: '#f59e0b' }]} />
+          </View>
+        </View>
+      </View>
+    );
+  };
 
   const renderAchievements = () => (
     <View style={styles.achievementsSection}>
@@ -841,7 +912,19 @@ const styles = StyleSheet.create({
   goalInfo: { flex: 1, marginLeft: 12 },
   goalTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
   goalStats: { fontSize: 13, color: '#64748b', marginTop: 2 },
+  goalSubtext: { fontSize: 11, color: '#94a3b8' },
   goalPercent: { fontSize: 18, fontWeight: '800' },
+  goalsLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 30,
+    gap: 10,
+  },
+  goalsLoadingText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
   goalProgressBar: {
     height: 6,
     backgroundColor: '#f1f5f9',

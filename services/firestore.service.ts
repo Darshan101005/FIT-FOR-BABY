@@ -2,7 +2,7 @@
 // FIRESTORE SERVICE - CRUD OPERATIONS
 // ============================================
 
-import { Admin, Appointment, AppointmentStatus, COLLECTIONS, ExerciseLog, FoodLog, Notification, NurseVisit, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
+import { Admin, Appointment, AppointmentStatus, COLLECTIONS, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
 import {
   addDoc,
   collection,
@@ -1225,6 +1225,137 @@ export const notificationService = {
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification)));
     });
+  },
+};
+
+// ============================================
+// GLOBAL SETTINGS OPERATIONS (Admin managed)
+// Path: /settings/globalSettings
+// ============================================
+
+const DEFAULT_GLOBAL_SETTINGS: Omit<GlobalSettings, 'updatedAt'> = {
+  dailySteps: 7000,
+  coupleWalkingMinutes: 60,
+  highKneesMinutes: 30,
+  weeklySteps: 49000,
+  weeklyCoupleWalkingMinutes: 420,
+  weeklyHighKneesMinutes: 210,
+  dataCollectionPeriods: {
+    dietLogging: {
+      startDate: '',
+      endDate: '',
+    },
+    exerciseFrequency: {
+      frequency: 'daily',
+      startDate: '',
+    },
+    weightTracking: {
+      frequency: 'weekly',
+      reminderEnabled: true,
+    },
+  },
+};
+
+export const globalSettingsService = {
+  // Get global settings
+  async get(): Promise<GlobalSettings> {
+    try {
+      const settingsRef = doc(db, COLLECTIONS.SETTINGS, 'globalSettings');
+      const snapshot = await getDoc(settingsRef);
+      
+      if (snapshot.exists()) {
+        return snapshot.data() as GlobalSettings;
+      }
+      
+      // Return default settings if document doesn't exist
+      return {
+        ...DEFAULT_GLOBAL_SETTINGS,
+        updatedAt: now(),
+      } as GlobalSettings;
+    } catch (error) {
+      console.error('Error getting global settings:', error);
+      return {
+        ...DEFAULT_GLOBAL_SETTINGS,
+        updatedAt: now(),
+      } as GlobalSettings;
+    }
+  },
+
+  // Update global settings
+  async update(data: Partial<GlobalSettings>, adminId?: string): Promise<void> {
+    const settingsRef = doc(db, COLLECTIONS.SETTINGS, 'globalSettings');
+    
+    // Calculate weekly goals if daily goals are updated
+    const updateData: Partial<GlobalSettings> = {
+      ...data,
+      updatedAt: now(),
+    };
+    
+    if (adminId) {
+      updateData.updatedBy = adminId;
+    }
+    
+    // Auto-calculate weekly goals
+    if (data.dailySteps !== undefined) {
+      updateData.weeklySteps = data.dailySteps * 7;
+    }
+    if (data.coupleWalkingMinutes !== undefined) {
+      updateData.weeklyCoupleWalkingMinutes = data.coupleWalkingMinutes * 7;
+    }
+    if (data.highKneesMinutes !== undefined) {
+      updateData.weeklyHighKneesMinutes = data.highKneesMinutes * 7;
+    }
+    
+    await setDoc(settingsRef, updateData, { merge: true });
+  },
+
+  // Save all goals at once
+  async saveGoals(goals: {
+    dailySteps: number;
+    coupleWalkingMinutes: number;
+    highKneesMinutes: number;
+  }, adminId?: string): Promise<void> {
+    const settingsRef = doc(db, COLLECTIONS.SETTINGS, 'globalSettings');
+    
+    const updateData: Partial<GlobalSettings> = {
+      dailySteps: goals.dailySteps,
+      coupleWalkingMinutes: goals.coupleWalkingMinutes,
+      highKneesMinutes: goals.highKneesMinutes,
+      weeklySteps: goals.dailySteps * 7,
+      weeklyCoupleWalkingMinutes: goals.coupleWalkingMinutes * 7,
+      weeklyHighKneesMinutes: goals.highKneesMinutes * 7,
+      updatedAt: now(),
+    };
+    
+    if (adminId) {
+      updateData.updatedBy = adminId;
+    }
+    
+    await setDoc(settingsRef, updateData, { merge: true });
+  },
+
+  // Subscribe to settings changes (real-time)
+  subscribe(callback: (settings: GlobalSettings) => void): Unsubscribe {
+    const settingsRef = doc(db, COLLECTIONS.SETTINGS, 'globalSettings');
+    return onSnapshot(settingsRef, 
+      (snapshot) => {
+        if (snapshot.exists()) {
+          callback(snapshot.data() as GlobalSettings);
+        } else {
+          callback({
+            ...DEFAULT_GLOBAL_SETTINGS,
+            updatedAt: now(),
+          } as GlobalSettings);
+        }
+      },
+      (error) => {
+        console.error('Global settings subscription error:', error);
+        callback({
+          ...DEFAULT_GLOBAL_SETTINGS,
+          updatedAt: now(),
+        } as GlobalSettings);
+      }
+    );
   },
 };
 

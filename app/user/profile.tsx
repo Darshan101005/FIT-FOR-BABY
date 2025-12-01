@@ -1,4 +1,5 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { MobileProfileCardSkeleton, WebProfileCardSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
 import { coupleService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -118,17 +119,10 @@ export default function ProfileScreen() {
   const [dataSync, setDataSync] = useState(true);
   const [stepTracking, setStepTracking] = useState(true);
   const [partnerSync, setPartnerSync] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Profile data from Firestore
-  const [profileData, setProfileData] = useState<ProfileData>({
-    name: 'User',
-    email: '',
-    coupleId: '',
-    userId: '',
-    partnerName: '',
-    partnerUserId: '',
-    initials: 'U',
-  });
+  const [profileData, setProfileData] = useState<ProfileData | null>(null);
   
   // Profile stats
   const [profileStats, setProfileStats] = useState({
@@ -141,6 +135,7 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       const loadProfileData = async () => {
+        setIsLoading(true);
         try {
           const coupleId = await AsyncStorage.getItem('coupleId');
           const userGender = await AsyncStorage.getItem('userGender');
@@ -175,10 +170,44 @@ export default function ProfileScreen() {
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 setProfileStats(prev => ({ ...prev, daysActive: diffDays }));
               }
+            } else {
+              // Fallback if no couple data
+              setProfileData({
+                name: 'User',
+                email: '',
+                coupleId: coupleId || '',
+                userId: '',
+                partnerName: '',
+                partnerUserId: '',
+                initials: 'U',
+              });
             }
+          } else {
+            // Fallback if no storage data
+            setProfileData({
+              name: 'User',
+              email: '',
+              coupleId: '',
+              userId: '',
+              partnerName: '',
+              partnerUserId: '',
+              initials: 'U',
+            });
           }
         } catch (error) {
           console.error('Error loading profile data:', error);
+          // Set fallback on error
+          setProfileData({
+            name: 'User',
+            email: '',
+            coupleId: '',
+            userId: '',
+            partnerName: '',
+            partnerUserId: '',
+            initials: 'U',
+          });
+        } finally {
+          setIsLoading(false);
         }
       };
       
@@ -235,43 +264,49 @@ export default function ProfileScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <View style={styles.profileCard}>
-        <View style={styles.avatarContainer}>
-          <View style={[styles.avatar, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[styles.avatarText, { color: colors.primary }]}>{profileData.initials}</Text>
-          </View>
-          <TouchableOpacity style={[styles.cameraButton, { backgroundColor: colors.cardBackground }]}>
-            <Ionicons name="camera" size={16} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>{profileData.name}</Text>
-          <Text style={styles.profileEmail}>{profileData.email || profileData.userId}</Text>
-          {profileData.partnerName && (
-            <View style={styles.partnerBadge}>
-              <Ionicons name="heart" size={14} color="#ef4444" />
-              <Text style={styles.partnerText}>Connected with {profileData.partnerName}</Text>
+      {isLoading || !profileData ? (
+        <MobileProfileCardSkeleton />
+      ) : (
+        <>
+          <View style={styles.profileCard}>
+            <View style={styles.avatarContainer}>
+              <View style={[styles.avatar, { backgroundColor: colors.cardBackground }]}>
+                <Text style={[styles.avatarText, { color: colors.primary }]}>{profileData.initials}</Text>
+              </View>
+              <TouchableOpacity style={[styles.cameraButton, { backgroundColor: colors.cardBackground }]}>
+                <Ionicons name="camera" size={16} color={colors.primary} />
+              </TouchableOpacity>
             </View>
-          )}
-        </View>
-      </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{profileData.name}</Text>
+              <Text style={styles.profileEmail}>{profileData.email || profileData.userId}</Text>
+              {profileData.partnerName && (
+                <View style={styles.partnerBadge}>
+                  <Ionicons name="heart" size={14} color="#ef4444" />
+                  <Text style={styles.partnerText}>Connected with {profileData.partnerName}</Text>
+                </View>
+              )}
+            </View>
+          </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{profileStats.daysActive}</Text>
-          <Text style={styles.statLabel}>Days Active</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{profileStats.goalsAchieved}</Text>
-          <Text style={styles.statLabel}>Goals Done</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{profileStats.currentStreak}🔥</Text>
-          <Text style={styles.statLabel}>Day Streak</Text>
-        </View>
-      </View>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{profileStats.daysActive}</Text>
+              <Text style={styles.statLabel}>Days Active</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{profileStats.goalsAchieved}</Text>
+              <Text style={styles.statLabel}>Goals Done</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{profileStats.currentStreak}🔥</Text>
+              <Text style={styles.statLabel}>Day Streak</Text>
+            </View>
+          </View>
+        </>
+      )}
     </LinearGradient>
   );
 
@@ -289,46 +324,52 @@ export default function ProfileScreen() {
   );
 
   // Profile card for web view (inline with settings)
-  const renderWebProfileCard = () => (
-    <View style={[styles.webProfileCard, { backgroundColor: colors.cardBackground }]}>
-      <View style={styles.webProfileRow}>
-        <View style={styles.avatarContainer}>
-          <View style={[styles.avatar, { backgroundColor: colors.primary + '15' }]}>
-            <Text style={[styles.avatarText, { color: colors.primary }]}>{profileData.initials}</Text>
-          </View>
-          <TouchableOpacity style={[styles.cameraButton, { backgroundColor: colors.cardBackground, borderWidth: 1, borderColor: colors.border }]}>
-            <Ionicons name="camera" size={14} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.webProfileInfo}>
-          <Text style={[styles.webProfileName, { color: colors.text }]}>{profileData.name}</Text>
-          <Text style={[styles.webProfileEmail, { color: colors.textSecondary }]}>{profileData.email || profileData.userId}</Text>
-          {profileData.partnerName && (
-            <View style={[styles.webPartnerBadge, { backgroundColor: '#ef444415' }]}>
-              <Ionicons name="heart" size={12} color="#ef4444" />
-              <Text style={styles.webPartnerText}>Connected with {profileData.partnerName}</Text>
+  const renderWebProfileCard = () => {
+    if (isLoading || !profileData) {
+      return <WebProfileCardSkeleton />;
+    }
+    
+    return (
+      <View style={[styles.webProfileCard, { backgroundColor: colors.cardBackground }]}>
+        <View style={styles.webProfileRow}>
+          <View style={styles.avatarContainer}>
+            <View style={[styles.avatar, { backgroundColor: colors.primary + '15' }]}>
+              <Text style={[styles.avatarText, { color: colors.primary }]}>{profileData.initials}</Text>
             </View>
-          )}
+            <TouchableOpacity style={[styles.cameraButton, { backgroundColor: colors.cardBackground, borderWidth: 1, borderColor: colors.border }]}>
+              <Ionicons name="camera" size={14} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.webProfileInfo}>
+            <Text style={[styles.webProfileName, { color: colors.text }]}>{profileData.name}</Text>
+            <Text style={[styles.webProfileEmail, { color: colors.textSecondary }]}>{profileData.email || profileData.userId}</Text>
+            {profileData.partnerName && (
+              <View style={[styles.webPartnerBadge, { backgroundColor: '#ef444415' }]}>
+                <Ionicons name="heart" size={12} color="#ef4444" />
+                <Text style={styles.webPartnerText}>Connected with {profileData.partnerName}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        <View style={[styles.webStatsRow, { borderTopColor: colors.borderLight }]}>
+          <View style={styles.webStatItem}>
+            <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.daysActive}</Text>
+            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Days Active</Text>
+          </View>
+          <View style={[styles.webStatDivider, { backgroundColor: colors.borderLight }]} />
+          <View style={styles.webStatItem}>
+            <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.goalsAchieved}</Text>
+            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Goals Done</Text>
+          </View>
+          <View style={[styles.webStatDivider, { backgroundColor: colors.borderLight }]} />
+          <View style={styles.webStatItem}>
+            <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.currentStreak}🔥</Text>
+            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Day Streak</Text>
+          </View>
         </View>
       </View>
-      <View style={[styles.webStatsRow, { borderTopColor: colors.borderLight }]}>
-        <View style={styles.webStatItem}>
-          <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.daysActive}</Text>
-          <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Days Active</Text>
-        </View>
-        <View style={[styles.webStatDivider, { backgroundColor: colors.borderLight }]} />
-        <View style={styles.webStatItem}>
-          <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.goalsAchieved}</Text>
-          <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Goals Done</Text>
-        </View>
-        <View style={[styles.webStatDivider, { backgroundColor: colors.borderLight }]} />
-        <View style={styles.webStatItem}>
-          <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.currentStreak}🔥</Text>
-          <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Day Streak</Text>
-        </View>
-      </View>
-    </View>
-  );
+    );
+  };
 
   const renderQuestionnaireStatus = () => (
     <View style={[styles.questionnaireCard, { backgroundColor: colors.cardBackground }]}>
