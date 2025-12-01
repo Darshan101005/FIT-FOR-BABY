@@ -12,7 +12,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { CoupleStepEntry, CoupleWeightLog, coupleService, coupleStepsService, coupleWeightLogService, formatDateString } from '../../services/firestore.service';
+import { CoupleExerciseLog, CoupleStepEntry, CoupleWeightLog, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService, formatDateString } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
 
@@ -36,22 +36,7 @@ const COLORS = {
   borderLight: '#f1f5f9',
 };
 
-// Exercise types matching log-exercise.tsx
-interface ExerciseLog {
-  id: string;
-  date: string;
-  exerciseType: string;
-  exerciseName: string;
-  nameTamil: string;
-  duration: number; // in minutes
-  intensity: 'light' | 'moderate' | 'vigorous';
-  hardnessRank: number; // 1-10
-  caloriesBurned: number;
-  steps?: number;
-  partnerParticipated: boolean;
-  notes?: string;
-}
-
+// MealLog interface for meal tracking
 interface MealLog {
   id: string;
   date: string;
@@ -85,28 +70,6 @@ interface UserData {
   dateOfBirth?: string;
   lastWeightDate?: string;
 }
-
-// Mock exercise logs - keep for now until exercise logging is implemented
-const mockExerciseLogs: Record<string, ExerciseLog[]> = {
-  'C_001_M': [
-    { id: 'ex1', date: '2024-11-28', exerciseType: 'couple-walking', exerciseName: 'Couple Walking', nameTamil: 'தம்பதிகள் நடைப்பயிற்சி', duration: 30, intensity: 'moderate', hardnessRank: 4, caloriesBurned: 120, steps: 3500, partnerParticipated: true, notes: 'Morning walk in the park' },
-    { id: 'ex2', date: '2024-11-28', exerciseType: 'high-knees', exerciseName: 'High Knees', nameTamil: 'ஹை நீஸ்', duration: 15, intensity: 'vigorous', hardnessRank: 7, caloriesBurned: 156, partnerParticipated: false },
-    { id: 'ex3', date: '2024-11-27', exerciseType: 'yoga', exerciseName: 'Yoga/Pranayama', nameTamil: 'யோகா/பிராணாயாமா', duration: 45, intensity: 'light', hardnessRank: 3, caloriesBurned: 108, partnerParticipated: true },
-    { id: 'ex4', date: '2024-11-27', exerciseType: 'strength', exerciseName: 'Strength Training', nameTamil: 'பலப்பயிற்சி', duration: 30, intensity: 'vigorous', hardnessRank: 8, caloriesBurned: 195, partnerParticipated: false },
-  ],
-  'C_001_F': [
-    { id: 'ex1', date: '2024-11-28', exerciseType: 'couple-walking', exerciseName: 'Couple Walking', nameTamil: 'தம்பதிகள் நடைப்பயிற்சி', duration: 30, intensity: 'moderate', hardnessRank: 5, caloriesBurned: 120, steps: 3500, partnerParticipated: true, notes: 'Morning walk in the park' },
-    { id: 'ex2', date: '2024-11-28', exerciseType: 'yoga', exerciseName: 'Yoga/Pranayama', nameTamil: 'யோகா/பிராணாயாமா', duration: 30, intensity: 'light', hardnessRank: 2, caloriesBurned: 72, partnerParticipated: false },
-    { id: 'ex3', date: '2024-11-27', exerciseType: 'swimming', exerciseName: 'Swimming', nameTamil: 'நீச்சல்', duration: 45, intensity: 'moderate', hardnessRank: 6, caloriesBurned: 315, partnerParticipated: false },
-  ],
-  'C_002_M': [
-    { id: 'ex1', date: '2024-11-28', exerciseType: 'cycling', exerciseName: 'Cycling', nameTamil: 'சைக்கிள் ஓட்டுதல்', duration: 45, intensity: 'moderate', hardnessRank: 5, caloriesBurned: 270, partnerParticipated: false },
-    { id: 'ex2', date: '2024-11-27', exerciseType: 'high-knees', exerciseName: 'High Knees', nameTamil: 'ஹை நீஸ்', duration: 20, intensity: 'vigorous', hardnessRank: 8, caloriesBurned: 208, partnerParticipated: false },
-  ],
-  'C_002_F': [
-    { id: 'ex1', date: '2024-11-28', exerciseType: 'yoga', exerciseName: 'Yoga/Pranayama', nameTamil: 'யோகா/பிராணாயாமா', duration: 60, intensity: 'light', hardnessRank: 3, caloriesBurned: 144, partnerParticipated: false },
-  ],
-};
 
 // Mock meal logs
 const mockMealLogs: Record<string, MealLog[]> = {
@@ -197,10 +160,16 @@ export default function UserDashboardScreen() {
   const [femaleWeightLogs, setFemaleWeightLogs] = useState<CoupleWeightLog[]>([]);
   const [maleStepLogs, setMaleStepLogs] = useState<CoupleStepEntry[]>([]);
   const [femaleStepLogs, setFemaleStepLogs] = useState<CoupleStepEntry[]>([]);
+  const [maleExerciseLogs, setMaleExerciseLogs] = useState<CoupleExerciseLog[]>([]);
+  const [femaleExerciseLogs, setFemaleExerciseLogs] = useState<CoupleExerciseLog[]>([]);
   const [showWeightHistoryModal, setShowWeightHistoryModal] = useState(false);
   const [showHeightHistoryModal, setShowHeightHistoryModal] = useState(false);
   const [showStepHistoryModal, setShowStepHistoryModal] = useState(false);
   const [selectedGenderForHistory, setSelectedGenderForHistory] = useState<'male' | 'female'>('male');
+  const [exerciseDateFilter, setExerciseDateFilter] = useState<'all' | 'today' | 'yesterday' | 'custom'>('all');
+  const [customExerciseDate, setCustomExerciseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  const [tempSelectedDate, setTempSelectedDate] = useState({ year: new Date().getFullYear(), month: new Date().getMonth(), day: new Date().getDate() });
 
   // Format timestamp to 12-hour AM/PM format in IST (Indian Standard Time)
   const formatTimestamp = (timestamp: any): string => {
@@ -371,10 +340,33 @@ export default function UserDashboardScreen() {
 
     loadStepLogs();
   }, [coupleId]);
+
+  // Load exercise logs from Firestore
+  useEffect(() => {
+    if (!coupleId) return;
+
+    const loadExerciseLogs = async () => {
+      try {
+        // Get past 30 days date range
+        const endDate = formatDateString(new Date());
+        const startDate = formatDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+        
+        const [maleLogs, femaleLogs] = await Promise.all([
+          coupleExerciseService.getByDateRange(coupleId, 'male', startDate, endDate),
+          coupleExerciseService.getByDateRange(coupleId, 'female', startDate, endDate)
+        ]);
+        
+        setMaleExerciseLogs(maleLogs);
+        setFemaleExerciseLogs(femaleLogs);
+      } catch (error) {
+        console.error('Error loading exercise logs:', error);
+      }
+    };
+
+    loadExerciseLogs();
+  }, [coupleId]);
   
-  // Get exercise and meal logs for both users (keep using mock for now)
-  const maleExerciseLogs = mockExerciseLogs[`${coupleId}_M`] || [];
-  const femaleExerciseLogs = mockExerciseLogs[`${coupleId}_F`] || [];
+  // Get meal logs (keep using mock for now)
   const maleMealLogs = mockMealLogs[`${coupleId}_M`] || [];
   const femaleMealLogs = mockMealLogs[`${coupleId}_F`] || [];
 
@@ -576,8 +568,9 @@ export default function UserDashboardScreen() {
   );
 
   // Render exercise item with user indicator
-  const renderExerciseItem = (log: ExerciseLog, isMale: boolean) => {
+  const renderExerciseItem = (log: CoupleExerciseLog, isMale: boolean) => {
     const iconInfo = getExerciseIcon(log.exerciseType);
+    const exertionRank = log.perceivedExertion || 5;
     return (
       <View key={`${isMale ? 'M' : 'F'}_${log.id}`} style={styles.recentItem}>
         <View style={[styles.recentIcon, { backgroundColor: getIntensityColor(log.intensity) + '15' }]}>
@@ -596,9 +589,9 @@ export default function UserDashboardScreen() {
           </View>
           <Text style={styles.recentSubtitle}>{log.duration} min • {log.caloriesBurned} cal</Text>
         </View>
-        <View style={[styles.hardnessBadge, { backgroundColor: getHardnessColor(log.hardnessRank) + '15' }]}>
-          <Text style={[styles.hardnessText, { color: getHardnessColor(log.hardnessRank) }]}>
-            {log.hardnessRank}/10
+        <View style={[styles.hardnessBadge, { backgroundColor: getHardnessColor(exertionRank) + '15' }]}>
+          <Text style={[styles.hardnessText, { color: getHardnessColor(exertionRank) }]}>
+            {exertionRank}/10
           </Text>
         </View>
       </View>
@@ -721,7 +714,7 @@ export default function UserDashboardScreen() {
         </View>
       </View>
 
-      {/* Recent Exercises - Both Users */}
+      {/* Recent Exercises - Both Users (Top 3) */}
       <View style={styles.recentSection}>
         <View style={styles.recentHeader}>
           <Text style={styles.sectionTitle}>Recent Exercises</Text>
@@ -729,8 +722,10 @@ export default function UserDashboardScreen() {
             <Text style={styles.viewAllText}>View All</Text>
           </TouchableOpacity>
         </View>
-        {todayMaleExerciseLogs.slice(0, 2).map((log) => renderExerciseItem(log, true))}
-        {todayFemaleExerciseLogs.slice(0, 2).map((log) => renderExerciseItem(log, false))}
+        {[...todayMaleExerciseLogs.map(log => ({ ...log, isMale: true })), ...todayFemaleExerciseLogs.map(log => ({ ...log, isMale: false }))]
+          .sort((a, b) => (b.createdAt?.toDate?.()?.getTime() || 0) - (a.createdAt?.toDate?.()?.getTime() || 0))
+          .slice(0, 3)
+          .map((log) => renderExerciseItem(log as CoupleExerciseLog, log.isMale))}
         {todayMaleExerciseLogs.length === 0 && todayFemaleExerciseLogs.length === 0 && (
           <Text style={styles.noDataText}>No exercises logged today</Text>
         )}
@@ -754,8 +749,9 @@ export default function UserDashboardScreen() {
   );
 
   // Render single exercise card with user indicator
-  const renderExerciseCard = (log: ExerciseLog, isMale: boolean) => {
+  const renderExerciseCard = (log: CoupleExerciseLog, isMale: boolean) => {
     const iconInfo = getExerciseIcon(log.exerciseType);
+    const exertionRank = log.perceivedExertion || 5;
     return (
       <View key={`${isMale ? 'M' : 'F'}_${log.id}`} style={[styles.exerciseCard, { borderLeftWidth: 4, borderLeftColor: isMale ? COLORS.primary : '#e91e8c' }]}>
         <View style={styles.exerciseCardHeader}>
@@ -808,14 +804,14 @@ export default function UserDashboardScreen() {
             </View>
           </View>
 
-          {/* Hardness Rank */}
+          {/* Perceived Exertion (Hardness) */}
           <View style={styles.metricItem}>
-            <MaterialCommunityIcons name="gauge" size={18} color={getHardnessColor(log.hardnessRank)} />
+            <MaterialCommunityIcons name="gauge" size={18} color={getHardnessColor(exertionRank)} />
             <View>
-              <Text style={[styles.metricValue, { color: getHardnessColor(log.hardnessRank) }]}>
-                {log.hardnessRank}/10
+              <Text style={[styles.metricValue, { color: getHardnessColor(exertionRank) }]}>
+                {exertionRank}/10
               </Text>
-              <Text style={styles.metricLabel}>Hardness</Text>
+              <Text style={styles.metricLabel}>Effort</Text>
             </View>
           </View>
 
@@ -926,22 +922,138 @@ export default function UserDashboardScreen() {
   );
   };
 
+  // Get yesterday's date
+  const getYesterdayDate = () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  };
+
+  // Get filtered exercise logs based on date filter
+  const getFilteredExerciseLogs = (logs: CoupleExerciseLog[]) => {
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = getYesterdayDate();
+    
+    switch (exerciseDateFilter) {
+      case 'today':
+        return logs.filter(log => log.date === today);
+      case 'yesterday':
+        return logs.filter(log => log.date === yesterday);
+      case 'custom':
+        return logs.filter(log => log.date === customExerciseDate);
+      default:
+        return logs;
+    }
+  };
+
+  const filteredMaleExerciseLogs = getFilteredExerciseLogs(maleExerciseLogs);
+  const filteredFemaleExerciseLogs = getFilteredExerciseLogs(femaleExerciseLogs);
+
+  // Get filtered step logs based on date filter
+  const getFilteredStepLogs = (logs: any[]) => {
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = getYesterdayDate();
+    
+    switch (exerciseDateFilter) {
+      case 'today':
+        return logs.filter(log => log.date === today);
+      case 'yesterday':
+        return logs.filter(log => log.date === yesterday);
+      case 'custom':
+        return logs.filter(log => log.date === customExerciseDate);
+      default:
+        return logs;
+    }
+  };
+
+  const filteredMaleStepLogs = getFilteredStepLogs(maleStepLogs);
+  const filteredFemaleStepLogs = getFilteredStepLogs(femaleStepLogs);
+
+  // Get step total for filtered logs
+  const getFilteredStepTotal = (gender: 'male' | 'female') => {
+    const logs = gender === 'male' ? filteredMaleStepLogs : filteredFemaleStepLogs;
+    return logs.reduce((sum, log) => sum + log.stepCount, 0);
+  };
+
+  // Get label for step summary based on filter
+  const getStepSummaryLabel = () => {
+    switch (exerciseDateFilter) {
+      case 'today': return 'Today\'s Steps';
+      case 'yesterday': return 'Yesterday\'s Steps';
+      case 'custom': return `${customExerciseDate} Steps`;
+      default: return 'All Steps';
+    }
+  };
+
   // Exercise Tab
   const renderExerciseTab = () => (
     <View style={styles.exerciseContainer}>
+      {/* Date Filter */}
+      <View style={styles.dateFilterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateFilterScroll}>
+          {[
+            { id: 'all', label: 'All', icon: null },
+            { id: 'today', label: 'Today', icon: null },
+            { id: 'yesterday', label: 'Yesterday', icon: null },
+          ].map((filter) => (
+            <TouchableOpacity
+              key={filter.id}
+              style={[
+                styles.dateFilterButton,
+                exerciseDateFilter === filter.id && styles.dateFilterButtonActive
+              ]}
+              onPress={() => setExerciseDateFilter(filter.id as any)}
+            >
+              <Text style={[
+                styles.dateFilterText,
+                exerciseDateFilter === filter.id && styles.dateFilterTextActive
+              ]}>{filter.label}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity
+            style={[
+              styles.dateFilterButton,
+              styles.dateFilterButtonWithIcon,
+              exerciseDateFilter === 'custom' && styles.dateFilterButtonActive
+            ]}
+            onPress={() => {
+              const currentDate = exerciseDateFilter === 'custom' ? new Date(customExerciseDate) : new Date();
+              setTempSelectedDate({
+                year: currentDate.getFullYear(),
+                month: currentDate.getMonth(),
+                day: currentDate.getDate()
+              });
+              setShowDatePickerModal(true);
+            }}
+          >
+            <Ionicons 
+              name="calendar" 
+              size={16} 
+              color={exerciseDateFilter === 'custom' ? '#fff' : COLORS.textSecondary} 
+            />
+            <Text style={[
+              styles.dateFilterText,
+              exerciseDateFilter === 'custom' && styles.dateFilterTextActive
+            ]}>
+              {exerciseDateFilter === 'custom' ? customExerciseDate : 'Pick Date'}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
       {/* Step Count Section */}
       <Text style={styles.sectionTitle}>Step Count Log</Text>
-      <Text style={styles.sectionSubtitle}>All recorded step counts for both partners</Text>
+      <Text style={styles.sectionSubtitle}>{exerciseDateFilter === 'all' ? 'All recorded step counts' : `Step counts for ${exerciseDateFilter === 'custom' ? customExerciseDate : exerciseDateFilter}`}</Text>
 
-      {maleStepLogs.length === 0 && femaleStepLogs.length === 0 ? (
+      {filteredMaleStepLogs.length === 0 && filteredFemaleStepLogs.length === 0 ? (
         <View style={[styles.emptyState, { marginBottom: 24 }]}>
           <MaterialCommunityIcons name="shoe-print" size={48} color={COLORS.textMuted} />
-          <Text style={styles.emptyText}>No steps logged yet</Text>
+          <Text style={styles.emptyText}>{exerciseDateFilter === 'all' ? 'No steps logged yet' : `No steps for ${exerciseDateFilter === 'custom' ? customExerciseDate : exerciseDateFilter}`}</Text>
         </View>
       ) : (
         <>
           {/* Male User Step Summary */}
-          {maleStepLogs.length > 0 && (
+          {filteredMaleStepLogs.length > 0 && (
             <View style={styles.userExerciseSection}>
               <View style={styles.userSummaryHeader}>
                 <Ionicons name="male" size={18} color={COLORS.primary} />
@@ -959,21 +1071,21 @@ export default function UserDashboardScreen() {
               </View>
               <View style={styles.stepSummaryCard}>
                 <View style={styles.stepSummaryItem}>
-                  <Text style={styles.stepSummaryLabel}>Today</Text>
-                  <Text style={styles.stepSummaryValue}>{getTodaySteps('male').toLocaleString()}</Text>
+                  <Text style={styles.stepSummaryLabel}>{getStepSummaryLabel()}</Text>
+                  <Text style={styles.stepSummaryValue}>{getFilteredStepTotal('male').toLocaleString()}</Text>
                 </View>
                 <View style={styles.stepSummaryDivider} />
                 <View style={styles.stepSummaryItem}>
-                  <Text style={styles.stepSummaryLabel}>30 Day Total</Text>
-                  <Text style={styles.stepSummaryValue}>{getTotalSteps('male').toLocaleString()}</Text>
+                  <Text style={styles.stepSummaryLabel}>Logs</Text>
+                  <Text style={styles.stepSummaryValue}>{filteredMaleStepLogs.length}</Text>
                 </View>
               </View>
-              {maleStepLogs.filter(log => log.date === selectedDate).slice(0, 2).map((log) => renderStepCard(log, true))}
+              {filteredMaleStepLogs.slice(0, 3).map((log) => renderStepCard(log, true))}
             </View>
           )}
           
           {/* Female User Step Summary */}
-          {femaleStepLogs.length > 0 && (
+          {filteredFemaleStepLogs.length > 0 && (
             <View style={styles.userExerciseSection}>
               <View style={styles.userSummaryHeader}>
                 <Ionicons name="female" size={18} color="#e91e8c" />
@@ -991,16 +1103,16 @@ export default function UserDashboardScreen() {
               </View>
               <View style={styles.stepSummaryCard}>
                 <View style={styles.stepSummaryItem}>
-                  <Text style={styles.stepSummaryLabel}>Today</Text>
-                  <Text style={[styles.stepSummaryValue, { color: '#e91e8c' }]}>{getTodaySteps('female').toLocaleString()}</Text>
+                  <Text style={styles.stepSummaryLabel}>{getStepSummaryLabel()}</Text>
+                  <Text style={[styles.stepSummaryValue, { color: '#e91e8c' }]}>{getFilteredStepTotal('female').toLocaleString()}</Text>
                 </View>
                 <View style={styles.stepSummaryDivider} />
                 <View style={styles.stepSummaryItem}>
-                  <Text style={styles.stepSummaryLabel}>30 Day Total</Text>
-                  <Text style={[styles.stepSummaryValue, { color: '#e91e8c' }]}>{getTotalSteps('female').toLocaleString()}</Text>
+                  <Text style={styles.stepSummaryLabel}>Logs</Text>
+                  <Text style={[styles.stepSummaryValue, { color: '#e91e8c' }]}>{filteredFemaleStepLogs.length}</Text>
                 </View>
               </View>
-              {femaleStepLogs.filter(log => log.date === selectedDate).slice(0, 2).map((log) => renderStepCard(log, false))}
+              {filteredFemaleStepLogs.slice(0, 3).map((log) => renderStepCard(log, false))}
             </View>
           )}
         </>
@@ -1010,32 +1122,32 @@ export default function UserDashboardScreen() {
       <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Exercise Log</Text>
       <Text style={styles.sectionSubtitle}>All recorded exercises for both partners</Text>
 
-      {maleExerciseLogs.length === 0 && femaleExerciseLogs.length === 0 ? (
+      {filteredMaleExerciseLogs.length === 0 && filteredFemaleExerciseLogs.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="fitness-outline" size={48} color={COLORS.textMuted} />
-          <Text style={styles.emptyText}>No exercises logged yet</Text>
+          <Text style={styles.emptyText}>{exerciseDateFilter === 'all' ? 'No exercises logged yet' : `No exercises for ${exerciseDateFilter === 'custom' ? customExerciseDate : exerciseDateFilter}`}</Text>
         </View>
       ) : (
         <>
           {/* Male User Exercises */}
-          {maleExerciseLogs.length > 0 && (
+          {filteredMaleExerciseLogs.length > 0 && (
             <View style={styles.userExerciseSection}>
               <View style={styles.userSummaryHeader}>
                 <Ionicons name="male" size={18} color={COLORS.primary} />
                 <Text style={[styles.userSummaryTitle, { color: COLORS.primary }]}>{maleUser?.name}'s Exercises</Text>
               </View>
-              {maleExerciseLogs.map((log) => renderExerciseCard(log, true))}
+              {filteredMaleExerciseLogs.map((log) => renderExerciseCard(log, true))}
             </View>
           )}
           
           {/* Female User Exercises */}
-          {femaleExerciseLogs.length > 0 && (
+          {filteredFemaleExerciseLogs.length > 0 && (
             <View style={styles.userExerciseSection}>
               <View style={styles.userSummaryHeader}>
                 <Ionicons name="female" size={18} color="#e91e8c" />
                 <Text style={[styles.userSummaryTitle, { color: '#e91e8c' }]}>{femaleUser?.name}'s Exercises</Text>
               </View>
-              {femaleExerciseLogs.map((log) => renderExerciseCard(log, false))}
+              {filteredFemaleExerciseLogs.map((log) => renderExerciseCard(log, false))}
             </View>
           )}
         </>
@@ -1573,6 +1685,168 @@ export default function UserDashboardScreen() {
     );
   };
 
+  // Date Picker Modal for Exercise Tab
+  const renderDatePickerModal = () => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                    'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const getDaysInMonth = (year: number, month: number) => {
+      return new Date(year, month + 1, 0).getDate();
+    };
+    
+    const getFirstDayOfMonth = (year: number, month: number) => {
+      return new Date(year, month, 1).getDay();
+    };
+    
+    const daysInMonth = getDaysInMonth(tempSelectedDate.year, tempSelectedDate.month);
+    const firstDay = getFirstDayOfMonth(tempSelectedDate.year, tempSelectedDate.month);
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    
+    // Generate calendar grid
+    const calendarDays = [];
+    for (let i = 0; i < firstDay; i++) {
+      calendarDays.push(null); // Empty cells before first day
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      calendarDays.push(day);
+    }
+    
+    const handleDateSelect = (day: number) => {
+      const dateStr = `${tempSelectedDate.year}-${String(tempSelectedDate.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      setCustomExerciseDate(dateStr);
+      setExerciseDateFilter('custom');
+      setShowDatePickerModal(false);
+    };
+    
+    const goToPreviousMonth = () => {
+      if (tempSelectedDate.month === 0) {
+        setTempSelectedDate({ ...tempSelectedDate, year: tempSelectedDate.year - 1, month: 11 });
+      } else {
+        setTempSelectedDate({ ...tempSelectedDate, month: tempSelectedDate.month - 1 });
+      }
+    };
+    
+    const goToNextMonth = () => {
+      if (tempSelectedDate.month === 11) {
+        setTempSelectedDate({ ...tempSelectedDate, year: tempSelectedDate.year + 1, month: 0 });
+      } else {
+        setTempSelectedDate({ ...tempSelectedDate, month: tempSelectedDate.month + 1 });
+      }
+    };
+    
+    return (
+      <Modal
+        visible={showDatePickerModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowDatePickerModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.datePickerModalContent, { width: isMobile ? '90%' : 360 }]}>
+            <View style={styles.datePickerHeader}>
+              <Text style={styles.datePickerTitle}>Select Date</Text>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setShowDatePickerModal(false)}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Month/Year Navigation */}
+            <View style={styles.calendarNavigation}>
+              <TouchableOpacity onPress={goToPreviousMonth} style={styles.calendarNavButton}>
+                <Ionicons name="chevron-back" size={24} color={COLORS.primary} />
+              </TouchableOpacity>
+              <View style={styles.calendarMonthYear}>
+                <Text style={styles.calendarMonthText}>{months[tempSelectedDate.month]}</Text>
+                <Text style={styles.calendarYearText}>{tempSelectedDate.year}</Text>
+              </View>
+              <TouchableOpacity onPress={goToNextMonth} style={styles.calendarNavButton}>
+                <Ionicons name="chevron-forward" size={24} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Day headers */}
+            <View style={styles.calendarDayHeaders}>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
+              ))}
+            </View>
+            
+            {/* Calendar Grid */}
+            <View style={styles.calendarGrid}>
+              {calendarDays.map((day, index) => {
+                if (day === null) {
+                  return <View key={`empty-${index}`} style={styles.calendarDayCell} />;
+                }
+                
+                const dateStr = `${tempSelectedDate.year}-${String(tempSelectedDate.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isToday = dateStr === todayStr;
+                const isSelected = dateStr === customExerciseDate && exerciseDateFilter === 'custom';
+                const isFuture = new Date(dateStr) > today;
+                
+                return (
+                  <TouchableOpacity
+                    key={day}
+                    style={[
+                      styles.calendarDayCell,
+                      styles.calendarDayCellActive,
+                      isToday && styles.calendarDayCellToday,
+                      isSelected && styles.calendarDayCellSelected,
+                      isFuture && styles.calendarDayCellDisabled,
+                    ]}
+                    onPress={() => !isFuture && handleDateSelect(day)}
+                    disabled={isFuture}
+                  >
+                    <Text style={[
+                      styles.calendarDayText,
+                      isToday && styles.calendarDayTextToday,
+                      isSelected && styles.calendarDayTextSelected,
+                      isFuture && styles.calendarDayTextDisabled,
+                    ]}>{day}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            
+            {/* Quick select buttons */}
+            <View style={styles.quickSelectButtons}>
+              <TouchableOpacity 
+                style={styles.quickSelectButton}
+                onPress={() => {
+                  setExerciseDateFilter('today');
+                  setShowDatePickerModal(false);
+                }}
+              >
+                <Text style={styles.quickSelectText}>Today</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.quickSelectButton}
+                onPress={() => {
+                  setExerciseDateFilter('yesterday');
+                  setShowDatePickerModal(false);
+                }}
+              >
+                <Text style={styles.quickSelectText}>Yesterday</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.quickSelectButton}
+                onPress={() => {
+                  setExerciseDateFilter('all');
+                  setShowDatePickerModal(false);
+                }}
+              >
+                <Text style={styles.quickSelectText}>All Logs</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -1588,6 +1862,7 @@ export default function UserDashboardScreen() {
       {renderWeightHistoryModal()}
       {renderHeightHistoryModal()}
       {renderStepHistoryModal()}
+      {renderDatePickerModal()}
       
       <ScrollView
         contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
@@ -1967,6 +2242,50 @@ const styles = StyleSheet.create({
   // Exercise Tab
   exerciseContainer: {
     gap: 16,
+  },
+  dateFilterContainer: {
+    marginBottom: 16,
+  },
+  dateFilterScroll: {
+    flexDirection: 'row',
+  },
+  dateFilterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.borderLight,
+    marginRight: 8,
+  },
+  dateFilterButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  dateFilterText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  dateFilterTextActive: {
+    color: '#fff',
+  },
+  customDatePicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    gap: 16,
+  },
+  customDateButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customDateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
   },
   exerciseCard: {
     backgroundColor: COLORS.surface,
@@ -2407,5 +2726,132 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.primary,
     marginRight: 2,
+  },
+  
+  // Date Picker Modal
+  datePickerModalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  calendarNavigation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  calendarNavButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarMonthYear: {
+    alignItems: 'center',
+  },
+  calendarMonthText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  calendarYearText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  calendarDayHeaders: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  calendarDayHeader: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    paddingVertical: 8,
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarDayCell: {
+    width: '14.28%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarDayCellActive: {
+    borderRadius: 20,
+  },
+  calendarDayCellToday: {
+    backgroundColor: COLORS.primary + '15',
+  },
+  calendarDayCellSelected: {
+    backgroundColor: COLORS.primary,
+  },
+  calendarDayCellDisabled: {
+    opacity: 0.3,
+  },
+  calendarDayText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+  },
+  calendarDayTextToday: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  calendarDayTextSelected: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  calendarDayTextDisabled: {
+    color: COLORS.textMuted,
+  },
+  quickSelectButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    gap: 8,
+  },
+  quickSelectButton: {
+    flex: 1,
+    paddingVertical: 10,
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  quickSelectText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  dateFilterButtonWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 });

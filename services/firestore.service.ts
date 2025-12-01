@@ -1191,6 +1191,174 @@ export const coupleStepsService = {
 };
 
 // ============================================
+// COUPLE EXERCISE LOG OPERATIONS
+// ============================================
+
+export interface CoupleExerciseLog {
+  id: string;
+  coupleId: string;
+  gender: 'male' | 'female';
+  date: string; // YYYY-MM-DD format
+  exerciseType: string; // 'couple-walking', 'high-knees', 'yoga', etc.
+  exerciseName: string;
+  nameTamil: string;
+  duration: number; // in minutes
+  intensity: 'light' | 'moderate' | 'vigorous';
+  caloriesPerMinute: number;
+  caloriesBurned: number;
+  perceivedExertion: number; // 1-10
+  steps?: number; // For walking exercises
+  partnerParticipated: boolean;
+  notes?: string;
+  loggedAt?: Timestamp;
+  createdAt?: Timestamp;
+}
+
+export const coupleExerciseService = {
+  // Add exercise log for a couple member
+  async add(coupleId: string, gender: 'male' | 'female', data: {
+    exerciseType: string;
+    exerciseName: string;
+    nameTamil: string;
+    duration: number;
+    intensity: 'light' | 'moderate' | 'vigorous';
+    caloriesPerMinute: number;
+    caloriesBurned: number;
+    perceivedExertion: number;
+    steps?: number;
+    partnerParticipated: boolean;
+    notes?: string;
+    date?: string;
+  }): Promise<string> {
+    try {
+      // Verify the couple exists
+      const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+      const coupleSnapshot = await getDoc(coupleRef);
+      
+      if (!coupleSnapshot.exists()) {
+        throw new Error(`Couple ${coupleId} not found`);
+      }
+
+      const exerciseRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'exerciseLogs');
+      const date = data.date || formatDateString(new Date());
+      
+      const docRef = await addDoc(exerciseRef, {
+        coupleId,
+        gender,
+        date,
+        exerciseType: data.exerciseType,
+        exerciseName: data.exerciseName,
+        nameTamil: data.nameTamil,
+        duration: data.duration,
+        intensity: data.intensity,
+        caloriesPerMinute: data.caloriesPerMinute,
+        caloriesBurned: data.caloriesBurned,
+        perceivedExertion: data.perceivedExertion,
+        steps: data.steps || null,
+        partnerParticipated: data.partnerParticipated,
+        notes: data.notes || null,
+        loggedAt: now(),
+        createdAt: now(),
+      });
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding exercise log:', error);
+      throw error;
+    }
+  },
+
+  // Get exercise logs for a date
+  async getByDate(coupleId: string, gender: 'male' | 'female', date: string): Promise<CoupleExerciseLog[]> {
+    try {
+      const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'exerciseLogs');
+      const q = query(logsRef, where('date', '==', date), where('gender', '==', gender));
+      const snapshot = await getDocs(q);
+      const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CoupleExerciseLog));
+      return entries.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.()?.getTime() || 0;
+        const bTime = b.createdAt?.toDate?.()?.getTime() || 0;
+        return bTime - aTime;
+      });
+    } catch (error) {
+      console.error('Error getting exercise logs:', error);
+      return [];
+    }
+  },
+
+  // Get all exercise logs for a date (both genders)
+  async getAllByDate(coupleId: string, date: string): Promise<CoupleExerciseLog[]> {
+    try {
+      const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'exerciseLogs');
+      const q = query(logsRef, where('date', '==', date));
+      const snapshot = await getDocs(q);
+      const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CoupleExerciseLog));
+      return entries.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.()?.getTime() || 0;
+        const bTime = b.createdAt?.toDate?.()?.getTime() || 0;
+        return bTime - aTime;
+      });
+    } catch (error) {
+      console.error('Error getting all exercise logs:', error);
+      return [];
+    }
+  },
+
+  // Get exercise logs by date range
+  async getByDateRange(coupleId: string, gender: 'male' | 'female', startDate: string, endDate: string): Promise<CoupleExerciseLog[]> {
+    try {
+      const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'exerciseLogs');
+      const q = query(logsRef, where('gender', '==', gender));
+      const snapshot = await getDocs(q);
+      const entries = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as CoupleExerciseLog))
+        .filter(entry => entry.date >= startDate && entry.date <= endDate);
+      return entries.sort((a, b) => b.date.localeCompare(a.date));
+    } catch (error) {
+      console.error('Error getting exercise logs by date range:', error);
+      return [];
+    }
+  },
+
+  // Get totals for a date
+  async getTotalsForDate(coupleId: string, gender: 'male' | 'female', date: string): Promise<{ duration: number; calories: number; count: number }> {
+    const entries = await this.getByDate(coupleId, gender, date);
+    return {
+      duration: entries.reduce((sum, e) => sum + e.duration, 0),
+      calories: entries.reduce((sum, e) => sum + e.caloriesBurned, 0),
+      count: entries.length,
+    };
+  },
+
+  // Get exercise logs by type for a date range (for goal tracking)
+  async getByTypeAndDateRange(coupleId: string, gender: 'male' | 'female', exerciseType: string, startDate: string, endDate: string): Promise<CoupleExerciseLog[]> {
+    try {
+      const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'exerciseLogs');
+      const q = query(logsRef, where('gender', '==', gender), where('exerciseType', '==', exerciseType));
+      const snapshot = await getDocs(q);
+      const entries = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as CoupleExerciseLog))
+        .filter(entry => entry.date >= startDate && entry.date <= endDate);
+      return entries.sort((a, b) => b.date.localeCompare(a.date));
+    } catch (error) {
+      console.error('Error getting exercise logs by type:', error);
+      return [];
+    }
+  },
+
+  // Delete exercise log
+  async delete(coupleId: string, logId: string): Promise<void> {
+    try {
+      const logRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'exerciseLogs', logId);
+      await deleteDoc(logRef);
+    } catch (error) {
+      console.error('Error deleting exercise log:', error);
+      throw error;
+    }
+  },
+};
+
+// ============================================
 // NURSE VISITS OPERATIONS (Admin managed)
 // ============================================
 
@@ -1513,6 +1681,7 @@ export const firestoreServices = {
   weightLog: weightLogService,
   coupleWeightLog: coupleWeightLogService,
   exerciseLog: exerciseLogService,
+  coupleExercise: coupleExerciseService,
   appointment: appointmentService,
   admin: adminService,
   nurseVisit: nurseVisitService,

@@ -13,7 +13,7 @@ import {
     View,
     useWindowDimensions
 } from 'react-native';
-import { CoupleData, CoupleStepEntry, coupleService, coupleStepsService, coupleWeightLogService, formatDateString } from '../../services/firestore.service';
+import { CoupleData, CoupleStepEntry, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
 
@@ -46,7 +46,7 @@ interface DailyLog {
   femaleStatus: string;
   date: string;
   steps: { male: LogStatus; female: LogStatus; maleCount: number; femaleCount: number };
-  exercise: { male: LogStatus; female: LogStatus };
+  exercise: { male: LogStatus; female: LogStatus; maleDuration?: number; maleCalories?: number; femaleDuration?: number; femaleCalories?: number };
   diet: { male: LogStatus; female: LogStatus };
   weight: { male: LogStatus; female: LogStatus };
   coupleWalking: LogStatus;
@@ -178,11 +178,18 @@ export default function AdminMonitoringScreen() {
             coupleStepsService.getByDate(coupleId, 'female', selectedDate)
           ]);
           
+          // Load exercise data for the selected date
+          const [maleExercise, femaleExercise] = await Promise.all([
+            coupleExerciseService.getTotalsForDate(coupleId, 'male', selectedDate),
+            coupleExerciseService.getTotalsForDate(coupleId, 'female', selectedDate)
+          ]);
+          
           const maleStepCount = maleSteps.reduce((sum, entry) => sum + entry.stepCount, 0);
           const femaleStepCount = femaleSteps.reduce((sum, entry) => sum + entry.stepCount, 0);
           
-          // Step goal (default 7000)
+          // Goal defaults
           const stepGoal = 7000;
+          const exerciseGoal = 60; // 60 minutes default
           
           // Determine step status
           const getMaleStepStatus = (): LogStatus => {
@@ -197,6 +204,19 @@ export default function AdminMonitoringScreen() {
             return 'pending';
           };
           
+          // Determine exercise status
+          const getMaleExerciseStatus = (): LogStatus => {
+            if (maleExercise.duration >= exerciseGoal) return 'complete';
+            if (maleExercise.duration > 0) return 'partial';
+            return 'pending';
+          };
+          
+          const getFemaleExerciseStatus = (): LogStatus => {
+            if (femaleExercise.duration >= exerciseGoal) return 'complete';
+            if (femaleExercise.duration > 0) return 'partial';
+            return 'pending';
+          };
+          
           setCoupleDetails(prev => ({
             ...prev,
             [coupleId]: {
@@ -207,10 +227,14 @@ export default function AdminMonitoringScreen() {
               femaleLastWeightDate: femaleWeight?.date,
               maleStepEntries: maleSteps,
               femaleStepEntries: femaleSteps,
+              maleExerciseDuration: maleExercise.duration,
+              maleExerciseCalories: maleExercise.calories,
+              femaleExerciseDuration: femaleExercise.duration,
+              femaleExerciseCalories: femaleExercise.calories,
             }
           }));
           
-          // Update log status based on weight and step data
+          // Update log status based on weight, step, and exercise data
           const today = new Date().toISOString().split('T')[0];
           setLogs(prevLogs => prevLogs.map(log => {
             if (log.coupleId === coupleId) {
@@ -221,6 +245,14 @@ export default function AdminMonitoringScreen() {
                   female: getFemaleStepStatus(),
                   maleCount: maleStepCount,
                   femaleCount: femaleStepCount,
+                },
+                exercise: {
+                  male: getMaleExerciseStatus(),
+                  female: getFemaleExerciseStatus(),
+                  maleDuration: maleExercise.duration,
+                  maleCalories: maleExercise.calories,
+                  femaleDuration: femaleExercise.duration,
+                  femaleCalories: femaleExercise.calories,
                 },
                 weight: {
                   male: maleWeight?.date === selectedDate ? 'complete' : (maleWeight ? 'partial' : 'pending'),
@@ -648,10 +680,16 @@ export default function AdminMonitoringScreen() {
       return count.toLocaleString() + ' steps';
     };
     
+    // Format exercise duration
+    const formatExercise = (duration: number | undefined, calories: number | undefined, status: LogStatus): string => {
+      if (!duration || duration === 0) return status === 'pending' ? 'Not logged' : 'Not logged';
+      return `${duration} min (${calories || 0} cal)`;
+    };
+    
     // Generate logs based on actual data
     const logsToShow: DetailedLogEntry[] = [
       { metric: 'Steps', icon: 'walk', iconFamily: 'MaterialCommunityIcons' as const, maleValue: formatStepCount(selectedCouple.steps.maleCount, selectedCouple.steps.male), femaleValue: formatStepCount(selectedCouple.steps.femaleCount, selectedCouple.steps.female), maleStatus: selectedCouple.steps.male, femaleStatus: selectedCouple.steps.female, unit: 'steps' },
-      { metric: 'Exercise', icon: 'fitness', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.exercise.male === 'complete' ? '45 min' : selectedCouple.exercise.male === 'partial' ? '20 min' : 'Not logged', femaleValue: selectedCouple.exercise.female === 'complete' ? '45 min' : selectedCouple.exercise.female === 'partial' ? '20 min' : 'Not logged', maleStatus: selectedCouple.exercise.male, femaleStatus: selectedCouple.exercise.female, unit: '' },
+      { metric: 'Exercise', icon: 'fitness', iconFamily: 'Ionicons' as const, maleValue: formatExercise(selectedCouple.exercise.maleDuration, selectedCouple.exercise.maleCalories, selectedCouple.exercise.male), femaleValue: formatExercise(selectedCouple.exercise.femaleDuration, selectedCouple.exercise.femaleCalories, selectedCouple.exercise.female), maleStatus: selectedCouple.exercise.male, femaleStatus: selectedCouple.exercise.female, unit: '' },
       { metric: 'Diet Log', icon: 'nutrition', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.diet.male === 'complete' ? '3 meals' : selectedCouple.diet.male === 'partial' ? '1 meal' : 'Not logged', femaleValue: selectedCouple.diet.female === 'complete' ? '3 meals' : selectedCouple.diet.female === 'partial' ? '1 meal' : 'Not logged', maleStatus: selectedCouple.diet.male, femaleStatus: selectedCouple.diet.female, unit: '' },
       { metric: 'Weight', icon: 'scale-bathroom', iconFamily: 'MaterialCommunityIcons' as const, maleValue: details?.maleWeight ? `${details.maleWeight} kg` : (selectedCouple.weight.male === 'pending' ? 'Pending' : 'Not logged'), femaleValue: details?.femaleWeight ? `${details.femaleWeight} kg` : (selectedCouple.weight.female === 'pending' ? 'Pending' : 'Not logged'), maleStatus: selectedCouple.weight.male, femaleStatus: selectedCouple.weight.female, unit: '' },
       { metric: 'Couple Walking', icon: 'people', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.coupleWalking === 'complete' ? '30 min' : selectedCouple.coupleWalking === 'partial' ? '15 min' : 'Not done', femaleValue: selectedCouple.coupleWalking === 'complete' ? '30 min' : selectedCouple.coupleWalking === 'partial' ? '15 min' : 'Not done', maleStatus: selectedCouple.coupleWalking, femaleStatus: selectedCouple.coupleWalking, unit: '' },

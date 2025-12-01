@@ -1,8 +1,11 @@
+import { coupleExerciseService, globalSettingsService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
 import {
+    ActivityIndicator,
     Animated,
     Image,
     Platform,
@@ -119,13 +122,58 @@ export default function LogExerciseScreen() {
   const [step, setStep] = useState<'type' | 'details' | 'summary'>('type');
   const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null);
   const [duration, setDuration] = useState('30');
-  const [intensity, setIntensity] = useState('moderate');
+  const [intensity, setIntensity] = useState<'light' | 'moderate' | 'vigorous'>('moderate');
   const [steps, setSteps] = useState('');
   const [partnerParticipated, setPartnerParticipated] = useState(false);
   const [perceivedExertion, setPerceivedExertion] = useState(5);
   const [notes, setNotes] = useState('');
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [coupleId, setCoupleId] = useState<string | null>(null);
+  const [userGender, setUserGender] = useState<'male' | 'female'>('male');
+  const [dailyExerciseGoal, setDailyExerciseGoal] = useState(60);
+  const [todayExercises, setTodayExercises] = useState<any[]>([]);
+  const [goalSettings, setGoalSettings] = useState<{ coupleWalkingMinutes: number; highKneesMinutes: number } | null>(null);
   const toastAnim = useRef(new Animated.Value(-100)).current;
+
+  // Load user data and goal settings on focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadData = async () => {
+        setIsLoading(true);
+        try {
+          const [storedCoupleId, storedGender, settings] = await Promise.all([
+            AsyncStorage.getItem('coupleId'),
+            AsyncStorage.getItem('userGender'),
+            globalSettingsService.get(),
+          ]);
+          
+          if (storedCoupleId) setCoupleId(storedCoupleId);
+          if (storedGender) setUserGender(storedGender as 'male' | 'female');
+          if (settings) {
+            setGoalSettings({
+              coupleWalkingMinutes: settings.coupleWalkingMinutes || 60,
+              highKneesMinutes: settings.highKneesMinutes || 30,
+            });
+            setDailyExerciseGoal(settings.dailyExerciseMinutes || 60);
+          }
+
+          // Load today's exercises
+          if (storedCoupleId && storedGender) {
+            const today = new Date().toISOString().split('T')[0];
+            const exercises = await coupleExerciseService.getByDate(storedCoupleId, storedGender as 'male' | 'female', today);
+            setTodayExercises(exercises);
+          }
+        } catch (error) {
+          console.error('Error loading data:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadData();
+    }, [])
+  );
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -177,12 +225,50 @@ export default function LogExerciseScreen() {
     setStep('summary');
   };
 
-  const handleSave = () => {
-    // Save to backend/storage
-    showToast('Exercise logged successfully!', 'success');
-    setTimeout(() => {
-      router.back();
-    }, 1500);
+  const handleSave = async () => {
+    if (!selectedExercise || !coupleId) {
+      showToast('Session error. Please try again.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const caloriesBurned = calculateCalories();
+      
+      await coupleExerciseService.add(coupleId, userGender, {
+        exerciseType: selectedExercise.id,
+        exerciseName: selectedExercise.name,
+        nameTamil: selectedExercise.nameTamil,
+        duration: parseInt(duration),
+        intensity: intensity,
+        caloriesPerMinute: selectedExercise.caloriesPerMinute,
+        caloriesBurned: caloriesBurned,
+        perceivedExertion: perceivedExertion,
+        steps: selectedExercise.requiresSteps ? parseInt(steps) : undefined,
+        partnerParticipated: partnerParticipated,
+        notes: notes || undefined,
+      });
+
+      // Check if goal achieved
+      let goalMessage = '';
+      if (goalSettings) {
+        if (selectedExercise.id === 'couple-walking' && parseInt(duration) >= goalSettings.coupleWalkingMinutes) {
+          goalMessage = ' 🎉 Daily walking goal achieved!';
+        } else if (selectedExercise.id === 'high-knees' && parseInt(duration) >= goalSettings.highKneesMinutes) {
+          goalMessage = ' 🎉 High knees goal achieved!';
+        }
+      }
+
+      showToast(`Exercise logged! ${caloriesBurned} cal burned.${goalMessage}`, 'success');
+      setTimeout(() => {
+        router.back();
+      }, 2000);
+    } catch (error) {
+      console.error('Error saving exercise:', error);
+      showToast('Failed to save exercise. Please try again.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const renderHeader = () => (
@@ -538,17 +624,24 @@ export default function LogExerciseScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.saveButton}
+            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
             onPress={handleSave}
             activeOpacity={0.85}
+            disabled={isSaving}
           >
-            <LinearGradient
-              colors={['#22c55e', '#16a34a']}
-              style={styles.saveButtonGradient}
-            >
-              <Text style={styles.saveButtonText}>Save Exercise</Text>
-              <Ionicons name="checkmark" size={20} color="#fff" />
-            </LinearGradient>
+            <View style={styles.saveButtonSolid}>
+              {isSaving ? (
+                <>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.saveButtonText}>Saving...</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.saveButtonText}>Save Exercise</Text>
+                  <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                </>
+              )}
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -913,16 +1006,20 @@ const styles = StyleSheet.create({
     flex: 2,
     borderRadius: 14,
     overflow: 'hidden',
-    shadowColor: '#22c55e',
+    shadowColor: '#98be4e',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
-  saveButtonGradient: {
+  saveButtonDisabled: {
+    opacity: 0.7,
+  },
+  saveButtonSolid: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#98be4e',
     paddingVertical: 16,
     gap: 8,
   },

@@ -1,7 +1,7 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { HomePageSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
-import { coupleService, coupleStepsService, formatDateString, globalSettingsService } from '@/services/firestore.service';
+import { coupleExerciseService, coupleService, coupleStepsService, formatDateString, globalSettingsService } from '@/services/firestore.service';
 import { GlobalSettings } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -68,6 +68,8 @@ export default function UserHomeScreen() {
   const [notificationSidebarVisible, setNotificationSidebarVisible] = useState(false);
   const [todayStepsFromStorage, setTodayStepsFromStorage] = useState(0);
   const [userWeight, setUserWeight] = useState(60); // Default 60kg for calorie calculation
+  const [todayExerciseMinutes, setTodayExerciseMinutes] = useState(0);
+  const [todayExerciseCalories, setTodayExerciseCalories] = useState(0);
   const [isLoading, setIsLoading] = useState(true); // Loading state for skeleton
   const sidebarAnim = useRef(new Animated.Value(300)).current;
   
@@ -93,15 +95,23 @@ export default function UserHomeScreen() {
   // Progress data for different dates - no mock data, only real data
   const getProgressDataForDate = (dateIndex: number) => {
     const stepTarget = globalSettings?.dailySteps || 7000;
+    const exerciseGoal = globalSettings?.coupleWalkingMinutes || 60;
     // Only today (index 3) has real data from storage, past dates will come from Firestore later
     // For now, show 0 for past dates - this will be replaced with real Firestore data
     const isToday = dateIndex === 3;
     const currentSteps = isToday ? todayStepsFromStorage : 0;
+    const stepCalories = calculateCaloriesFromSteps(currentSteps, userWeight);
+    const stepMinutes = calculateTimeFromSteps(currentSteps);
+    const totalExerciseMinutes = isToday ? (stepMinutes + todayExerciseMinutes) : 0;
+    const totalCaloriesBurnt = isToday ? (stepCalories + todayExerciseCalories) : 0;
     return {
       steps: { current: currentSteps, target: stepTarget },
-      exerciseMinutes: calculateTimeFromSteps(currentSteps), // Time from steps
+      exerciseMinutes: totalExerciseMinutes,
+      exerciseGoal: exerciseGoal,
+      exerciseGoalMet: totalExerciseMinutes >= exerciseGoal,
       foodLogged: 0, // TODO: Fetch from Firestore
-      caloriesBurnt: calculateCaloriesFromSteps(currentSteps, userWeight), // Calories from steps
+      caloriesBurnt: totalCaloriesBurnt,
+      caloriesGoalMet: totalCaloriesBurnt >= 200, // 200 cal default goal
     };
   };
 
@@ -132,6 +142,15 @@ export default function UserHomeScreen() {
               today
             );
             setTodayStepsFromStorage(totalSteps);
+            
+            // Fetch exercise data for today
+            const exerciseTotals = await coupleExerciseService.getTotalsForDate(
+              coupleId, 
+              userGender as 'male' | 'female', 
+              today
+            );
+            setTodayExerciseMinutes(exerciseTotals.duration);
+            setTodayExerciseCalories(exerciseTotals.calories);
             
             // Get user weight for calorie calculation
             const couple = await coupleService.get(coupleId);
@@ -491,8 +510,15 @@ export default function UserHomeScreen() {
                   {todayProgress.exerciseMinutes}
                   <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> min</Text>
                 </Text>
-                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>Exercise Done</Text>
+                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>
+                  Exercise {todayProgress.exerciseGoalMet ? '✓' : `/ ${todayProgress.exerciseGoal}m`}
+                </Text>
               </View>
+              {todayProgress.exerciseGoalMet && (
+                <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#22c55e', borderRadius: 10, padding: 2 }}>
+                  <Ionicons name="checkmark" size={12} color="white" />
+                </View>
+              )}
             </View>
 
             {/* Food Logged */}

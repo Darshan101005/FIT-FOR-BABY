@@ -1,6 +1,4 @@
-import BottomNavBar from '@/components/navigation/BottomNavBar';
-import { useTheme } from '@/context/ThemeContext';
-import { coupleStepsService, CoupleStepEntry, formatDateString } from '@/services/firestore.service';
+import { coupleStepsService, formatDateString } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
