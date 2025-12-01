@@ -41,9 +41,12 @@ export const toTimestamp = (date: Date): Timestamp => Timestamp.fromDate(date);
 // Convert Timestamp to Date
 export const toDate = (timestamp: Timestamp): Date => timestamp.toDate();
 
-// Format date as YYYY-MM-DD
+// Format date as YYYY-MM-DD in LOCAL timezone (not UTC)
 export const formatDateString = (date: Date): string => {
-  return date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 // ============================================

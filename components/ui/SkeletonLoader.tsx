@@ -533,6 +533,130 @@ export const WebProfileCardSkeleton: React.FC = () => {
   );
 };
 
+// Progress Page Skeleton Loader
+export const ProgressPageSkeleton: React.FC<{ isMobile?: boolean }> = ({ isMobile = true }) => {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.container}>
+      {/* Header - no skeleton needed as header renders immediately */}
+
+      <View style={[styles.progressContent, { maxWidth: 800, width: '100%', alignSelf: 'center' }]}>
+        {/* Time Range Selector */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+          <Skeleton width={100} height={40} borderRadius={10} />
+        </View>
+
+        {/* Summary Cards Row */}
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+          {[1, 2, 3].map((_, i) => (
+            <View key={i} style={[styles.progressSummaryCard, { backgroundColor: colors.cardBackground }]}>
+              <Skeleton width={28} height={28} borderRadius={8} />
+              <Skeleton width={50} height={22} borderRadius={4} style={{ marginTop: 8 }} />
+              <Skeleton width={60} height={11} borderRadius={4} style={{ marginTop: 4 }} />
+            </View>
+          ))}
+        </View>
+
+        {/* Weekly Chart Card */}
+        <View style={[styles.progressChartCard, { backgroundColor: colors.cardBackground }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+            <Skeleton width={120} height={18} borderRadius={4} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Skeleton width={8} height={8} borderRadius={4} />
+              <Skeleton width={40} height={12} borderRadius={4} />
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 120 }}>
+            {[1, 2, 3, 4, 5, 6, 7].map((_, i) => (
+              <View key={i} style={{ alignItems: 'center', flex: 1 }}>
+                <Skeleton width={9} height={9} borderRadius={4} style={{ marginBottom: 4 }} />
+                <Skeleton width={24} height={40 + Math.random() * 50} borderRadius={6} />
+                <Skeleton width={24} height={12} borderRadius={4} style={{ marginTop: 8 }} />
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Weight Chart Card */}
+        <View style={[styles.progressChartCard, { backgroundColor: colors.cardBackground }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+            <Skeleton width={130} height={18} borderRadius={4} />
+            <Skeleton width={80} height={28} borderRadius={20} />
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+            <View style={{ alignItems: 'center' }}>
+              <Skeleton width={40} height={11} borderRadius={4} />
+              <Skeleton width={50} height={16} borderRadius={4} style={{ marginTop: 4 }} />
+            </View>
+            <Skeleton width={16} height={16} borderRadius={4} />
+            <View style={{ alignItems: 'center' }}>
+              <Skeleton width={50} height={11} borderRadius={4} />
+              <Skeleton width={50} height={16} borderRadius={4} style={{ marginTop: 4 }} />
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 100 }}>
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((_, i) => (
+              <View key={i} style={{ alignItems: 'center', flex: 1 }}>
+                <Skeleton width={20} height={30 + Math.random() * 40} borderRadius={4} />
+                <Skeleton width={20} height={9} borderRadius={4} style={{ marginTop: 6 }} />
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Weekly Goals Section */}
+        <Skeleton width={120} height={18} borderRadius={4} style={{ marginBottom: 16 }} />
+        {[1, 2, 3].map((_, i) => (
+          <View key={i} style={[styles.progressGoalCard, { backgroundColor: colors.cardBackground }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <Skeleton width={44} height={44} borderRadius={12} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Skeleton width={100} height={15} borderRadius={4} />
+                <Skeleton width={140} height={13} borderRadius={4} style={{ marginTop: 4 }} />
+              </View>
+              <Skeleton width={40} height={18} borderRadius={4} />
+            </View>
+            <Skeleton width="100%" height={6} borderRadius={3} />
+          </View>
+        ))}
+
+        {/* Couple Journey Card */}
+        <View style={[styles.progressCoupleCard]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <SkeletonCircle size={32} />
+            <Skeleton width={130} height={20} borderRadius={4} />
+          </View>
+          <Skeleton width={100} height={14} borderRadius={4} style={{ marginBottom: 20 }} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+            <View style={{ alignItems: 'center' }}>
+              <Skeleton width={40} height={28} borderRadius={4} />
+              <Skeleton width={80} height={11} borderRadius={4} style={{ marginTop: 4 }} />
+            </View>
+            <Skeleton width={1} height={40} borderRadius={1} />
+            <View style={{ alignItems: 'center' }}>
+              <Skeleton width={40} height={28} borderRadius={4} />
+              <Skeleton width={60} height={11} borderRadius={4} style={{ marginTop: 4 }} />
+            </View>
+          </View>
+        </View>
+
+        {/* Achievements Section */}
+        <Skeleton width={150} height={18} borderRadius={4} style={{ marginBottom: 16 }} />
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          {[1, 2, 3].map((_, i) => (
+            <View key={i} style={[styles.progressAchievementCard, { backgroundColor: colors.cardBackground }]}>
+              <Skeleton width={52} height={52} borderRadius={14} />
+              <Skeleton width={70} height={13} borderRadius={4} style={{ marginTop: 10 }} />
+              <Skeleton width={80} height={10} borderRadius={4} style={{ marginTop: 4 }} />
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -754,6 +878,50 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginTop: 8,
+  },
+  
+  // Progress Page Styles
+  progressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 50,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  progressContent: {
+    padding: 16,
+  },
+  progressSummaryCard: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    minHeight: 100,
+    justifyContent: 'center',
+  },
+  progressChartCard: {
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+  },
+  progressGoalCard: {
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+  },
+  progressCoupleCard: {
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 24,
+    backgroundColor: '#ede9fe',
+  },
+  progressAchievementCard: {
+    width: 130,
+    borderRadius: 16,
+    padding: 14,
+    alignItems: 'center',
   },
 });
 

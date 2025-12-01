@@ -1,14 +1,15 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { ProgressPageSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
-import { globalSettingsService } from '@/services/firestore.service';
+import { CoupleWeightLog, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService, formatDateString, globalSettingsService } from '@/services/firestore.service';
 import { GlobalSettings } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
-    ActivityIndicator,
     Platform,
     ScrollView,
     StyleSheet,
@@ -20,8 +21,18 @@ import {
 
 const isWeb = Platform.OS === 'web';
 
+interface ChartData {
+  label: string;
+  date: string;
+  steps: number;
+  calories: number;
+  exercise: number;
+}
+
+// Keep WeeklyData as alias for backward compatibility
 interface WeeklyData {
   day: string;
+  date: string;
   steps: number;
   calories: number;
   exercise: number;
@@ -30,60 +41,25 @@ interface WeeklyData {
 interface WeightData {
   date: string;
   weight: number;
+  label: string;
 }
 
-// Weekly data
-const weeklyStepsData: WeeklyData[] = [
-  { day: 'Mon', steps: 8500, calories: 320, exercise: 45 },
-  { day: 'Tue', steps: 6200, calories: 250, exercise: 30 },
-  { day: 'Wed', steps: 10200, calories: 420, exercise: 60 },
-  { day: 'Thu', steps: 7800, calories: 300, exercise: 40 },
-  { day: 'Fri', steps: 9100, calories: 380, exercise: 55 },
-  { day: 'Sat', steps: 11500, calories: 480, exercise: 75 },
-  { day: 'Sun', steps: 5600, calories: 210, exercise: 25 },
-];
-
-// Monthly data
-const monthlyStepsData: WeeklyData[] = [
-  { day: 'W1', steps: 52000, calories: 2100, exercise: 280 },
-  { day: 'W2', steps: 58000, calories: 2400, exercise: 320 },
-  { day: 'W3', steps: 61000, calories: 2550, exercise: 350 },
-  { day: 'W4', steps: 55000, calories: 2200, exercise: 300 },
-];
-
-// 3 Month data
-const threeMonthData: WeeklyData[] = [
-  { day: 'Sep', steps: 180000, calories: 7500, exercise: 980 },
-  { day: 'Oct', steps: 210000, calories: 8800, exercise: 1150 },
-  { day: 'Nov', steps: 226000, calories: 9250, exercise: 1250 },
-];
-
-// All time data
-const allTimeData: WeeklyData[] = [
-  { day: 'Jun', steps: 120000, calories: 5000, exercise: 650 },
-  { day: 'Jul', steps: 155000, calories: 6500, exercise: 820 },
-  { day: 'Aug', steps: 170000, calories: 7100, exercise: 900 },
-  { day: 'Sep', steps: 180000, calories: 7500, exercise: 980 },
-  { day: 'Oct', steps: 210000, calories: 8800, exercise: 1150 },
-  { day: 'Nov', steps: 226000, calories: 9250, exercise: 1250 },
-];
-
-const weightHistory: WeightData[] = [
-  { date: 'Week 1', weight: 92 },
-  { date: 'Week 2', weight: 91.2 },
-  { date: 'Week 3', weight: 90.5 },
-  { date: 'Week 4', weight: 89.8 },
-  { date: 'Week 5', weight: 88.9 },
-  { date: 'Week 6', weight: 88.2 },
-  { date: 'Week 7', weight: 87.5 },
-  { date: 'Week 8', weight: 86.8 },
-];
+interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  emoji?: string;
+  image?: any;
+  backgroundColor: string;
+  isUnlocked: boolean;
+  unlockedAt?: Date;
+  requirement: string;
+}
 
 const timeRanges = [
   { id: 'week', label: 'This Week' },
   { id: 'month', label: 'This Month' },
-  { id: '3months', label: '3 Months' },
-  { id: 'all', label: 'All Time' },
+  { id: '3months', label: 'Past 3 Months' },
 ];
 
 export default function ProgressScreen() {
@@ -95,62 +71,499 @@ export default function ProgressScreen() {
   const [selectedRange, setSelectedRange] = useState('week');
   const [selectedMetric, setSelectedMetric] = useState<'steps' | 'calories' | 'exercise'>('steps');
   
+  // User data
+  const [coupleId, setCoupleId] = useState<string | null>(null);
+  const [userGender, setUserGender] = useState<'male' | 'female'>('male');
+  const [userWeight, setUserWeight] = useState(60);
+  
+  // Dynamic data from Firestore
+  const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
+  const [monthlyData, setMonthlyData] = useState<ChartData[]>([]);
+  const [threeMonthData, setThreeMonthData] = useState<ChartData[]>([]);
+  const [weightHistory, setWeightHistory] = useState<WeightData[]>([]);
+  const [coupleWeeksJoined, setCoupleWeeksJoined] = useState(0);
+  const [totalWalksTogether, setTotalWalksTogether] = useState(0);
+  const [combinedWeightLost, setCombinedWeightLost] = useState(0);
+  
+  // Weekly goal tracking
+  const [weeklyStepsTotal, setWeeklyStepsTotal] = useState(0);
+  const [coupleWalkingMinutes, setCoupleWalkingMinutes] = useState(0);
+  const [highKneesMinutes, setHighKneesMinutes] = useState(0);
+  
   // Global settings from Firestore
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
-  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load global settings on mount
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        setIsLoadingSettings(true);
-        const settings = await globalSettingsService.get();
-        setGlobalSettings(settings);
-      } catch (error) {
-        console.error('Error loading global settings:', error);
-      } finally {
-        setIsLoadingSettings(false);
+  // Achievements state
+  const [achievements, setAchievements] = useState<Achievement[]>([
+    {
+      id: '7-day-streak',
+      title: '7-Day Streak',
+      description: 'Logged activity daily',
+      emoji: '🔥',
+      backgroundColor: '#fef3c7',
+      isUnlocked: false,
+      requirement: 'Log activity for 7 consecutive days',
+    },
+    {
+      id: '10k-steps',
+      title: '10K Steps',
+      description: 'Reached goal 3 times',
+      emoji: '👟',
+      backgroundColor: '#e8f5d6',
+      isUnlocked: false,
+      requirement: 'Hit 10,000 steps in a day 3 times',
+    },
+    {
+      id: 'partner-goals',
+      title: 'Partner Goals',
+      description: 'Complete couple walks',
+      image: require('../../assets/images/couple.jpg'),
+      backgroundColor: '#ede9fe',
+      isUnlocked: false,
+      requirement: 'Complete 4 couple walks together',
+    },
+    {
+      id: '5kg-lost',
+      title: '5kg Lost',
+      description: 'Milestone reached!',
+      emoji: '⚖️',
+      backgroundColor: '#dbeafe',
+      isUnlocked: false,
+      requirement: 'Lose 5kg from starting weight',
+    },
+    {
+      id: 'weekly-warrior',
+      title: 'Weekly Warrior',
+      description: 'All weekly goals met',
+      emoji: '🏆',
+      backgroundColor: '#fce7f3',
+      isUnlocked: false,
+      requirement: 'Meet all weekly goals in a week',
+    },
+    {
+      id: 'first-exercise',
+      title: 'First Exercise',
+      description: 'Logged first workout',
+      emoji: '💪',
+      backgroundColor: '#ccfbf1',
+      isUnlocked: false,
+      requirement: 'Log your first exercise',
+    },
+  ]);
+
+  // Helper function to get week start/end dates
+  const getWeekDates = () => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+    monday.setHours(0, 0, 0, 0);
+    
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    
+    return { start: monday, end: sunday };
+  };
+
+  // Helper function to calculate calories from steps
+  const calculateCaloriesFromSteps = (steps: number, weight: number): number => {
+    return Math.round(0.0004 * weight * steps);
+  };
+
+  // Load all data
+  useFocusEffect(
+    useCallback(() => {
+      const loadData = async () => {
+        try {
+          setIsLoading(true);
+          
+          // Get user session data
+          const [storedCoupleId, storedGender, settings] = await Promise.all([
+            AsyncStorage.getItem('coupleId'),
+            AsyncStorage.getItem('userGender'),
+            globalSettingsService.get(),
+          ]);
+
+          if (!storedCoupleId || !storedGender) {
+            setIsLoading(false);
+            return;
+          }
+
+          setCoupleId(storedCoupleId);
+          setUserGender(storedGender as 'male' | 'female');
+          setGlobalSettings(settings);
+
+          // Get couple data
+          const couple = await coupleService.get(storedCoupleId);
+          if (couple) {
+            const user = couple[storedGender as 'male' | 'female'];
+            if (user.weight) {
+              setUserWeight(user.weight);
+            }
+            
+            // Calculate weeks joined
+            if (couple.createdAt) {
+              const createdDate = couple.createdAt.toDate ? couple.createdAt.toDate() : new Date(couple.createdAt);
+              const weeksJoined = Math.floor((Date.now() - createdDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+              setCoupleWeeksJoined(Math.max(1, weeksJoined));
+            }
+          }
+
+          // Get week date range
+          const { start, end } = getWeekDates();
+          const startStr = formatDateString(start);
+          const endStr = formatDateString(end);
+
+          // Fetch weekly steps
+          const stepsEntries = await coupleStepsService.getByDateRange(
+            storedCoupleId,
+            storedGender as 'male' | 'female',
+            startStr,
+            endStr
+          );
+
+          // Fetch weekly exercise logs
+          const exerciseLogs = await coupleExerciseService.getByDateRange(
+            storedCoupleId,
+            storedGender as 'male' | 'female',
+            startStr,
+            endStr
+          );
+
+          // Fetch weight history (get all logs for accurate start weight)
+          const weightLogs = await coupleWeightLogService.getAll(
+            storedCoupleId,
+            storedGender as 'male' | 'female',
+            365 // Fetch up to a year of data
+          );
+
+          // Build weekly data - 7 days Mon-Sun
+          const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+          const weeklyDataArr: WeeklyData[] = [];
+          let totalWeekSteps = 0;
+          let totalCoupleWalkingMins = 0;
+          let totalHighKneesMins = 0;
+
+          for (let i = 0; i < 7; i++) {
+            const date = new Date(start);
+            date.setDate(start.getDate() + i);
+            const dateStr = formatDateString(date);
+            
+            // Sum steps for this day
+            const daySteps = stepsEntries
+              .filter(e => e.date === dateStr)
+              .reduce((sum, e) => sum + e.stepCount, 0);
+            
+            // Sum exercise for this day
+            const dayExercise = exerciseLogs
+              .filter(e => e.date === dateStr)
+              .reduce((sum, e) => sum + e.duration, 0);
+            
+            // Calculate calories from steps
+            const dayCalories = calculateCaloriesFromSteps(daySteps, userWeight) + 
+              exerciseLogs.filter(e => e.date === dateStr).reduce((sum, e) => sum + e.caloriesBurned, 0);
+
+            weeklyDataArr.push({
+              day: weekDays[i],
+              date: dateStr,
+              steps: daySteps,
+              calories: dayCalories,
+              exercise: dayExercise,
+            });
+
+            totalWeekSteps += daySteps;
+
+            // Sum couple walking and high knees minutes
+            exerciseLogs.filter(e => e.date === dateStr).forEach(log => {
+              if (log.exerciseType === 'couple-walking' || log.partnerParticipated) {
+                totalCoupleWalkingMins += log.duration;
+              }
+              if (log.exerciseType === 'high-knees') {
+                totalHighKneesMins += log.duration;
+              }
+            });
+          }
+
+          setWeeklyData(weeklyDataArr);
+          setWeeklyStepsTotal(totalWeekSteps);
+          setCoupleWalkingMinutes(totalCoupleWalkingMins);
+          setHighKneesMinutes(totalHighKneesMins);
+
+          // ===== LOAD MONTHLY DATA (weeks of current month) =====
+          const now = new Date();
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+          const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          
+          // Calculate how many weeks in this month
+          const weeksInMonth = Math.ceil((monthEnd.getDate() + monthStart.getDay()) / 7);
+          
+          // Fetch all data for the month
+          const monthStepsEntries = await coupleStepsService.getByDateRange(
+            storedCoupleId,
+            storedGender as 'male' | 'female',
+            formatDateString(monthStart),
+            formatDateString(monthEnd)
+          );
+          const monthExerciseLogs = await coupleExerciseService.getByDateRange(
+            storedCoupleId,
+            storedGender as 'male' | 'female',
+            formatDateString(monthStart),
+            formatDateString(monthEnd)
+          );
+
+          // Aggregate by week
+          const monthlyDataArr: ChartData[] = [];
+          for (let w = 0; w < weeksInMonth; w++) {
+            const weekStart = new Date(monthStart);
+            weekStart.setDate(monthStart.getDate() + (w * 7) - monthStart.getDay() + (w === 0 ? 0 : 0));
+            
+            // Calculate actual week boundaries within the month
+            const wkStart = new Date(monthStart);
+            wkStart.setDate(1 + (w * 7));
+            if (wkStart > monthEnd) continue;
+            
+            const wkEnd = new Date(wkStart);
+            wkEnd.setDate(wkStart.getDate() + 6);
+            if (wkEnd > monthEnd) wkEnd.setTime(monthEnd.getTime());
+
+            let weekSteps = 0;
+            let weekCalories = 0;
+            let weekExercise = 0;
+
+            // Sum data for this week
+            for (let d = new Date(wkStart); d <= wkEnd; d.setDate(d.getDate() + 1)) {
+              const dateStr = formatDateString(new Date(d));
+              weekSteps += monthStepsEntries.filter(e => e.date === dateStr).reduce((sum, e) => sum + e.stepCount, 0);
+              weekExercise += monthExerciseLogs.filter(e => e.date === dateStr).reduce((sum, e) => sum + e.duration, 0);
+              weekCalories += calculateCaloriesFromSteps(weekSteps, userWeight) + 
+                monthExerciseLogs.filter(e => e.date === dateStr).reduce((sum, e) => sum + e.caloriesBurned, 0);
+            }
+
+            monthlyDataArr.push({
+              label: `W${w + 1}`,
+              date: formatDateString(wkStart),
+              steps: weekSteps,
+              calories: weekCalories,
+              exercise: weekExercise,
+            });
+          }
+          setMonthlyData(monthlyDataArr);
+
+          // ===== LOAD 3-MONTH DATA (past 3 months) =====
+          const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          
+          const threeMonthDataArr: ChartData[] = [];
+          for (let m = 0; m < 3; m++) {
+            const mStart = new Date(now.getFullYear(), now.getMonth() - 2 + m, 1);
+            const mEnd = new Date(now.getFullYear(), now.getMonth() - 2 + m + 1, 0);
+            
+            const mStepsEntries = await coupleStepsService.getByDateRange(
+              storedCoupleId,
+              storedGender as 'male' | 'female',
+              formatDateString(mStart),
+              formatDateString(mEnd)
+            );
+            const mExerciseLogs = await coupleExerciseService.getByDateRange(
+              storedCoupleId,
+              storedGender as 'male' | 'female',
+              formatDateString(mStart),
+              formatDateString(mEnd)
+            );
+
+            const monthSteps = mStepsEntries.reduce((sum, e) => sum + e.stepCount, 0);
+            const monthExercise = mExerciseLogs.reduce((sum, e) => sum + e.duration, 0);
+            const monthCalories = calculateCaloriesFromSteps(monthSteps, userWeight) + 
+              mExerciseLogs.reduce((sum, e) => sum + e.caloriesBurned, 0);
+
+            threeMonthDataArr.push({
+              label: monthNames[mStart.getMonth()],
+              date: formatDateString(mStart),
+              steps: monthSteps,
+              calories: monthCalories,
+              exercise: monthExercise,
+            });
+          }
+          setThreeMonthData(threeMonthDataArr);
+
+          // Process weight history
+          // Data comes from Firestore ordered by date DESC (most recent first)
+          // So: weightLogs[0] = most recent (current), weightLogs[last] = oldest (start)
+          if (weightLogs.length > 0) {
+            // First entry ever logged is at the END of the array (oldest)
+            // Most recent (current) is at the BEGINNING
+            const firstLogEver = weightLogs[weightLogs.length - 1]; // Oldest = Start
+            const latestLog = weightLogs[0]; // Most recent = Current
+            
+            // Create weight data array
+            const weightData: WeightData[] = [];
+            
+            // Start weight (first ever logged)
+            weightData.push({
+              date: firstLogEver.date,
+              weight: firstLogEver.weight,
+              label: 'Start',
+            });
+            
+            // Current weight (most recent)
+            if (weightLogs.length > 1) {
+              weightData.push({
+                date: latestLog.date,
+                weight: latestLog.weight,
+                label: 'Current',
+              });
+            }
+            
+            setWeightHistory(weightData);
+
+            // Calculate weight change
+            if (weightLogs.length >= 1) {
+              const startWeight = firstLogEver.weight;
+              const currentWeight = latestLog.weight;
+              setCombinedWeightLost(Math.max(0, startWeight - currentWeight));
+            }
+          }
+
+          // Calculate total walks together (all time)
+          const allExerciseLogs = await coupleExerciseService.getByDateRange(
+            storedCoupleId,
+            storedGender as 'male' | 'female',
+            '2020-01-01', // Start from a long time ago
+            formatDateString(new Date())
+          );
+          const totalWalks = allExerciseLogs.filter(
+            log => log.exerciseType === 'couple-walking' || log.partnerParticipated
+          ).length;
+          setTotalWalksTogether(totalWalks);
+
+          // Update achievements based on data
+          updateAchievements(totalWalks, weightLogs, weeklyDataArr, exerciseLogs.length > 0);
+
+        } catch (error) {
+          console.error('Error loading progress data:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      loadData();
+    }, [])
+  );
+
+  // Update achievements based on actual data
+  const updateAchievements = (
+    totalWalks: number, 
+    weightLogs: CoupleWeightLog[], 
+    weeklyData: WeeklyData[],
+    hasExercise: boolean
+  ) => {
+    setAchievements(prev => prev.map(achievement => {
+      let isUnlocked = achievement.isUnlocked;
+      
+      switch (achievement.id) {
+        case 'partner-goals':
+          isUnlocked = totalWalks >= 4;
+          break;
+        case '5kg-lost':
+          if (weightLogs.length >= 2) {
+            const sortedLogs = [...weightLogs].sort((a, b) => a.date.localeCompare(b.date));
+            const weightLost = sortedLogs[0].weight - sortedLogs[sortedLogs.length - 1].weight;
+            isUnlocked = weightLost >= 5;
+          }
+          break;
+        case '10k-steps':
+          const daysOver10k = weeklyData.filter(d => d.steps >= 10000).length;
+          isUnlocked = daysOver10k >= 3;
+          break;
+        case 'first-exercise':
+          isUnlocked = hasExercise;
+          break;
+        // Other achievements will be unlocked based on additional logic later
       }
-    };
-    loadSettings();
-  }, []);
+      
+      return { ...achievement, isUnlocked };
+    }));
+  };
 
-  // Get data based on selected range
-  const getCurrentData = () => {
+  // Get chart data based on selected range
+  const getChartData = (): ChartData[] => {
     switch (selectedRange) {
       case 'week':
-        return weeklyStepsData;
+        return weeklyData.length > 0 
+          ? weeklyData.map(d => ({ label: d.day, date: d.date, steps: d.steps, calories: d.calories, exercise: d.exercise }))
+          : [
+              { label: 'Mon', date: '', steps: 0, calories: 0, exercise: 0 },
+              { label: 'Tue', date: '', steps: 0, calories: 0, exercise: 0 },
+              { label: 'Wed', date: '', steps: 0, calories: 0, exercise: 0 },
+              { label: 'Thu', date: '', steps: 0, calories: 0, exercise: 0 },
+              { label: 'Fri', date: '', steps: 0, calories: 0, exercise: 0 },
+              { label: 'Sat', date: '', steps: 0, calories: 0, exercise: 0 },
+              { label: 'Sun', date: '', steps: 0, calories: 0, exercise: 0 },
+            ];
       case 'month':
-        return monthlyStepsData;
+        return monthlyData.length > 0 
+          ? monthlyData 
+          : [
+              { label: 'W1', date: '', steps: 0, calories: 0, exercise: 0 },
+              { label: 'W2', date: '', steps: 0, calories: 0, exercise: 0 },
+              { label: 'W3', date: '', steps: 0, calories: 0, exercise: 0 },
+              { label: 'W4', date: '', steps: 0, calories: 0, exercise: 0 },
+            ];
       case '3months':
-        return threeMonthData;
-      case 'all':
-        return allTimeData;
+        return threeMonthData.length > 0 
+          ? threeMonthData 
+          : [
+              { label: 'Sep', date: '', steps: 0, calories: 0, exercise: 0 },
+              { label: 'Oct', date: '', steps: 0, calories: 0, exercise: 0 },
+              { label: 'Nov', date: '', steps: 0, calories: 0, exercise: 0 },
+            ];
       default:
-        return weeklyStepsData;
+        return [];
     }
   };
 
-  const currentData = getCurrentData();
+  const chartData = getChartData();
+
+  // Keep currentData for backward compatibility with summary cards (always weekly)
+  const currentData = weeklyData.length > 0 ? weeklyData : [
+    { day: 'Mon', date: '', steps: 0, calories: 0, exercise: 0 },
+    { day: 'Tue', date: '', steps: 0, calories: 0, exercise: 0 },
+    { day: 'Wed', date: '', steps: 0, calories: 0, exercise: 0 },
+    { day: 'Thu', date: '', steps: 0, calories: 0, exercise: 0 },
+    { day: 'Fri', date: '', steps: 0, calories: 0, exercise: 0 },
+    { day: 'Sat', date: '', steps: 0, calories: 0, exercise: 0 },
+    { day: 'Sun', date: '', steps: 0, calories: 0, exercise: 0 },
+  ];
 
   const totalSteps = currentData.reduce((acc, day) => acc + day.steps, 0);
-  const avgSteps = Math.round(totalSteps / currentData.length);
+  const daysWithData = currentData.filter(day => day.steps > 0 || day.calories > 0 || day.exercise > 0).length;
+  const avgSteps = daysWithData > 1 ? Math.round(totalSteps / daysWithData) : totalSteps;
   const totalCalories = currentData.reduce((acc, day) => acc + day.calories, 0);
   const totalExercise = currentData.reduce((acc, day) => acc + day.exercise, 0);
+  const isFirstDayOrWeek = daysWithData <= 1;
 
-  const startWeight = weightHistory[0].weight;
-  const currentWeight = weightHistory[weightHistory.length - 1].weight;
-  const weightLost = startWeight - currentWeight;
+  const startWeight = weightHistory.length > 0 ? weightHistory[0].weight : 0;
+  const currentWeight = weightHistory.length > 0 ? weightHistory[weightHistory.length - 1].weight : 0;
+  const weightLost = Math.max(0, startWeight - currentWeight);
 
   const getMaxValue = () => {
     switch (selectedMetric) {
       case 'steps':
-        return Math.max(...currentData.map(d => d.steps));
+        return Math.max(...chartData.map(d => d.steps), 1);
       case 'calories':
-        return Math.max(...currentData.map(d => d.calories));
+        return Math.max(...chartData.map(d => d.calories), 1);
       case 'exercise':
-        return Math.max(...currentData.map(d => d.exercise));
+        return Math.max(...chartData.map(d => d.exercise), 1);
     }
+  };
+
+  // Get today's index in the week (Monday = 0, Sunday = 6)
+  const getTodayIndex = () => {
+    const dayOfWeek = new Date().getDay();
+    // getDay() returns 0 for Sunday, 1 for Monday, etc.
+    // We want Monday = 0, so convert: Sunday (0) -> 6, Monday (1) -> 0, etc.
+    return dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   };
 
   const getValue = (data: WeeklyData) => {
@@ -182,9 +595,7 @@ export default function ProgressScreen() {
         <Text style={styles.headerTitle}>Progress</Text>
         <Text style={styles.headerSubtitle}>Track your health journey</Text>
       </View>
-      <TouchableOpacity style={styles.shareButton}>
-        <Ionicons name="share-outline" size={24} color="#006dab" />
-      </TouchableOpacity>
+      <View style={{ width: 40 }} />
     </View>
   );
 
@@ -245,7 +656,7 @@ export default function ProgressScreen() {
               styles.summaryLabel,
               selectedMetric === 'steps' && { color: '#7ba83c' },
             ]}>
-              Avg Steps
+              {isFirstDayOrWeek ? 'Total Steps' : 'Avg Steps'}
             </Text>
           </View>
         </TouchableOpacity>
@@ -341,25 +752,41 @@ export default function ProgressScreen() {
         </View>
 
         <View style={styles.chartContainer}>
-          {currentData.map((data, index) => {
-            const value = getValue(data);
-            const barHeight = (value / maxVal) * 100; // Max height is 100px
-            const isToday = selectedRange === 'week' && index === new Date().getDay() - 1;
+          {chartData.map((data, index) => {
+            const value = selectedMetric === 'steps' ? data.steps : 
+                          selectedMetric === 'calories' ? data.calories : data.exercise;
+            const barHeight = maxVal > 0 ? (value / maxVal) * 100 : 0; // Max height is 100px
+            
+            // For weekly view, highlight today
+            let isHighlighted = false;
+            if (selectedRange === 'week') {
+              const todayDayOfWeek = new Date().getDay();
+              const todayIndex = todayDayOfWeek === 0 ? 6 : todayDayOfWeek - 1;
+              isHighlighted = index === todayIndex;
+            } else if (selectedRange === 'month') {
+              // Highlight current week
+              const now = new Date();
+              const currentWeekOfMonth = Math.ceil(now.getDate() / 7);
+              isHighlighted = index === currentWeekOfMonth - 1;
+            } else if (selectedRange === '3months') {
+              // Highlight current month (last one)
+              isHighlighted = index === chartData.length - 1;
+            }
 
             return (
-              <View key={data.day} style={styles.chartBar}>
+              <View key={data.label} style={styles.chartBar}>
                 <Text style={[styles.chartValue, isMobile && styles.chartValueMobile]}>
                   {formatValue(value)}
                 </Text>
                 <View style={styles.chartBarContainer}>
                   <View style={{ flex: 1 }} />
                   <LinearGradient
-                    colors={isToday ? ['#98be4e', '#7ba83c'] : ['#006dab', '#005a8f']}
+                    colors={isHighlighted ? ['#98be4e', '#7ba83c'] : ['#006dab', '#005a8f']}
                     style={[styles.chartBarFill, { height: barHeight }]}
                   />
                 </View>
-                <Text style={[styles.chartDay, isToday && styles.chartDayActive]}>
-                  {data.day}
+                <Text style={[styles.chartDay, isHighlighted && styles.chartDayActive]}>
+                  {data.label}
                 </Text>
               </View>
             );
@@ -369,86 +796,87 @@ export default function ProgressScreen() {
     );
   };
 
-  const renderWeightChart = () => {
-    const maxWeight = Math.max(...weightHistory.map(w => w.weight));
-    const minWeight = Math.min(...weightHistory.map(w => w.weight));
+  const renderWeightProgress = () => {
+    // Handle empty weight history
+    if (weightHistory.length === 0) {
+      return (
+        <View style={styles.chartCard}>
+          <View style={[styles.chartHeader, isMobile && styles.chartHeaderMobile]}>
+            <Text style={styles.chartTitle}>Weight Progress</Text>
+          </View>
+          <View style={styles.emptyChartContainer}>
+            <Ionicons name="scale-outline" size={48} color="#94a3b8" />
+            <Text style={styles.emptyChartText}>No weight data yet</Text>
+            <Text style={styles.emptyChartSubtext}>Log your weight to see progress</Text>
+          </View>
+        </View>
+      );
+    }
+
+    // Calculate weight change
+    const weightChange = startWeight - currentWeight;
+    const isWeightReduced = weightChange > 0;
+    const isNoChange = weightChange === 0;
+    // Black when no change, green when reduced, red when gained
+    const changeColor = isNoChange ? '#0f172a' : isWeightReduced ? '#98be4e' : '#ef4444';
+    const changeText = isWeightReduced 
+      ? `${weightChange.toFixed(1)} kg lost` 
+      : weightChange < 0 
+        ? `${Math.abs(weightChange).toFixed(1)} kg gained`
+        : 'No change';
+    // Border color: default gray when no change
+    const borderColor = isNoChange ? '#e2e8f0' : changeColor;
 
     return (
       <View style={styles.chartCard}>
         <View style={[styles.chartHeader, isMobile && styles.chartHeaderMobile]}>
           <Text style={styles.chartTitle}>Weight Progress</Text>
-          <View style={styles.weightSummary}>
-            <Text style={styles.weightLostText}>
-              {weightLost.toFixed(1)} kg lost
-            </Text>
-          </View>
         </View>
 
-        <View style={styles.weightStats}>
-          <View style={styles.weightStat}>
-            <Text style={styles.weightStatLabel}>Start</Text>
-            <Text style={styles.weightStatValue}>{startWeight} kg</Text>
+        <View style={styles.weightProgressContainer}>
+          {/* Start Weight */}
+          <View style={styles.weightBox}>
+            <Text style={styles.weightBoxLabel}>Start</Text>
+            <Text style={styles.weightBoxValue}>{startWeight}</Text>
+            <Text style={styles.weightBoxUnit}>kg</Text>
           </View>
-          <Ionicons name="arrow-forward" size={16} color="#64748b" />
-          <View style={styles.weightStat}>
-            <Text style={styles.weightStatLabel}>Current</Text>
-            <Text style={[styles.weightStatValue, { color: '#98be4e' }]}>
-              {currentWeight} kg
+
+          {/* Arrow and Change */}
+          <View style={styles.weightChangeContainer}>
+            <Ionicons name="arrow-forward" size={24} color={changeColor} />
+            <Text style={[styles.weightChangeText, { color: changeColor }]}>
+              {changeText}
             </Text>
           </View>
-        </View>
 
-        <View style={styles.weightBarChart}>
-          {weightHistory.map((point, index) => {
-            // Higher weight = taller bar (actual weight visualization)
-            const range = maxWeight - minWeight || 1;
-            const barHeight = ((point.weight - minWeight) / range) * 60 + 20; // Min 20px, max 80px
-            const isLast = index === weightHistory.length - 1;
-            
-            return (
-              <View key={point.date} style={styles.weightBarItem}>
-                <View style={styles.weightBarContainer}>
-                  <View style={{ flex: 1 }} />
-                  <LinearGradient
-                    colors={isLast ? ['#98be4e', '#7ba83c'] : ['#006dab', '#005a8f']}
-                    style={[styles.weightBarFill, { height: barHeight }]}
-                  />
-                </View>
-                <Text style={styles.weightBarLabel}>{point.weight}</Text>
-              </View>
-            );
-          })}
+          {/* Current Weight */}
+          <View style={[styles.weightBox, { borderColor: borderColor }]}>
+            <Text style={styles.weightBoxLabel}>Current</Text>
+            <Text style={[styles.weightBoxValue, { color: isNoChange ? '#0f172a' : changeColor }]}>{currentWeight}</Text>
+            <Text style={[styles.weightBoxUnit, { color: isNoChange ? '#64748b' : changeColor }]}>kg</Text>
+          </View>
         </View>
       </View>
     );
   };
 
   const renderGoalProgress = () => {
-    // Calculate goal progress based on Firestore settings
-    // Using mock current values - these would come from actual logged data
-    const stepsTarget = globalSettings?.weeklySteps || 49000;
-    const currentSteps = totalSteps; // Use actual weekly total
+    // Calculate goal progress based on Firestore settings and actual data
+    // Steps: daily target × 7 = weekly target
+    const dailyStepsTarget = globalSettings?.dailySteps || 7000;
+    const stepsTarget = dailyStepsTarget * 7;
+    const currentSteps = weeklyStepsTotal;
     const stepsPercent = Math.min((currentSteps / stepsTarget) * 100, 100);
 
-    const coupleWalkingTarget = 3; // 3 days/week
-    const currentCoupleWalks = 2; // Mock - would come from exercise logs
-    const coupleWalkingPercent = Math.min((currentCoupleWalks / coupleWalkingTarget) * 100, 100);
+    // Couple Walking: daily target × 7 = weekly target (in minutes)
+    const dailyCoupleWalkingTarget = globalSettings?.coupleWalkingMinutes || 60;
+    const coupleWalkingTarget = dailyCoupleWalkingTarget * 7;
+    const coupleWalkingPercent = Math.min((coupleWalkingMinutes / coupleWalkingTarget) * 100, 100);
 
-    const highKneesTarget = 3; // 3 days/week
-    const currentHighKnees = 2; // Mock - would come from exercise logs
-    const highKneesPercent = Math.min((currentHighKnees / highKneesTarget) * 100, 100);
-
-    if (isLoadingSettings) {
-      return (
-        <View style={styles.goalsSection}>
-          <Text style={styles.sectionTitle}>Weekly Goals</Text>
-          <View style={styles.goalsLoadingContainer}>
-            <ActivityIndicator size="small" color="#006dab" />
-            <Text style={styles.goalsLoadingText}>Loading goals...</Text>
-          </View>
-        </View>
-      );
-    }
+    // High Knees: daily target × 7 = weekly target (in minutes)
+    const dailyHighKneesTarget = globalSettings?.highKneesMinutes || 30;
+    const highKneesTarget = dailyHighKneesTarget * 7;
+    const highKneesPercent = Math.min((highKneesMinutes / highKneesTarget) * 100, 100);
 
     return (
       <View style={styles.goalsSection}>
@@ -488,10 +916,9 @@ export default function ProgressScreen() {
               <Text style={styles.goalTitle}>Couple Walking</Text>
               <Text style={styles.goalStats}>
                 <Text style={{ color: '#3b82f6', fontWeight: '800' }}>
-                  {currentCoupleWalks}
+                  {coupleWalkingMinutes}
                 </Text>
-                {' / '}{coupleWalkingTarget} days
-                <Text style={styles.goalSubtext}> ({globalSettings?.coupleWalkingMinutes || 60} mins/session)</Text>
+                {' / '}{coupleWalkingTarget} mins/week
               </Text>
             </View>
             <Text style={[styles.goalPercent, { color: '#3b82f6' }]}>
@@ -513,10 +940,9 @@ export default function ProgressScreen() {
               <Text style={styles.goalTitle}>High Knees Exercise</Text>
               <Text style={styles.goalStats}>
                 <Text style={{ color: '#f59e0b', fontWeight: '800' }}>
-                  {currentHighKnees}
+                  {highKneesMinutes}
                 </Text>
-                {' / '}{highKneesTarget} days
-                <Text style={styles.goalSubtext}> ({globalSettings?.highKneesMinutes || 30} mins/session)</Text>
+                {' / '}{highKneesTarget} mins/week
               </Text>
             </View>
             <Text style={[styles.goalPercent, { color: '#f59e0b' }]}>
@@ -531,57 +957,80 @@ export default function ProgressScreen() {
     );
   };
 
-  const renderAchievements = () => (
-    <View style={styles.achievementsSection}>
-      <Text style={styles.sectionTitle}>Recent Achievements</Text>
-      
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.achievementsScroll}
-      >
-        <View style={styles.achievementCard}>
-          <View style={[styles.achievementBadge, { backgroundColor: '#fef3c7' }]}>
-            <Text style={styles.achievementEmoji}>🔥</Text>
-          </View>
-          <Text style={styles.achievementTitle}>7-Day Streak</Text>
-          <Text style={styles.achievementDesc}>Logged activity daily</Text>
-        </View>
+  const renderAchievements = () => {
+    // Separate unlocked and locked achievements
+    const unlockedAchievements = achievements.filter(a => a.isUnlocked);
+    const lockedAchievements = achievements.filter(a => !a.isUnlocked);
 
-        <View style={styles.achievementCard}>
-          <View style={[styles.achievementBadge, { backgroundColor: '#e8f5d6', overflow: 'hidden' }]}>
-            <Image 
-              source={require('../../assets/images/run_male.jpg')} 
-              style={styles.coupleAchievementImage}
-              contentFit="cover"
-            />
-          </View>
-          <Text style={styles.achievementTitle}>10K Steps</Text>
-          <Text style={styles.achievementDesc}>Reached goal 3 times</Text>
-        </View>
+    return (
+      <View style={styles.achievementsSection}>
+        {/* Recent Achievements (Unlocked) */}
+        {unlockedAchievements.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Recent Achievements</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.achievementsScroll}
+            >
+              {unlockedAchievements.map((achievement) => (
+                <View key={achievement.id} style={styles.achievementCard}>
+                  <View style={[styles.achievementBadge, { backgroundColor: achievement.backgroundColor, overflow: 'hidden' }]}>
+                    {achievement.image ? (
+                      <Image 
+                        source={achievement.image} 
+                        style={styles.coupleAchievementImage}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <Text style={styles.achievementEmoji}>{achievement.emoji}</Text>
+                    )}
+                  </View>
+                  <View style={styles.unlockedBadge}>
+                    <Ionicons name="checkmark-circle" size={16} color="#98be4e" />
+                  </View>
+                  <Text style={styles.achievementTitle}>{achievement.title}</Text>
+                  <Text style={styles.achievementDesc}>{achievement.description}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </>
+        )}
 
-        <View style={styles.achievementCard}>
-          <View style={[styles.achievementBadge, { backgroundColor: '#ede9fe', overflow: 'hidden' }]}>
-            <Image 
-              source={require('../../assets/images/couple.jpg')} 
-              style={styles.coupleAchievementImage}
-              contentFit="cover"
-            />
-          </View>
-          <Text style={styles.achievementTitle}>Partner Goals</Text>
-          <Text style={styles.achievementDesc}>4 couple walks done</Text>
-        </View>
-
-        <View style={styles.achievementCard}>
-          <View style={[styles.achievementBadge, { backgroundColor: '#dbeafe' }]}>
-            <Text style={styles.achievementEmoji}>⚖️</Text>
-          </View>
-          <Text style={styles.achievementTitle}>5kg Lost</Text>
-          <Text style={styles.achievementDesc}>Milestone reached!</Text>
-        </View>
-      </ScrollView>
-    </View>
-  );
+        {/* All Achievements (Locked with lock icon) */}
+        <Text style={[styles.sectionTitle, unlockedAchievements.length > 0 && { marginTop: 24 }]}>
+          All Achievements
+        </Text>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.achievementsScroll}
+        >
+          {lockedAchievements.map((achievement) => (
+            <View key={achievement.id} style={[styles.achievementCard, styles.lockedAchievementCard]}>
+              <View style={[styles.achievementBadge, { backgroundColor: achievement.backgroundColor, overflow: 'hidden' }]}>
+                {achievement.image ? (
+                  <Image 
+                    source={achievement.image} 
+                    style={[styles.coupleAchievementImage, styles.lockedImage]}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <Text style={[styles.achievementEmoji, styles.lockedEmoji]}>{achievement.emoji}</Text>
+                )}
+                {/* Lock overlay */}
+                <View style={styles.lockOverlay}>
+                  <Ionicons name="lock-closed" size={20} color="#ffffff" />
+                </View>
+              </View>
+              <Text style={[styles.achievementTitle, styles.lockedText]}>{achievement.title}</Text>
+              <Text style={[styles.achievementDesc, styles.lockedText]}>{achievement.requirement}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
 
   const renderCoupleProgress = () => (
     <View style={styles.coupleSection}>
@@ -595,24 +1044,12 @@ export default function ProgressScreen() {
             />
             <Text style={styles.coupleTitle}>Couple Journey</Text>
           </View>
-          <Text style={styles.coupleSubtitle}>8 weeks together</Text>
+          <Text style={styles.coupleSubtitle}>{coupleWeeksJoined} week{coupleWeeksJoined !== 1 ? 's' : ''} together</Text>
         </View>
         
-        <View style={styles.coupleStats}>
-          <View style={styles.coupleStat}>
-            <Text style={styles.coupleStatValue}>24</Text>
-            <Text style={styles.coupleStatLabel}>Walks Together</Text>
-          </View>
-          <View style={styles.coupleStatDivider} />
-          <View style={styles.coupleStat}>
-            <Text style={styles.coupleStatValue}>10.5</Text>
-            <Text style={styles.coupleStatLabel}>kg Lost (Combined)</Text>
-          </View>
-          <View style={styles.coupleStatDivider} />
-          <View style={styles.coupleStat}>
-            <Text style={styles.coupleStatValue}>95%</Text>
-            <Text style={styles.coupleStatLabel}>Goal Sync</Text>
-          </View>
+        <View style={styles.coupleStatsCenter}>
+          <Text style={styles.coupleStatValueLarge}>{totalWalksTogether}</Text>
+          <Text style={styles.coupleStatLabelLarge}>Walks Together</Text>
         </View>
       </View>
     </View>
@@ -622,20 +1059,24 @@ export default function ProgressScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {renderHeader()}
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.content}>
-          {renderTimeRangeSelector()}
-          {renderSummaryCards()}
-          {renderWeeklyChart()}
-          {renderWeightChart()}
-          {renderGoalProgress()}
-          {renderCoupleProgress()}
-          {renderAchievements()}
-        </View>
-      </ScrollView>
+      {isLoading ? (
+        <ProgressPageSkeleton isMobile={isMobile} />
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.content}>
+            {renderTimeRangeSelector()}
+            {renderSummaryCards()}
+            {renderWeeklyChart()}
+            {renderWeightProgress()}
+            {renderGoalProgress()}
+            {renderCoupleProgress()}
+            {renderAchievements()}
+          </View>
+        </ScrollView>
+      )}
       
       {/* Bottom Navigation */}
       <BottomNavBar />
@@ -792,6 +1233,52 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   weightLostText: { fontSize: 13, fontWeight: '700', color: '#98be4e' },
+  // New simple weight progress styles
+  weightProgressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  weightBox: {
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  weightBoxLabel: { 
+    fontSize: 12, 
+    color: '#64748b', 
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  weightBoxValue: { 
+    fontSize: 32, 
+    fontWeight: '800', 
+    color: '#0f172a',
+  },
+  weightBoxUnit: { 
+    fontSize: 14, 
+    color: '#64748b', 
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  weightChangeContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  weightChangeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  // Keep old styles for backward compatibility
   weightStats: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -961,6 +1448,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
   },
+  coupleStatsCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  coupleStatValueLarge: { 
+    fontSize: 42, 
+    fontWeight: '800', 
+    color: '#7c3aed',
+    lineHeight: 48,
+  },
+  coupleStatLabelLarge: { 
+    fontSize: 14, 
+    color: '#8b5cf6', 
+    marginTop: 4, 
+    textAlign: 'center',
+    fontWeight: '600',
+  },
   coupleStat: { alignItems: 'center' },
   coupleStatValue: { fontSize: 28, fontWeight: '800', color: '#7c3aed' },
   coupleStatLabel: { fontSize: 11, color: '#8b5cf6', marginTop: 4, textAlign: 'center' },
@@ -991,6 +1496,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
+    position: 'relative',
   },
   achievementEmoji: { fontSize: 26 },
   coupleAchievementImage: {
@@ -1000,4 +1506,60 @@ const styles = StyleSheet.create({
   },
   achievementTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
   achievementDesc: { fontSize: 10, color: '#64748b', marginTop: 4, textAlign: 'center' },
+  
+  // New styles for locked achievements and loading
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 100,
+  },
+  loadingText: {
+    fontSize: 14,
+    marginTop: 12,
+  },
+  emptyChartContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyChartText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 12,
+  },
+  emptyChartSubtext: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginTop: 4,
+  },
+  lockedAchievementCard: {
+    opacity: 0.85,
+  },
+  lockedImage: {
+    opacity: 0.4,
+  },
+  lockedEmoji: {
+    opacity: 0.4,
+  },
+  lockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockedText: {
+    color: '#94a3b8',
+  },
+  unlockedBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+  },
 });
