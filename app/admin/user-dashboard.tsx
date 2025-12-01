@@ -2,15 +2,15 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 import { CoupleWeightLog, coupleService, coupleWeightLogService } from '../../services/firestore.service';
 
@@ -196,7 +196,47 @@ export default function UserDashboardScreen() {
   const [maleWeightLogs, setMaleWeightLogs] = useState<CoupleWeightLog[]>([]);
   const [femaleWeightLogs, setFemaleWeightLogs] = useState<CoupleWeightLog[]>([]);
   const [showWeightHistoryModal, setShowWeightHistoryModal] = useState(false);
+  const [showHeightHistoryModal, setShowHeightHistoryModal] = useState(false);
   const [selectedGenderForHistory, setSelectedGenderForHistory] = useState<'male' | 'female'>('male');
+
+  // Format timestamp to 12-hour AM/PM format in IST (Indian Standard Time)
+  const formatTimestamp = (timestamp: any): string => {
+    if (!timestamp) return '';
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleString('en-IN', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Kolkata'
+      });
+    } catch (e) {
+      return '';
+    }
+  };
+
+  // Get unique height entries from weight logs
+  const getHeightHistory = (gender: 'male' | 'female') => {
+    const logs = gender === 'male' ? maleWeightLogs : femaleWeightLogs;
+    const heightMap = new Map<number, { height: number; date: string; loggedAt: any }>();
+    
+    logs.forEach(log => {
+      if (log.height && !heightMap.has(log.height)) {
+        heightMap.set(log.height, {
+          height: log.height,
+          date: log.date,
+          loggedAt: log.loggedAt || log.createdAt
+        });
+      }
+    });
+    
+    return Array.from(heightMap.values()).sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  };
 
   // Load couple data from Firestore
   useEffect(() => {
@@ -385,6 +425,12 @@ export default function UserDashboardScreen() {
     setShowWeightHistoryModal(true);
   };
 
+  // Open height history modal
+  const openHeightHistory = (gender: 'male' | 'female') => {
+    setSelectedGenderForHistory(gender);
+    setShowHeightHistoryModal(true);
+  };
+
   // Get weight logs for selected gender
   const getSelectedWeightLogs = () => {
     return selectedGenderForHistory === 'male' ? maleWeightLogs : femaleWeightLogs;
@@ -445,10 +491,16 @@ export default function UserDashboardScreen() {
           )}
         </TouchableOpacity>
         <View style={styles.userStatDivider} />
-        <View style={styles.userStatItem}>
-          <Text style={styles.userStatValue}>{user?.height || '-'} cm</Text>
+        <TouchableOpacity 
+          style={styles.userStatItem}
+          onPress={() => openHeightHistory(isMale ? 'male' : 'female')}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={[styles.userStatValue, { color: COLORS.accent }]}>{user?.height || '-'} cm</Text>
+            <Ionicons name="chevron-forward" size={14} color={COLORS.accent} style={{ marginLeft: 2 }} />
+          </View>
           <Text style={styles.userStatLabel}>Height</Text>
-        </View>
+        </TouchableOpacity>
         <View style={styles.userStatDivider} />
         <TouchableOpacity 
           style={styles.userStatItem}
@@ -1059,11 +1111,18 @@ export default function UserDashboardScreen() {
                   {weightLogs.map((log, index) => (
                     <View key={log.id} style={[styles.historyItem, index === 0 && { borderColor: COLORS.primary }]}>
                       <View style={styles.historyDate}>
-                        <Text style={styles.historyDateText}>{log.date}</Text>
-                        {index === 0 && (
-                          <View style={[styles.latestBadge]}>
-                            <Text style={styles.latestBadgeText}>Latest</Text>
-                          </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={styles.historyDateText}>{log.date}</Text>
+                          {index === 0 && (
+                            <View style={[styles.latestBadge]}>
+                              <Text style={styles.latestBadgeText}>Latest</Text>
+                            </View>
+                          )}
+                        </View>
+                        {(log.loggedAt || log.createdAt) && (
+                          <Text style={styles.historyTimeText}>
+                            {formatTimestamp(log.loggedAt || log.createdAt)}
+                          </Text>
                         )}
                       </View>
                       <View style={styles.historyStats}>
@@ -1110,6 +1169,107 @@ export default function UserDashboardScreen() {
     );
   };
 
+  // Render height history modal
+  const renderHeightHistoryModal = () => {
+    const heightHistory = getHeightHistory(selectedGenderForHistory);
+    const selectedUser = selectedGenderForHistory === 'male' ? maleUser : femaleUser;
+    
+    return (
+      <Modal
+        visible={showHeightHistoryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowHeightHistoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%', width: isMobile ? '95%' : 500 }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.userAvatar, { 
+                  backgroundColor: selectedGenderForHistory === 'male' ? COLORS.primary : '#e91e8c',
+                  width: 36,
+                  height: 36,
+                }]}>
+                  <Ionicons 
+                    name={selectedGenderForHistory === 'male' ? 'male' : 'female'} 
+                    size={20} 
+                    color="#fff" 
+                  />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Height History</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 13 }}>
+                    {selectedUser?.name}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setShowHeightHistoryModal(false)}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={{ flex: 1 }}>
+              {heightHistory.length === 0 ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <Ionicons name="resize-outline" size={48} color={COLORS.textMuted} />
+                  <Text style={{ marginTop: 12, color: COLORS.textSecondary, fontSize: 15 }}>
+                    No height recorded yet
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ padding: 16 }}>
+                  {/* Current height card */}
+                  <View style={[styles.summaryCard, { marginBottom: 16 }]}>
+                    <View style={styles.summaryRow}>
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>Current Height</Text>
+                        <Text style={styles.summaryValue}>{selectedUser?.height || heightHistory[0]?.height || '-'} cm</Text>
+                      </View>
+                      <View style={styles.summaryItem}>
+                        <Text style={styles.summaryLabel}>Total Records</Text>
+                        <Text style={styles.summaryValue}>{heightHistory.length}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  {/* Height history list */}
+                  {heightHistory.map((entry, index) => (
+                    <View key={`height-${index}`} style={[styles.historyItem, index === 0 && { borderColor: COLORS.accent }]}>
+                      <View style={styles.historyDate}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={styles.historyDateText}>{entry.date}</Text>
+                          {index === 0 && (
+                            <View style={[styles.latestBadge, { backgroundColor: COLORS.accent + '20' }]}>
+                              <Text style={[styles.latestBadgeText, { color: COLORS.accent }]}>Current</Text>
+                            </View>
+                          )}
+                        </View>
+                        {entry.loggedAt && (
+                          <Text style={styles.historyTimeText}>
+                            {formatTimestamp(entry.loggedAt)}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.historyStats}>
+                        <View style={styles.historyStatItem}>
+                          <Ionicons name="resize-outline" size={18} color={COLORS.accent} />
+                          <Text style={[styles.historyStatValue, { fontSize: 16, fontWeight: '700' }]}>{entry.height} cm</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -1123,6 +1283,7 @@ export default function UserDashboardScreen() {
     <View style={styles.container}>
       {renderHeader()}
       {renderWeightHistoryModal()}
+      {renderHeightHistoryModal()}
       
       <ScrollView
         contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
@@ -1402,6 +1563,15 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.textMuted,
     marginTop: 1,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    gap: 16,
+  },
+  summaryItem: {
+    alignItems: 'center',
+    flex: 1,
   },
 
   // Recent Section
@@ -1831,6 +2001,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.textPrimary,
+  },
+  historyTimeText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
   latestBadge: {
     backgroundColor: COLORS.primary + '20',

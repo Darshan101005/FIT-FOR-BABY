@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -52,6 +53,7 @@ export default function LogWeightScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Load user session and weight history
   useEffect(() => {
@@ -213,21 +215,34 @@ export default function LogWeightScreen() {
     });
   };
 
-  const handleDeleteLatest = async () => {
+  // Format timestamp to 12-hour AM/PM format in IST (Indian Standard Time)
+  const formatTimestamp = (timestamp: any): string => {
+    if (!timestamp) return '';
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleString('en-IN', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Kolkata'
+      });
+    } catch (e) {
+      return '';
+    }
+  };
+
+  const handleDeleteLatest = () => {
+    if (!coupleId || weightHistory.length === 0) return;
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
     if (!coupleId || weightHistory.length === 0) return;
     
     const latestEntry = weightHistory[0];
-    
-    // Confirm deletion - use window.confirm for web, simple confirmation for mobile
-    const confirmDelete = isWeb 
-      ? window.confirm('Are you sure you want to delete the latest weight entry?')
-      : true; // For mobile, we'll show the delete button only, no extra confirmation
-    
-    if (!confirmDelete) {
-      return;
-    }
-    
+    setShowDeleteModal(false);
     setIsDeleting(true);
+    
     try {
       await coupleWeightLogService.delete(coupleId, latestEntry.id);
       showToast('Entry deleted successfully', 'success');
@@ -507,38 +522,6 @@ export default function LogWeightScreen() {
           </LinearGradient>
         </View>
 
-        {/* Simple Chart Visualization */}
-        <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Weight Trend</Text>
-          <View style={styles.chartContainer}>
-            {weightHistory.slice(0, 7).reverse().map((entry, index, arr) => {
-              const displayData = weightHistory.slice(0, 7);
-              const maxWeight = Math.max(...displayData.map(e => e.weight));
-              const minWeight = Math.min(...displayData.map(e => e.weight));
-              const range = maxWeight - minWeight || 1;
-              const heightPercent = ((entry.weight - minWeight) / range) * 100;
-              
-              return (
-                <View key={entry.id} style={styles.chartBar}>
-                  <View style={styles.chartBarContainer}>
-                    <View 
-                      style={[
-                        styles.chartBarFill, 
-                        { 
-                          height: `${Math.max(20, heightPercent)}%`,
-                          backgroundColor: index === arr.length - 1 ? '#006dab' : '#94a3b8'
-                        }
-                      ]} 
-                    />
-                  </View>
-                  <Text style={styles.chartBarLabel}>{formatDate(entry.date)}</Text>
-                  <Text style={styles.chartBarValue}>{entry.weight}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
         {/* History List */}
         <Text style={styles.historyTitle}>Recent Entries ({weightHistory.length})</Text>
         {weightHistory.map((entry, index) => {
@@ -550,11 +533,16 @@ export default function LogWeightScreen() {
             <View key={entry.id} style={[styles.historyItem, isLatest && styles.historyItemLatest]}>
               <View style={styles.historyDate}>
                 <Text style={styles.historyDay}>
-                  {new Date(entry.date).toLocaleDateString('en-US', { day: 'numeric' })}
+                  {new Date(entry.date).toLocaleDateString('en-IN', { day: 'numeric', timeZone: 'Asia/Kolkata' })}
                 </Text>
                 <Text style={styles.historyMonth}>
-                  {new Date(entry.date).toLocaleDateString('en-US', { month: 'short' })}
+                  {new Date(entry.date).toLocaleDateString('en-IN', { month: 'short', timeZone: 'Asia/Kolkata' })}
                 </Text>
+                {entry.loggedAt && (
+                  <Text style={styles.historyTime}>
+                    {formatTimestamp(entry.loggedAt)}
+                  </Text>
+                )}
                 {isLatest && (
                   <View style={styles.latestBadge}>
                     <Text style={styles.latestBadgeText}>Latest</Text>
@@ -622,8 +610,46 @@ export default function LogWeightScreen() {
     );
   };
 
+  // Delete Confirmation Modal
+  const renderDeleteModal = () => (
+    <Modal
+      visible={showDeleteModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowDeleteModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, isMobile && styles.modalContentMobile]}>
+          <View style={styles.modalIconContainer}>
+            <Ionicons name="warning" size={48} color="#ef4444" />
+          </View>
+          <Text style={styles.modalTitle}>Delete Entry?</Text>
+          <Text style={styles.modalMessage}>
+            Are you sure you want to delete the latest weight entry? This action cannot be undone.
+          </Text>
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalButtonCancel]}
+              onPress={() => setShowDeleteModal(false)}
+            >
+              <Text style={styles.modalButtonCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalButtonDelete]}
+              onPress={confirmDelete}
+            >
+              <Ionicons name="trash-outline" size={18} color="#fff" />
+              <Text style={styles.modalButtonDeleteText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
+      {renderDeleteModal()}
       {toast.visible && (
         <Animated.View
           style={[
@@ -962,7 +988,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   historyDate: {
-    width: 50,
+    width: 65,
     alignItems: 'center',
     justifyContent: 'center',
     borderRightWidth: 1,
@@ -972,6 +998,7 @@ const styles = StyleSheet.create({
   },
   historyDay: { fontSize: 24, fontWeight: '800', color: '#0f172a' },
   historyMonth: { fontSize: 12, color: '#64748b', textTransform: 'uppercase' },
+  historyTime: { fontSize: 10, color: '#94a3b8', marginTop: 2 },
   historyDetails: { flex: 1 },
   historyMain: {
     flexDirection: 'row',
@@ -1020,5 +1047,84 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
+  },
+  
+  // Delete Confirmation Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 28,
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalContentMobile: {
+    maxWidth: '90%',
+    padding: 24,
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#fef2f2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 15,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  modalButtonCancel: {
+    backgroundColor: '#f1f5f9',
+  },
+  modalButtonCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  modalButtonDelete: {
+    backgroundColor: '#ef4444',
+  },
+  modalButtonDeleteText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });
