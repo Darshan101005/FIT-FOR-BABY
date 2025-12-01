@@ -7,16 +7,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Animated,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -118,20 +118,9 @@ export default function LoginScreen() {
       const femaleSetupComplete = couple.female.isPasswordReset && couple.female.isPinSet;
       
       if (!maleSetupComplete || !femaleSetupComplete) {
-        const incompleteUsers: string[] = [];
-        if (!maleSetupComplete) {
-          const issues = [];
-          if (!couple.male.isPasswordReset) issues.push('reset password');
-          if (!couple.male.isPinSet) issues.push('set PIN');
-          incompleteUsers.push(`${couple.male.name} must ${issues.join(' & ')}`);
-        }
-        if (!femaleSetupComplete) {
-          const issues = [];
-          if (!couple.female.isPasswordReset) issues.push('reset password');
-          if (!couple.female.isPinSet) issues.push('set PIN');
-          incompleteUsers.push(`${couple.female.name} must ${issues.join(' & ')}`);
-        }
-        showToast(`First-time setup incomplete. ${incompleteUsers.join('. ')}. Use Individual Login.`, 'error');
+        // Get the name of the user who needs to complete setup
+        const incompleteUser = !maleSetupComplete ? couple.male.name : couple.female.name;
+        showToast(`${incompleteUser} needs to complete first-time setup. Use Individual Login.`, 'error');
         setLoginState('idle');
         return;
       }
@@ -332,7 +321,7 @@ export default function LoginScreen() {
       
       if (maleNeedsSetup || femaleNeedsSetup) {
         // Block shared credential login - require individual login first
-        showToast('First-time login requires your personal ID, phone, or email. Use your individual credentials.', 'error');
+        showToast('Please use your personal credentials for first-time login.', 'error');
         setLoginState('idle');
         return;
       }
@@ -499,8 +488,8 @@ export default function LoginScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder={loginMode === 'individual' 
-                        ? 'e.g., C_001_M, john@email.com, 9876543210' 
-                        : 'e.g., C_001, 9876543210, shared@email.com'}
+                        ? 'Enter your User ID, Email or Phone' 
+                        : 'Enter your Couple ID, Phone or Email'}
                       placeholderTextColor="#94a3b8"
                       value={email}
                       onChangeText={setEmail}
@@ -613,10 +602,21 @@ export default function LoginScreen() {
                   />
                   <Text style={styles.modeSwitchText}>
                     {loginMode === 'individual' 
-                      ? 'Using shared credentials? Quick Access' 
+                      ? 'Using shared credentials? Click here' 
                       : 'First-time or individual login? Click here'}
                   </Text>
                 </TouchableOpacity>
+
+                {/* Forgot Password Button */}
+                {loginMode === 'individual' && (
+                  <TouchableOpacity 
+                    style={styles.forgotPasswordButton} 
+                    onPress={() => router.push('/reset-password')} 
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </View>
@@ -737,16 +737,16 @@ const styles = StyleSheet.create({
   inputWrapper: {
     backgroundColor: '#ffffff',
     borderWidth: 2,
-    borderColor: '#e2e8f0',
-    borderRadius: 14,
-    shadowColor: '#000',
+    borderColor: '#006dab',
+    borderRadius: 12,
+    borderStyle: 'solid',
+    shadowColor: '#006dab',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
     flexDirection: 'row',
     alignItems: 'center',
-    overflow: 'hidden',
   },
   input: {
     flex: 1,
@@ -844,11 +844,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   modeSwitchText: {
     fontSize: 14,
     color: '#006dab',
     fontWeight: '600',
+  },
+  forgotPasswordButton: {
+    alignItems: 'center',
+    paddingVertical: 4,
+    marginTop: 0,
+  },
+  forgotPasswordText: {
+    fontSize: 15,
+    color: '#98be4e',
+    fontWeight: '700',
   },
 });

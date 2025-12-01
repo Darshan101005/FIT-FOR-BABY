@@ -138,16 +138,18 @@ export default function ResetPasswordScreen() {
     if (!newPassword) return { level: 0, text: '', color: '#e2e8f0' };
     
     let strength = 0;
+    // Check all 4 required rules
     if (newPassword.length >= 8) strength++;
     if (/[A-Z]/.test(newPassword)) strength++;
     if (/[a-z]/.test(newPassword)) strength++;
     if (/[0-9]/.test(newPassword)) strength++;
-    if (/[^A-Za-z0-9]/.test(newPassword)) strength++;
 
-    if (strength <= 2) return { level: strength, text: 'Weak', color: '#ef4444' };
-    if (strength <= 3) return { level: strength, text: 'Medium', color: '#f59e0b' };
-    if (strength <= 4) return { level: strength, text: 'Strong', color: '#22c55e' };
-    return { level: strength, text: 'Very Strong', color: '#006dab' };
+    // Strength levels based on rules met (out of 4)
+    if (strength === 0) return { level: 0, text: '', color: '#e2e8f0' };
+    if (strength === 1) return { level: 1, text: 'Weak', color: '#ef4444' };
+    if (strength === 2) return { level: 2, text: 'Weak', color: '#ef4444' };
+    if (strength === 3) return { level: 3, text: 'Medium', color: '#f59e0b' };
+    return { level: 4, text: 'Strong', color: '#22c55e' };
   };
 
   const passwordStrength = getPasswordStrength();
@@ -203,9 +205,9 @@ export default function ResetPasswordScreen() {
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>New Password</Text>
                 <View style={styles.inputWrapper}>
-                  <Ionicons name="lock-closed-outline" size={20} color="#64748b" style={styles.inputIcon} />
+                  <Ionicons name="lock-closed-outline" size={20} color="#006dab" style={styles.inputIcon} />
                   <TextInput
-                    style={styles.textInput}
+                    style={[styles.textInput, isWeb && { outlineStyle: 'none' as any }]}
                     value={newPassword}
                     onChangeText={setNewPassword}
                     placeholder="Enter new password"
@@ -220,7 +222,7 @@ export default function ResetPasswordScreen() {
                     <Ionicons 
                       name={showNewPassword ? 'eye-outline' : 'eye-off-outline'} 
                       size={22} 
-                      color="#64748b" 
+                      color="#006dab" 
                     />
                   </TouchableOpacity>
                 </View>
@@ -229,7 +231,7 @@ export default function ResetPasswordScreen() {
                 {newPassword.length > 0 && (
                   <View style={styles.strengthContainer}>
                     <View style={styles.strengthBars}>
-                      {[1, 2, 3, 4, 5].map((level) => (
+                      {[1, 2, 3, 4].map((level) => (
                         <View 
                           key={level}
                           style={[
@@ -250,9 +252,9 @@ export default function ResetPasswordScreen() {
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Confirm Password</Text>
                 <View style={styles.inputWrapper}>
-                  <Ionicons name="lock-closed-outline" size={20} color="#64748b" style={styles.inputIcon} />
+                  <Ionicons name="lock-closed-outline" size={20} color="#006dab" style={styles.inputIcon} />
                   <TextInput
-                    style={styles.textInput}
+                    style={[styles.textInput, isWeb && { outlineStyle: 'none' as any }]}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     placeholder="Confirm your password"
@@ -466,29 +468,39 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 8,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#006dab',
+    marginBottom: 10,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#e2e8f0',
-    paddingHorizontal: 14,
-    height: 54,
+    borderColor: '#006dab',
+    borderStyle: 'solid',
+    paddingHorizontal: 16,
+    height: 58,
+    shadowColor: '#006dab',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   inputIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   textInput: {
     flex: 1,
     fontSize: 16,
-    color: '#0f172a',
+    color: '#1e293b',
+    fontWeight: '600',
     height: '100%',
+    paddingVertical: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
   },
   eyeButton: {
     padding: 4,

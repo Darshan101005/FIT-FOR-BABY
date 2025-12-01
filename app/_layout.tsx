@@ -13,32 +13,15 @@ export default function RootLayout() {
           <Stack.Screen name="get-started" />
           <Stack.Screen name="landing" />
           <Stack.Screen name="login" />
+          <Stack.Screen name="admin-login" />
+          <Stack.Screen name="reset-password" />
           <Stack.Screen name="verify-otp" />
           <Stack.Screen name="questionnaire" />
           
-          {/* User Routes */}
-          <Stack.Screen name="user/home" />
-          <Stack.Screen name="user/log-food" />
-          <Stack.Screen name="user/log-exercise" />
-          <Stack.Screen name="user/log-weight" />
-          <Stack.Screen name="user/appointments" />
-          <Stack.Screen name="user/progress" />
-          <Stack.Screen name="user/messages" />
-          <Stack.Screen name="user/profile" />
-          <Stack.Screen name="user/personal-info" />
-          <Stack.Screen name="user/device-management" />
-          <Stack.Screen name="user/partner-settings" />
-          <Stack.Screen name="user/enter-pin" />
-          <Stack.Screen name="user/manage-pin" />
-          <Stack.Screen name="user/help-center" />
-          <Stack.Screen name="user/feedback" />
-          <Stack.Screen name="user/about" />
-          
-          {/* Admin Routes */}
-          <Stack.Screen name="admin/home" />
-          <Stack.Screen name="admin/users" />
-          <Stack.Screen name="admin/goals" />
-          <Stack.Screen name="admin/reports" />
+          {/* Nested Route Groups */}
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="admin" />
+          <Stack.Screen name="user" />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
