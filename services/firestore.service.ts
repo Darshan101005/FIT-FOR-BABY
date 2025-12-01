@@ -1525,6 +1525,122 @@ export const coupleFoodLogService = {
 };
 
 // ============================================
+// DIET PLAN OPERATIONS (Admin managed recommendations)
+// Path: /couples/{coupleId}/dietPlan
+// ============================================
+
+export interface DietPlanFood {
+  id: string;
+  name: string;
+  nameTamil: string;
+  caloriesPer100g: number;
+  proteinPer100g: number;
+  carbsPer100g: number;
+  fatPer100g: number;
+  category: string;
+  quantity?: string;
+  servingIndex?: number;
+  servingCount?: number;
+}
+
+export interface DietPlan {
+  id: string;
+  coupleId: string;
+  breakfast: DietPlanFood[];
+  lunch: DietPlanFood[];
+  dinner: DietPlanFood[];
+  snacks?: DietPlanFood[];
+  notes?: string;
+  createdBy: string;
+  createdByName?: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export const dietPlanService = {
+  // Save or update diet plan for a couple
+  async save(coupleId: string, data: {
+    breakfast: DietPlanFood[];
+    lunch: DietPlanFood[];
+    dinner: DietPlanFood[];
+    snacks?: DietPlanFood[];
+    notes?: string;
+    createdBy: string;
+    createdByName?: string;
+  }): Promise<void> {
+    try {
+      const dietPlanRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'dietPlan', 'current');
+      
+      await setDoc(dietPlanRef, {
+        coupleId,
+        breakfast: data.breakfast,
+        lunch: data.lunch,
+        dinner: data.dinner,
+        snacks: data.snacks || [],
+        notes: data.notes || '',
+        createdBy: data.createdBy,
+        createdByName: data.createdByName || '',
+        updatedAt: now(),
+      }, { merge: true });
+      
+      // Set createdAt only if it's a new document
+      const docSnap = await getDoc(dietPlanRef);
+      if (docSnap.exists() && !docSnap.data().createdAt) {
+        await updateDoc(dietPlanRef, { createdAt: now() });
+      }
+    } catch (error) {
+      console.error('Error saving diet plan:', error);
+      throw error;
+    }
+  },
+
+  // Get diet plan for a couple
+  async get(coupleId: string): Promise<DietPlan | null> {
+    try {
+      const dietPlanRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'dietPlan', 'current');
+      const docSnap = await getDoc(dietPlanRef);
+      
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as DietPlan;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting diet plan:', error);
+      return null;
+    }
+  },
+
+  // Subscribe to diet plan changes (real-time)
+  subscribe(coupleId: string, callback: (dietPlan: DietPlan | null) => void): Unsubscribe {
+    const dietPlanRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'dietPlan', 'current');
+    return onSnapshot(dietPlanRef, 
+      (docSnap) => {
+        if (docSnap.exists()) {
+          callback({ id: docSnap.id, ...docSnap.data() } as DietPlan);
+        } else {
+          callback(null);
+        }
+      },
+      (error) => {
+        console.error('Error subscribing to diet plan:', error);
+        callback(null);
+      }
+    );
+  },
+
+  // Delete diet plan
+  async delete(coupleId: string): Promise<void> {
+    try {
+      const dietPlanRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'dietPlan', 'current');
+      await deleteDoc(dietPlanRef);
+    } catch (error) {
+      console.error('Error deleting diet plan:', error);
+      throw error;
+    }
+  },
+};
+
+// ============================================
 // NURSE VISITS OPERATIONS (Admin managed)
 // ============================================
 
@@ -1852,6 +1968,7 @@ export const firestoreServices = {
   exerciseLog: exerciseLogService,
   coupleExercise: coupleExerciseService,
   coupleFoodLog: coupleFoodLogService,
+  dietPlan: dietPlanService,
   appointment: appointmentService,
   admin: adminService,
   nurseVisit: nurseVisitService,

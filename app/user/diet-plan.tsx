@@ -1,9 +1,13 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
+import { DietPlan, DietPlanFood, dietPlanService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
+    ActivityIndicator,
     Platform,
     ScrollView,
     StyleSheet,
@@ -15,80 +19,110 @@ import {
 
 const isWeb = Platform.OS === 'web';
 
+interface DietItem {
+  id: string;
+  name: string;
+  nameTamil: string;
+  calories: number;
+  quantity: string;
+}
+
 export default function DietPlanScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
 
-  // Mock diet recommendations from admin
-  const dietRecommendations = {
-    breakfast: [
-      { id: '1', name: 'Idli', nameTamil: 'இட்லி', calories: 39, quantity: '2 pieces' },
-      { id: '2', name: 'Sambar', nameTamil: 'சாம்பார்', calories: 65, quantity: '1 cup' },
-      { id: '3', name: 'Coconut Chutney', nameTamil: 'தேங்காய் சட்னி', calories: 45, quantity: '2 tbsp' },
-    ],
-    lunch: [
-      { id: '4', name: 'Rice', nameTamil: 'சாதம்', calories: 130, quantity: '1 cup' },
-      { id: '5', name: 'Dal Curry', nameTamil: 'பருப்பு குழம்பு', calories: 104, quantity: '1 cup' },
-      { id: '6', name: 'Mixed Vegetable Curry', nameTamil: 'காய்கறி கூட்டு', calories: 85, quantity: '1 cup' },
-      { id: '7', name: 'Buttermilk', nameTamil: 'மோர்', calories: 40, quantity: '1 glass' },
-    ],
-    dinner: [
-      { id: '8', name: 'Chapati', nameTamil: 'சப்பாத்தி', calories: 71, quantity: '2 pieces' },
-      { id: '9', name: 'Paneer Curry', nameTamil: 'பனீர் கறி', calories: 145, quantity: '1 cup' },
-      { id: '10', name: 'Salad', nameTamil: 'சாலட்', calories: 35, quantity: '1 bowl' },
-    ],
+  const [isLoading, setIsLoading] = useState(true);
+  const [dietPlan, setDietPlan] = useState<DietPlan | null>(null);
+
+  // Load diet plan from Firestore
+  useFocusEffect(
+    useCallback(() => {
+      const loadDietPlan = async () => {
+        try {
+          setIsLoading(true);
+          const coupleId = await AsyncStorage.getItem('coupleId');
+          console.log('Loading diet plan for coupleId:', coupleId);
+          if (coupleId) {
+            const plan = await dietPlanService.get(coupleId);
+            console.log('Loaded diet plan:', plan);
+            setDietPlan(plan);
+          }
+        } catch (error) {
+          console.error('Error loading diet plan:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadDietPlan();
+    }, [])
+  );
+
+  // Convert diet plan items to display format
+  const formatDietItems = (items: DietPlanFood[]): DietItem[] => {
+    return items.map((item, index) => ({
+      id: item.id || `item-${index}`,
+      name: item.name,
+      nameTamil: item.nameTamil || '',
+      calories: item.caloriesPer100g || 0,
+      quantity: item.quantity || '100g',
+    }));
   };
 
-  const totalCalories = 
-    dietRecommendations.breakfast.reduce((sum, item) => sum + item.calories, 0) +
-    dietRecommendations.lunch.reduce((sum, item) => sum + item.calories, 0) +
-    dietRecommendations.dinner.reduce((sum, item) => sum + item.calories, 0);
+  const breakfast = dietPlan ? formatDietItems(dietPlan.breakfast) : [];
+  const lunch = dietPlan ? formatDietItems(dietPlan.lunch) : [];
+  const dinner = dietPlan ? formatDietItems(dietPlan.dinner) : [];
+
+  const totalCalories = dietPlan?.totalCalories || 0;
 
   const renderMealSection = (
     title: string, 
-    items: typeof dietRecommendations.breakfast, 
+    items: DietItem[], 
     icon: string, 
     iconColor: string,
     bgColor: string
-  ) => (
-    <View style={styles.mealSection}>
-      <View style={styles.mealHeader}>
-        <View style={[styles.mealIconBox, { backgroundColor: bgColor }]}>
-          <Ionicons name={icon as any} size={22} color={iconColor} />
-        </View>
-        <View style={styles.mealHeaderInfo}>
-          <Text style={[styles.mealTitle, { color: colors.text }]}>{title}</Text>
-          <Text style={[styles.mealCalories, { color: colors.textSecondary }]}>
-            {items.reduce((sum, item) => sum + item.calories, 0)} calories
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.foodList}>
-        {items.map((item, index) => (
-          <View 
-            key={item.id} 
-            style={[
-              styles.foodItem, 
-              { backgroundColor: isDarkMode ? '#1a1a2e' : '#f8fafc' },
-              index === items.length - 1 && styles.foodItemLast
-            ]}
-          >
-            <View style={styles.foodItemLeft}>
-              <Text style={[styles.foodName, { color: colors.text }]}>{item.name}</Text>
-              <Text style={[styles.foodNameTamil, { color: colors.textSecondary }]}>{item.nameTamil}</Text>
-            </View>
-            <View style={styles.foodItemRight}>
-              <Text style={[styles.foodQuantity, { color: colors.textSecondary }]}>{item.quantity}</Text>
-              <Text style={styles.foodCalories}>{item.calories} cal</Text>
-            </View>
+  ) => {
+    if (items.length === 0) return null;
+    
+    return (
+      <View style={styles.mealSection}>
+        <View style={styles.mealHeader}>
+          <View style={[styles.mealIconBox, { backgroundColor: bgColor }]}>
+            <Ionicons name={icon as any} size={22} color={iconColor} />
           </View>
-        ))}
+          <View style={styles.mealHeaderInfo}>
+            <Text style={[styles.mealTitle, { color: colors.text }]}>{title}</Text>
+            <Text style={[styles.mealCalories, { color: colors.textSecondary }]}>
+              {items.reduce((sum, item) => sum + item.calories, 0)} calories
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.foodList}>
+          {items.map((item, index) => (
+            <View 
+              key={item.id} 
+              style={[
+                styles.foodItem, 
+                { backgroundColor: isDarkMode ? '#1a1a2e' : '#f8fafc' },
+                index === items.length - 1 && styles.foodItemLast
+              ]}
+            >
+              <View style={styles.foodItemLeft}>
+                <Text style={[styles.foodName, { color: colors.text }]}>{item.name}</Text>
+                <Text style={[styles.foodNameTamil, { color: colors.textSecondary }]}>{item.nameTamil}</Text>
+              </View>
+              <View style={styles.foodItemRight}>
+                <Text style={[styles.foodQuantity, { color: colors.textSecondary }]}>{item.quantity}</Text>
+                <Text style={styles.foodCalories}>{item.calories} cal</Text>
+              </View>
+            </View>
+          ))}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -119,56 +153,61 @@ export default function DietPlanScreen() {
       >
         <View style={[styles.content, isMobile && styles.contentMobile]}>
           
-          {/* Total Calories Card */}
-          <View style={[styles.totalCard, { backgroundColor: isDarkMode ? '#1a2d3d' : '#e0f2fe' }]}>
-            <View style={styles.totalCardLeft}>
-              <Ionicons name="flame" size={28} color="#006dab" />
-              <View style={styles.totalCardInfo}>
-                <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>Total Daily Calories</Text>
-                <Text style={styles.totalValue}>{totalCalories} cal</Text>
-              </View>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#006dab" />
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                Loading your diet plan...
+              </Text>
             </View>
-            <View style={[styles.totalBadge, { backgroundColor: '#006dab15' }]}>
-              <Text style={styles.totalBadgeText}>Balanced</Text>
+          ) : !dietPlan ? (
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons name="food-off" size={64} color={colors.textSecondary} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No Diet Plan Yet</Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                Your health coach hasn't assigned a diet plan for you yet. Check back later!
+              </Text>
             </View>
-          </View>
+          ) : (
+            <>
+              {/* Breakfast */}
+              {renderMealSection('Breakfast', breakfast, 'sunny', '#f59e0b', '#fef3c7')}
 
-          {/* Breakfast */}
-          {renderMealSection('Breakfast', dietRecommendations.breakfast, 'sunny', '#f59e0b', '#fef3c7')}
+              {/* Lunch */}
+              {renderMealSection('Lunch', lunch, 'partly-sunny', '#98be4e', '#e8f5d6')}
 
-          {/* Lunch */}
-          {renderMealSection('Lunch', dietRecommendations.lunch, 'partly-sunny', '#98be4e', '#e8f5d6')}
+              {/* Dinner */}
+              {renderMealSection('Dinner', dinner, 'moon', '#006dab', '#e0f2fe')}
 
-          {/* Dinner */}
-          {renderMealSection('Dinner', dietRecommendations.dinner, 'moon', '#006dab', '#e0f2fe')}
-
-          {/* Tips Section */}
-          <View style={[styles.tipsCard, { backgroundColor: colors.cardBackground }]}>
-            <View style={styles.tipsHeader}>
-              <Ionicons name="bulb" size={20} color="#f59e0b" />
-              <Text style={[styles.tipsTitle, { color: colors.text }]}>Nutrition Tips</Text>
-            </View>
-            <View style={styles.tipsList}>
-              <View style={styles.tipItem}>
-                <View style={[styles.tipDot, { backgroundColor: '#98be4e' }]} />
-                <Text style={[styles.tipText, { color: colors.textSecondary }]}>
-                  Drink plenty of water between meals
-                </Text>
+              {/* Tips Section */}
+              <View style={[styles.tipsCard, { backgroundColor: colors.cardBackground }]}>
+                <View style={styles.tipsHeader}>
+                  <Ionicons name="bulb" size={20} color="#f59e0b" />
+                  <Text style={[styles.tipsTitle, { color: colors.text }]}>Nutrition Tips</Text>
+                </View>
+                <View style={styles.tipsList}>
+                  <View style={styles.tipItem}>
+                    <View style={[styles.tipDot, { backgroundColor: '#98be4e' }]} />
+                    <Text style={[styles.tipText, { color: colors.textSecondary }]}>
+                      Drink plenty of water between meals
+                    </Text>
+                  </View>
+                  <View style={styles.tipItem}>
+                    <View style={[styles.tipDot, { backgroundColor: '#006dab' }]} />
+                    <Text style={[styles.tipText, { color: colors.textSecondary }]}>
+                      Eat slowly and chew your food thoroughly
+                    </Text>
+                  </View>
+                  <View style={styles.tipItem}>
+                    <View style={[styles.tipDot, { backgroundColor: '#f59e0b' }]} />
+                    <Text style={[styles.tipText, { color: colors.textSecondary }]}>
+                      Avoid heavy meals close to bedtime
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.tipItem}>
-                <View style={[styles.tipDot, { backgroundColor: '#006dab' }]} />
-                <Text style={[styles.tipText, { color: colors.textSecondary }]}>
-                  Eat slowly and chew your food thoroughly
-                </Text>
-              </View>
-              <View style={styles.tipItem}>
-                <View style={[styles.tipDot, { backgroundColor: '#f59e0b' }]} />
-                <Text style={[styles.tipText, { color: colors.textSecondary }]}>
-                  Avoid heavy meals close to bedtime
-                </Text>
-              </View>
-            </View>
-          </View>
+            </>
+          )}
 
         </View>
       </ScrollView>
@@ -230,6 +269,32 @@ const styles = StyleSheet.create({
   },
   contentMobile: {
     padding: 16,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+  },
+  loadingText: {
+    fontSize: 15,
+    marginTop: 16,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   totalCard: {
     flexDirection: 'row',

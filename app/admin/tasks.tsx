@@ -1,4 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,7 +14,13 @@ import {
   View
 } from 'react-native';
 import { foodDatabase, FoodItemData } from '../../data/foodDatabase';
-import { globalSettingsService } from '../../services/firestore.service';
+import { coupleService, DietPlanFood, dietPlanService, globalSettingsService } from '../../services/firestore.service';
+
+// Extended food type with quantity for diet recommendations
+interface DietFoodItem extends FoodItemData {
+  servingIndex: number;  // Index in commonServings array
+  servingCount: number;  // Number of servings (e.g., 2 pieces)
+}
 
 // Fit for Baby Color Palette
 const COLORS = {
@@ -116,24 +123,41 @@ export default function AdminTasksScreen() {
   const [showFoodModal, setShowFoodModal] = useState(false);
   const [activeMealType, setActiveMealType] = useState<'breakfast' | 'lunch' | 'dinner'>('breakfast');
   const [foodSearch, setFoodSearch] = useState('');
+  const [isSavingDiet, setIsSavingDiet] = useState(false);
+  const [isLoadingDietPlan, setIsLoadingDietPlan] = useState(false);
   const [dietRecommendations, setDietRecommendations] = useState<{
-    breakfast: FoodItemData[];
-    lunch: FoodItemData[];
-    dinner: FoodItemData[];
+    breakfast: DietFoodItem[];
+    lunch: DietFoodItem[];
+    dinner: DietFoodItem[];
   }>({
     breakfast: [],
     lunch: [],
     dinner: [],
   });
 
-  // Mock users for diet recommendation
-  const mockUsers = [
-    { id: 'C_001', name: 'John & Sarah Smith' },
-    { id: 'C_002', name: 'Mike & Lisa Johnson' },
-    { id: 'C_003', name: 'David & Emma Williams' },
-    { id: 'C_004', name: 'Chris & Anna Brown' },
-    { id: 'C_005', name: 'James & Olivia Davis' },
-  ];
+  // Couples list for diet recommendation
+  const [couplesList, setCouplesList] = useState<{ id: string; name: string }[]>([]);
+  const [isLoadingCouples, setIsLoadingCouples] = useState(true);
+
+  // Load couples from Firestore
+  useEffect(() => {
+    const loadCouples = async () => {
+      try {
+        setIsLoadingCouples(true);
+        const couples = await coupleService.getAll();
+        const formattedCouples = couples.map((couple: any) => ({
+          id: couple.coupleId || couple.id,
+          name: `${couple.male?.name || 'Male'} & ${couple.female?.name || 'Female'}`,
+        }));
+        setCouplesList(formattedCouples);
+      } catch (error) {
+        console.error('Error loading couples:', error);
+      } finally {
+        setIsLoadingCouples(false);
+      }
+    };
+    loadCouples();
+  }, []);
 
   // Load global settings from Firestore on mount
   useEffect(() => {
@@ -168,7 +192,78 @@ export default function AdminTasksScreen() {
     loadSettings();
   }, []);
 
-  const filteredUsers = mockUsers.filter(user =>
+  // Load existing diet plan when user is selected
+  useEffect(() => {
+    const loadDietPlan = async () => {
+      if (!selectedDietUser) return;
+      
+      try {
+        setIsLoadingDietPlan(true);
+        const existingPlan = await dietPlanService.get(selectedDietUser.id);
+        
+        if (existingPlan) {
+          // Convert DietPlanFood[] to DietFoodItem[] by finding matching foods
+          const mapToDietFoodItem = (foods: DietPlanFood[]): DietFoodItem[] => {
+            return foods.map(f => {
+              const fullFood = foodDatabase.find(fd => fd.id === f.id);
+              if (fullFood) {
+                // Validate servingIndex - make sure it points to a valid (non-Custom) serving
+                let servingIndex = f.servingIndex ?? 0;
+                const serving = fullFood.commonServings[servingIndex];
+                if (!serving || serving.label === 'Custom' || serving.grams === 0) {
+                  // Find first valid serving
+                  servingIndex = fullFood.commonServings.findIndex(s => s.label !== 'Custom' && s.grams > 0);
+                  if (servingIndex < 0) servingIndex = 0;
+                }
+                
+                return {
+                  ...fullFood,
+                  servingIndex,
+                  servingCount: f.servingCount ?? 1,
+                };
+              }
+              // Fallback if food not found in database
+              return {
+                id: f.id,
+                name: f.name,
+                nameTamil: f.nameTamil,
+                caloriesPer100g: f.caloriesPer100g,
+                proteinPer100g: f.proteinPer100g,
+                carbsPer100g: f.carbsPer100g,
+                fatPer100g: f.fatPer100g,
+                category: f.category as any,
+                subCategory: '',
+                isCustom: false,
+                mealTimes: [],
+                commonServings: [{ label: 'serving', grams: 100 }],
+                defaultServingSize: 100,
+                servingUnit: 'g',
+                servingIndex: 0,
+                servingCount: f.servingCount ?? 1,
+              } as DietFoodItem;
+            });
+          };
+          
+          setDietRecommendations({
+            breakfast: mapToDietFoodItem(existingPlan.breakfast || []),
+            lunch: mapToDietFoodItem(existingPlan.lunch || []),
+            dinner: mapToDietFoodItem(existingPlan.dinner || []),
+          });
+        } else {
+          // No existing plan, clear
+          setDietRecommendations({ breakfast: [], lunch: [], dinner: [] });
+        }
+      } catch (error) {
+        console.error('Error loading diet plan:', error);
+      } finally {
+        setIsLoadingDietPlan(false);
+      }
+    };
+    
+    loadDietPlan();
+  }, [selectedDietUser]);
+
+  const filteredUsers = couplesList.filter(user =>
     user.name.toLowerCase().includes(dietUserSearch.toLowerCase()) ||
     user.id.toLowerCase().includes(dietUserSearch.toLowerCase())
   );
@@ -178,13 +273,48 @@ export default function AdminTasksScreen() {
     food.nameTamil.toLowerCase().includes(foodSearch.toLowerCase())
   );
 
+  // Helper to get valid servings (exclude Custom which has 0 grams)
+  const getValidServings = (food: FoodItemData) => {
+    return food.commonServings.filter(s => s.label !== 'Custom' && s.grams > 0);
+  };
+
   const handleAddFood = (food: FoodItemData) => {
+    // Find first valid serving (not Custom)
+    const validServings = getValidServings(food);
+    const firstValidIndex = food.commonServings.findIndex(s => s.label !== 'Custom' && s.grams > 0);
+    
+    const foodWithServing: DietFoodItem = {
+      ...food,
+      servingIndex: firstValidIndex >= 0 ? firstValidIndex : 0,
+      servingCount: 1,
+    };
     setDietRecommendations(prev => ({
       ...prev,
-      [activeMealType]: [...prev[activeMealType], food],
+      [activeMealType]: [...prev[activeMealType], foodWithServing],
     }));
     setShowFoodModal(false);
     setFoodSearch('');
+  };
+
+  const handleUpdateServingCount = (mealType: 'breakfast' | 'lunch' | 'dinner', foodId: string, delta: number) => {
+    setDietRecommendations(prev => ({
+      ...prev,
+      [mealType]: prev[mealType].map(f => {
+        if (f.id === foodId) {
+          const newCount = Math.max(1, f.servingCount + delta);
+          const maxCount = f.maxServingCount || 10;
+          return { ...f, servingCount: Math.min(newCount, maxCount) };
+        }
+        return f;
+      }),
+    }));
+  };
+
+  const handleUpdateServingIndex = (mealType: 'breakfast' | 'lunch' | 'dinner', foodId: string, servingIndex: number) => {
+    setDietRecommendations(prev => ({
+      ...prev,
+      [mealType]: prev[mealType].map(f => f.id === foodId ? { ...f, servingIndex } : f),
+    }));
   };
 
   const handleRemoveFood = (mealType: 'breakfast' | 'lunch' | 'dinner', foodId: string) => {
@@ -194,7 +324,14 @@ export default function AdminTasksScreen() {
     }));
   };
 
-  const handleSaveDietRecommendation = () => {
+  // Helper to get serving label for display
+  const getServingLabel = (food: DietFoodItem): string => {
+    const serving = food.commonServings[food.servingIndex];
+    if (!serving) return `${food.servingCount} serving`;
+    return `${food.servingCount} × ${serving.label} (${serving.grams * food.servingCount}g)`;
+  };
+
+  const handleSaveDietRecommendation = async () => {
     if (!selectedDietUser) {
       showToast('Please select a user first', 'error');
       return;
@@ -203,11 +340,60 @@ export default function AdminTasksScreen() {
       showToast('Please add at least one food item', 'error');
       return;
     }
-    showToast(`Diet recommendation saved for ${selectedDietUser.name}!`, 'success');
-    // Reset after save
-    setDietRecommendations({ breakfast: [], lunch: [], dinner: [] });
-    setSelectedDietUser(null);
-    setDietUserSearch('');
+    
+    setIsSavingDiet(true);
+    try {
+      // Get admin info from AsyncStorage
+      const adminId = await AsyncStorage.getItem('adminId') || 'unknown';
+      const adminName = await AsyncStorage.getItem('adminName') || 'Admin';
+      
+      // Convert DietFoodItem to DietPlanFood with proper quantity string
+      const toDietPlanFood = (foods: DietFoodItem[]): DietPlanFood[] => {
+        return foods.map(f => {
+          const serving = f.commonServings[f.servingIndex];
+          // Ensure we have valid serving info (not Custom)
+          const isValidServing = serving && serving.label !== 'Custom' && serving.grams > 0;
+          const servingLabel = isValidServing ? serving.label : `${f.defaultServingSize}g`;
+          const gramsPerServing = isValidServing ? serving.grams : f.defaultServingSize;
+          const totalGrams = gramsPerServing * f.servingCount;
+          
+          const quantity = `${f.servingCount} ${servingLabel} (${totalGrams}g)`;
+          
+          return {
+            id: f.id,
+            name: f.name,
+            nameTamil: f.nameTamil,
+            caloriesPer100g: f.caloriesPer100g,
+            proteinPer100g: f.proteinPer100g,
+            carbsPer100g: f.carbsPer100g,
+            fatPer100g: f.fatPer100g,
+            category: f.category,
+            quantity,
+            servingIndex: f.servingIndex,
+            servingCount: f.servingCount,
+          };
+        });
+      };
+      
+      await dietPlanService.save(selectedDietUser.id, {
+        breakfast: toDietPlanFood(dietRecommendations.breakfast),
+        lunch: toDietPlanFood(dietRecommendations.lunch),
+        dinner: toDietPlanFood(dietRecommendations.dinner),
+        createdBy: adminId,
+        createdByName: adminName,
+      });
+      
+      showToast(`Diet plan saved for ${selectedDietUser.name}!`, 'success');
+      // Reset after save
+      setDietRecommendations({ breakfast: [], lunch: [], dinner: [] });
+      setSelectedDietUser(null);
+      setDietUserSearch('');
+    } catch (error) {
+      console.error('Error saving diet plan:', error);
+      showToast('Failed to save diet plan', 'error');
+    } finally {
+      setIsSavingDiet(false);
+    }
   };
 
   // Data collection periods
@@ -483,20 +669,36 @@ export default function AdminTasksScreen() {
             <MaterialCommunityIcons name="food-variant" size={22} color={COLORS.accent} />
             <Text style={styles.configTitle}>Diet Recommendations</Text>
           </View>
-          <TouchableOpacity style={styles.saveButton} onPress={handleSaveDietRecommendation}>
-            <Ionicons name="checkmark" size={18} color="#fff" />
-            <Text style={styles.saveButtonText}>Save</Text>
+          <TouchableOpacity 
+            style={[styles.saveButton, isSavingDiet && styles.saveButtonDisabled]} 
+            onPress={handleSaveDietRecommendation}
+            disabled={isSavingDiet}
+          >
+            {isSavingDiet ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark" size={18} color="#fff" />
+                <Text style={styles.saveButtonText}>Save</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
         {/* User Search */}
         <View style={styles.dietUserSection}>
-          <Text style={styles.dietSectionLabel}>Select User (by Name or ID)</Text>
+          <Text style={styles.dietSectionLabel}>Select Couple (by Name or ID)</Text>
+          {isLoadingCouples ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.loadingText}>Loading couples...</Text>
+            </View>
+          ) : (
           <View style={styles.userSearchContainer}>
             <Ionicons name="search" size={18} color={COLORS.textMuted} style={styles.searchIcon} />
             <TextInput
               style={styles.userSearchInput}
-              placeholder="Search user by name or ID..."
+              placeholder="Search couple by name or ID..."
               placeholderTextColor={COLORS.textMuted}
               value={dietUserSearch}
               onChangeText={setDietUserSearch}
@@ -507,6 +709,7 @@ export default function AdminTasksScreen() {
               </TouchableOpacity>
             )}
           </View>
+          )}
 
           {/* User Suggestions */}
           {dietUserSearch.length > 0 && !selectedDietUser && (
@@ -538,9 +741,9 @@ export default function AdminTasksScreen() {
           {/* Selected User Badge */}
           {selectedDietUser && (
             <View style={styles.selectedUserBadge}>
-              <Ionicons name="person" size={16} color={COLORS.primary} />
+              <Ionicons name="people" size={16} color={COLORS.primary} />
               <Text style={styles.selectedUserText}>{selectedDietUser.name} ({selectedDietUser.id})</Text>
-              <TouchableOpacity onPress={() => { setSelectedDietUser(null); setDietUserSearch(''); }}>
+              <TouchableOpacity onPress={() => { setSelectedDietUser(null); setDietUserSearch(''); setDietRecommendations({ breakfast: [], lunch: [], dinner: [] }); }}>
                 <Ionicons name="close" size={16} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -549,6 +752,12 @@ export default function AdminTasksScreen() {
 
         {/* Meal Sections */}
         {selectedDietUser && (
+          isLoadingDietPlan ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={styles.loadingText}>Loading existing diet plan...</Text>
+            </View>
+          ) : (
           <View style={styles.mealSections}>
             {(['breakfast', 'lunch', 'dinner'] as const).map(mealType => (
               <View key={mealType} style={styles.mealSection}>
@@ -583,27 +792,88 @@ export default function AdminTasksScreen() {
                   {dietRecommendations[mealType].length === 0 ? (
                     <Text style={styles.noFoodText}>No food items added</Text>
                   ) : (
-                    dietRecommendations[mealType].map(food => (
-                      <View key={food.id} style={styles.foodItem}>
-                        <View style={styles.foodItemInfo}>
-                          <Text style={styles.foodItemName}>{food.name}</Text>
-                          <Text style={styles.foodItemDetails}>
-                            {food.caloriesPer100g} cal/100g • {food.category}
-                          </Text>
+                    dietRecommendations[mealType].map(food => {
+                      const serving = food.commonServings[food.servingIndex];
+                      // If Custom or invalid serving, use first valid serving's grams
+                      const isValidServing = serving && serving.label !== 'Custom' && serving.grams > 0;
+                      const totalGrams = isValidServing 
+                        ? serving.grams * food.servingCount 
+                        : food.defaultServingSize * food.servingCount;
+                      
+                      // Get valid servings (exclude Custom)
+                      const validServings = food.commonServings
+                        .map((s, idx) => ({ ...s, originalIndex: idx }))
+                        .filter(s => s.label !== 'Custom' && s.grams > 0);
+                      
+                      return (
+                        <View key={food.id} style={styles.foodItemCard}>
+                          {/* Food Name and Delete */}
+                          <View style={styles.foodItemHeader}>
+                            <View style={styles.foodItemInfo}>
+                              <Text style={styles.foodItemName}>{food.name}</Text>
+                              <Text style={styles.foodItemNameTamil}>{food.nameTamil}</Text>
+                            </View>
+                            <TouchableOpacity
+                              style={styles.removeFoodButton}
+                              onPress={() => handleRemoveFood(mealType, food.id)}
+                            >
+                              <Ionicons name="trash-outline" size={18} color={COLORS.error} />
+                            </TouchableOpacity>
+                          </View>
+                          
+                          {/* Serving Size Selection - Only valid servings */}
+                          <View style={styles.servingSelector}>
+                            <Text style={styles.servingSelectorLabel}>Serving:</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.servingChipsContainer}>
+                              {validServings.map((s) => (
+                                <TouchableOpacity
+                                  key={s.originalIndex}
+                                  style={[
+                                    styles.servingChip,
+                                    food.servingIndex === s.originalIndex && styles.servingChipActive,
+                                  ]}
+                                  onPress={() => handleUpdateServingIndex(mealType, food.id, s.originalIndex)}
+                                >
+                                  <Text style={[
+                                    styles.servingChipText,
+                                    food.servingIndex === s.originalIndex && styles.servingChipTextActive,
+                                  ]}>
+                                    {s.label} ({s.grams}g)
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </ScrollView>
+                          </View>
+                          
+                          {/* Quantity with +/- buttons */}
+                          <View style={styles.quantityRow}>
+                            <Text style={styles.quantityLabel}>Quantity:</Text>
+                            <View style={styles.quantityControls}>
+                              <TouchableOpacity
+                                style={styles.quantityButton}
+                                onPress={() => handleUpdateServingCount(mealType, food.id, -1)}
+                              >
+                                <Ionicons name="remove" size={18} color={COLORS.primary} />
+                              </TouchableOpacity>
+                              <Text style={styles.quantityValue}>{food.servingCount}</Text>
+                              <TouchableOpacity
+                                style={styles.quantityButton}
+                                onPress={() => handleUpdateServingCount(mealType, food.id, 1)}
+                              >
+                                <Ionicons name="add" size={18} color={COLORS.primary} />
+                              </TouchableOpacity>
+                            </View>
+                            <Text style={styles.totalGrams}>{totalGrams}g total</Text>
+                          </View>
                         </View>
-                        <TouchableOpacity
-                          style={styles.removeFoodButton}
-                          onPress={() => handleRemoveFood(mealType, food.id)}
-                        >
-                          <Ionicons name="trash-outline" size={16} color={COLORS.error} />
-                        </TouchableOpacity>
-                      </View>
-                    ))
+                      );
+                    })
                   )}
                 </View>
               </View>
             ))}
           </View>
+          )
         )}
       </View>
     </View>
@@ -1462,7 +1732,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   mealFoodList: {
-    gap: 8,
+    gap: 12,
   },
   noFoodText: {
     fontSize: 13,
@@ -1471,28 +1741,109 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 10,
   },
-  foodItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  foodItemCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  foodItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   foodItemInfo: {
     flex: 1,
   },
   foodItemName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: COLORS.textPrimary,
+  },
+  foodItemNameTamil: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   foodItemDetails: {
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 2,
   },
+  servingSelector: {
+    marginBottom: 12,
+  },
+  servingSelectorLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  servingChipsContainer: {
+    flexDirection: 'row',
+  },
+  servingChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: COLORS.background,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  servingChipActive: {
+    backgroundColor: COLORS.primary + '15',
+    borderColor: COLORS.primary,
+  },
+  servingChipText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  servingChipTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  quantityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  quantityLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  quantityButton: {
+    padding: 8,
+    borderRadius: 6,
+  },
+  quantityValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    minWidth: 30,
+    textAlign: 'center',
+  },
+  totalGrams: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.accent,
+    marginLeft: 'auto',
+  },
   removeFoodButton: {
-    padding: 6,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.error + '10',
   },
 
   // Food Modal Styles

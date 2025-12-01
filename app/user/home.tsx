@@ -577,8 +577,8 @@ export default function UserHomeScreen() {
                 <MaterialCommunityIcons name="food-variant" size={24} color="#f59e0b" />
               </View>
               <View style={styles.activityInfo}>
-                <Text style={[styles.activityValue, { color: colors.text }]}>View</Text>
-                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>Diet Plan</Text>
+                <Text style={[styles.activityValue, { color: colors.text }]}>Diet Plan</Text>
+                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>View</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} style={styles.activityArrow} />
             </TouchableOpacity>

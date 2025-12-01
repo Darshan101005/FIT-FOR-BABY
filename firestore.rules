@@ -157,6 +157,12 @@ service cloud.firestore {
       match /exerciseLogs/{logId} {
         allow read, write: if true;
       }
+      
+      // Diet plan subcollection (admin managed)
+      match /dietPlan/{planId} {
+        allow read: if true; // Users can read their diet plan
+        allow write: if true; // Admins can write diet plans
+      }
     }
   }
 }
