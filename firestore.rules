@@ -107,9 +107,9 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
-    // App settings (read-only for users)
+    // App settings (read for all users, write for admin only)
     match /settings/{settingId} {
-      allow read: if isAuthenticated();
+      allow read: if true; // Allow read for Firestore-only auth
       allow write: if isAdmin();
     }
     

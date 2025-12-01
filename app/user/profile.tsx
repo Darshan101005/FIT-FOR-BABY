@@ -29,6 +29,8 @@ interface ProfileData {
   partnerName: string;
   partnerUserId: string;
   initials: string;
+  userGender: 'male' | 'female';
+  partnerGender: 'male' | 'female';
 }
 
 // Custom Toggle Component for consistent styling across platforms
@@ -160,6 +162,8 @@ export default function ProfileScreen() {
                 partnerName: partner.name || '',
                 partnerUserId: partner.id || '',
                 initials,
+                userGender: userGender as 'male' | 'female',
+                partnerGender: userGender === 'male' ? 'female' : 'male',
               });
               
               // Calculate days active (from enrollment date)
@@ -180,6 +184,8 @@ export default function ProfileScreen() {
                 partnerName: '',
                 partnerUserId: '',
                 initials: 'U',
+                userGender: (userGender as 'male' | 'female') || 'male',
+                partnerGender: userGender === 'male' ? 'female' : 'male',
               });
             }
           } else {
@@ -192,6 +198,8 @@ export default function ProfileScreen() {
               partnerName: '',
               partnerUserId: '',
               initials: 'U',
+              userGender: 'male',
+              partnerGender: 'female',
             });
           }
         } catch (error) {
@@ -205,6 +213,8 @@ export default function ProfileScreen() {
             partnerName: '',
             partnerUserId: '',
             initials: 'U',
+            userGender: 'male',
+            partnerGender: 'female',
           });
         } finally {
           setIsLoading(false);
@@ -589,9 +599,20 @@ export default function ProfileScreen() {
               id: 'switch-profile',
               icon: 'swap-horizontal',
               label: 'Switch Profile',
+              labelTamil: 'சுயவிவரத்தை மாற்று',
               type: 'link',
-              onPress: () => router.push('/user/enter-pin?profile=female' as any),
-              color: '#ec4899',
+              onPress: () => {
+                if (profileData) {
+                  router.push({
+                    pathname: '/user/enter-pin',
+                    params: {
+                      coupleId: profileData.coupleId,
+                      gender: profileData.partnerGender,
+                    }
+                  } as any);
+                }
+              },
+              color: profileData?.partnerGender === 'female' ? '#ec4899' : '#3b82f6',
             },
             {
               id: 'manage-pin',

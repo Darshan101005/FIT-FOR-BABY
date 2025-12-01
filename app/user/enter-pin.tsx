@@ -5,15 +5,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useWindowDimensions,
-    Vibration,
-    View,
+  Animated,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  Vibration,
+  View,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -48,10 +48,12 @@ export default function EnterPinScreen() {
   const [attempts, setAttempts] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
   const [lockTimer, setLockTimer] = useState(0);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnims = useRef([...Array(4)].map(() => new Animated.Value(1))).current;
   const dotAnims = useRef([...Array(4)].map(() => new Animated.Value(0))).current;
+  const successAnim = useRef(new Animated.Value(0)).current;
 
   // Load profile data
   useEffect(() => {
@@ -154,9 +156,19 @@ export default function EnterPinScreen() {
       const isValid = await coupleService.verifyPin(coupleId, gender, enteredPin);
       
       if (isValid) {
-        // Success - update last login and go home
+        // Success - show animation
         if (!isWeb) Vibration.vibrate(50);
+        setIsSuccess(true);
         
+        // Animate success
+        Animated.spring(successAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 50,
+          friction: 7,
+        }).start();
+        
+        // Update storage and redirect after animation
         await coupleService.updateLastLogin(coupleId, gender);
         await AsyncStorage.setItem('userRole', 'user');
         await AsyncStorage.setItem('coupleId', coupleId);
@@ -164,7 +176,9 @@ export default function EnterPinScreen() {
         await AsyncStorage.setItem('userId', profileData.userId);
         await AsyncStorage.setItem('userName', profileData.name);
         
-        router.replace('/user/home' as any);
+        setTimeout(() => {
+          router.replace('/user/home' as any);
+        }, 1200);
       } else {
         // Wrong PIN
         if (!isWeb) Vibration.vibrate([0, 100, 50, 100]);
@@ -261,6 +275,45 @@ export default function EnterPinScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Success Overlay */}
+      {isSuccess && (
+        <Animated.View 
+          style={[
+            styles.successOverlay,
+            { 
+              backgroundColor: colors.background,
+              opacity: successAnim,
+            }
+          ]}
+        >
+          <Animated.View 
+            style={[
+              styles.successContent,
+              {
+                transform: [
+                  { 
+                    scale: successAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.5, 1],
+                    })
+                  }
+                ],
+              }
+            ]}
+          >
+            <View style={[styles.successIcon, { backgroundColor: '#22c55e' }]}>
+              <Ionicons name="checkmark" size={48} color="#fff" />
+            </View>
+            <Text style={[styles.successTitle, { color: colors.text }]}>
+              Welcome back!
+            </Text>
+            <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
+              Switching to {profileData.name}...
+            </Text>
+          </Animated.View>
+        </Animated.View>
+      )}
+
       {/* Simple back button only */}
       <View style={styles.topBar}>
         <TouchableOpacity 
@@ -374,6 +427,35 @@ export default function EnterPinScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  successOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successContent: {
+    alignItems: 'center',
+  },
+  successIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  successSubtitle: {
+    fontSize: 15,
   },
   topBar: {
     paddingTop: isWeb ? 16 : 8,
