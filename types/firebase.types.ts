@@ -578,6 +578,7 @@ export interface FAQ {
 export const COLLECTIONS = {
   USERS: 'users',
   ADMINS: 'admins',
+  COUPLES: 'couples',
   QUESTIONNAIRE_RESPONSES: 'questionnaireResponses',
   NURSE_VISITS: 'nurseVisits',
   SUPPORT_REQUESTS: 'supportRequests',
@@ -594,6 +595,60 @@ export const COLLECTIONS = {
   APPOINTMENTS: 'appointments',
   MESSAGES: 'messages',
 } as const;
+
+// ============================================
+// COUPLES COLLECTION (User Onboarding)
+// Path: /couples/{coupleId}
+// ============================================
+
+export type CoupleUserStatus = 'pending' | 'active' | 'inactive';
+
+export interface CoupleUser {
+  id: string; // C_001_M or C_001_F
+  name: string;
+  email?: string;
+  phone?: string;
+  age?: number;
+  
+  // Physical Stats (entered later by user)
+  weight?: number;
+  height?: number;
+  bmi?: number;
+  
+  // Authentication (Firestore-based, no Firebase Auth)
+  tempPassword?: string; // Initial 8-char password, cleared after reset
+  password?: string; // User's password after reset
+  pin?: string; // 4-digit PIN
+  
+  // Status flags
+  status: CoupleUserStatus;
+  isPasswordReset: boolean; // Has user reset their temp password?
+  isPinSet: boolean; // Has user set their 4-digit PIN?
+  
+  // Timestamps
+  lastLoginAt?: Timestamp;
+  lastActive?: string; // For display purposes
+}
+
+export interface Couple {
+  id: string; // Document ID (same as coupleId)
+  coupleId: string; // C_001, C_002, etc.
+  
+  // Enrollment
+  enrollmentDate: string; // YYYY-MM-DD
+  enrolledBy: string; // Admin UID who enrolled
+  
+  // Status
+  status: 'active' | 'inactive';
+  
+  // Member details (each has their own tempPassword)
+  male: CoupleUser;
+  female: CoupleUser;
+  
+  // Timestamps
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
 
 // ============================================
 // STORAGE PATHS (for reference)

@@ -449,6 +449,26 @@ export const adminService = {
     return { uid: doc.id, ...doc.data() } as Admin;
   },
 
+  // Get admin by phone number
+  async getByPhone(phone: string): Promise<Admin | null> {
+    const adminsRef = collection(db, COLLECTIONS.ADMINS);
+    const q = query(adminsRef, where('phone', '==', phone), limit(1));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return null;
+    const doc = snapshot.docs[0];
+    return { uid: doc.id, ...doc.data() } as Admin;
+  },
+
+  // Find admin by credential (email or phone)
+  async findByCredential(credential: string): Promise<Admin | null> {
+    // Try email first
+    if (credential.includes('@')) {
+      return this.getByEmail(credential.toLowerCase());
+    }
+    // Try phone
+    return this.getByPhone(credential);
+  },
+
   // Subscribe to admins list (real-time updates)
   subscribe(callback: (admins: (Admin & { id: string })[]) => void): Unsubscribe {
     const adminsRef = collection(db, COLLECTIONS.ADMINS);
@@ -464,6 +484,325 @@ export const adminService = {
     await updateDoc(adminRef, {
       lastLoginAt: now(),
     });
+  },
+};
+
+// ============================================
+// COUPLE OPERATIONS (User Onboarding)
+// ============================================
+
+// Generate random 8-character password
+const generateTempPassword = (): string => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let password = '';
+  for (let i = 0; i < 8; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+};
+
+export const coupleService = {
+  // Get next couple ID (auto-increment)
+  async getNextCoupleId(): Promise<string> {
+    try {
+      const couplesRef = collection(db, COLLECTIONS.COUPLES);
+      const snapshot = await getDocs(couplesRef);
+      
+      if (snapshot.empty) {
+        return 'C_001';
+      }
+      
+      // Find the highest ID number
+      let maxIdNum = 0;
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.coupleId) {
+          const idNum = parseInt(data.coupleId.split('_')[1]) || 0;
+          if (idNum > maxIdNum) maxIdNum = idNum;
+        }
+      });
+      
+      return `C_${String(maxIdNum + 1).padStart(3, '0')}`;
+    } catch (error) {
+      console.error('Error getting next couple ID:', error);
+      return 'C_001';
+    }
+  },
+
+  // Create new couple (enrollment)
+  async create(data: {
+    coupleId: string;
+    enrollmentDate: string;
+    enrolledBy: string;
+    male: { name: string; email?: string; phone?: string; age?: number };
+    female: { name: string; email?: string; phone?: string; age?: number };
+  }): Promise<{ coupleId: string; maleTempPassword: string; femaleTempPassword: string }> {
+    const maleTempPassword = generateTempPassword();
+    const femaleTempPassword = generateTempPassword();
+    
+    const coupleData = {
+      id: data.coupleId,
+      coupleId: data.coupleId,
+      enrollmentDate: data.enrollmentDate,
+      enrolledBy: data.enrolledBy,
+      status: 'active' as const,
+      male: {
+        id: `${data.coupleId}_M`,
+        name: data.male.name,
+        email: data.male.email || '',
+        phone: data.male.phone || '',
+        age: data.male.age || 0,
+        status: 'pending' as const,
+        isPasswordReset: false,
+        isPinSet: false,
+        tempPassword: maleTempPassword, // Individual temp password
+      },
+      female: {
+        id: `${data.coupleId}_F`,
+        name: data.female.name,
+        email: data.female.email || '',
+        phone: data.female.phone || '',
+        age: data.female.age || 0,
+        status: 'pending' as const,
+        isPasswordReset: false,
+        isPinSet: false,
+        tempPassword: femaleTempPassword, // Individual temp password
+      },
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, data.coupleId);
+    await setDoc(coupleRef, coupleData);
+    
+    return { 
+      coupleId: data.coupleId, 
+      maleTempPassword, 
+      femaleTempPassword 
+    };
+  },
+
+  // Get couple by ID
+  async get(coupleId: string): Promise<any | null> {
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    const snapshot = await getDoc(coupleRef);
+    return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+  },
+
+  // Get all couples
+  async getAll(): Promise<any[]> {
+    const couplesRef = collection(db, COLLECTIONS.COUPLES);
+    const snapshot = await getDocs(couplesRef);
+    const couples = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Sort client-side by coupleId descending
+    couples.sort((a: any, b: any) => {
+      if (!a.coupleId || !b.coupleId) return 0;
+      return b.coupleId.localeCompare(a.coupleId);
+    });
+    return couples;
+  },
+
+  // Subscribe to couples list (real-time)
+  subscribe(callback: (couples: any[]) => void, onError?: (error: Error) => void): Unsubscribe {
+    try {
+      const couplesRef = collection(db, COLLECTIONS.COUPLES);
+      // Note: Simple query without orderBy to avoid index requirements
+      return onSnapshot(couplesRef, 
+        (snapshot) => {
+          // Empty collection is valid - not an error
+          const couples = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          // Sort client-side by coupleId (C_001, C_002, etc.)
+          couples.sort((a: any, b: any) => {
+            if (!a.coupleId || !b.coupleId) return 0;
+            return b.coupleId.localeCompare(a.coupleId); // Descending order (newest first)
+          });
+          callback(couples);
+        },
+        (error) => {
+          // Log for debugging
+          console.error('Couples subscription error:', error);
+          
+          // Call error handler only for actual errors (permission, network, etc.)
+          if (onError) {
+            onError(error);
+          }
+          
+          // Return empty array so UI can still render
+          callback([]);
+        }
+      );
+    } catch (error) {
+      console.error('Failed to setup couples subscription:', error);
+      // Return empty array and call error handler
+      callback([]);
+      if (onError && error instanceof Error) {
+        onError(error);
+      }
+      // Return a no-op unsubscribe function
+      return () => {};
+    }
+  },
+
+  // Find couple by login credential (coupleId, userId, phone, or email)
+  async findByCredential(credential: string): Promise<{ couple: any; gender: 'male' | 'female' | 'both' } | null> {
+    const couplesRef = collection(db, COLLECTIONS.COUPLES);
+    
+    // First check if credential is a Couple ID (e.g., C_001)
+    if (credential.match(/^C_\d+$/i)) {
+      const coupleDoc = await getDoc(doc(db, COLLECTIONS.COUPLES, credential.toUpperCase()));
+      if (coupleDoc.exists()) {
+        return { couple: { id: coupleDoc.id, ...coupleDoc.data() }, gender: 'both' };
+      }
+      return null;
+    }
+    
+    // Otherwise search by user credentials
+    const snapshot = await getDocs(couplesRef);
+    
+    for (const docSnap of snapshot.docs) {
+      const couple = { id: docSnap.id, ...docSnap.data() } as any;
+      
+      // Check if credential matches male
+      const matchesMale = 
+        couple.male.id === credential ||
+        couple.male.phone === credential ||
+        couple.male.email?.toLowerCase() === credential.toLowerCase();
+      
+      // Check if credential matches female
+      const matchesFemale = 
+        couple.female.id === credential ||
+        couple.female.phone === credential ||
+        couple.female.email?.toLowerCase() === credential.toLowerCase();
+      
+      if (matchesMale && matchesFemale) {
+        // Shared credential - need to show profile picker
+        return { couple, gender: 'both' };
+      } else if (matchesMale) {
+        return { couple, gender: 'male' };
+      } else if (matchesFemale) {
+        return { couple, gender: 'female' };
+      }
+    }
+    
+    return null;
+  },
+
+  // Verify password (temp or user's own)
+  async verifyPassword(coupleId: string, gender: 'male' | 'female', password: string): Promise<boolean> {
+    const couple = await this.get(coupleId);
+    if (!couple) return false;
+    
+    const user = couple[gender];
+    
+    // Check if user has reset password - use their own password
+    if (user.isPasswordReset && user.password) {
+      return user.password === password;
+    }
+    
+    // Check individual temp password (stored per user)
+    return user.tempPassword === password;
+  },
+
+  // Reset password for user (clears temp password)
+  async resetPassword(coupleId: string, gender: 'male' | 'female', newPassword: string): Promise<void> {
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    await updateDoc(coupleRef, {
+      [`${gender}.password`]: newPassword,
+      [`${gender}.isPasswordReset`]: true,
+      [`${gender}.tempPassword`]: null, // Clear temp password after reset
+      [`${gender}.status`]: 'active',
+      updatedAt: now(),
+    });
+  },
+
+  // Set PIN for user
+  async setPin(coupleId: string, gender: 'male' | 'female', pin: string): Promise<void> {
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    await updateDoc(coupleRef, {
+      [`${gender}.pin`]: pin,
+      [`${gender}.isPinSet`]: true,
+      updatedAt: now(),
+    });
+  },
+
+  // Verify PIN
+  async verifyPin(coupleId: string, gender: 'male' | 'female', pin: string): Promise<boolean> {
+    const couple = await this.get(coupleId);
+    if (!couple) return false;
+    return couple[gender].pin === pin;
+  },
+
+  // Update last login
+  async updateLastLogin(coupleId: string, gender: 'male' | 'female'): Promise<void> {
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    await updateDoc(coupleRef, {
+      [`${gender}.lastLoginAt`]: now(),
+      updatedAt: now(),
+    });
+  },
+
+  // Update couple status
+  async updateStatus(coupleId: string, status: 'active' | 'inactive'): Promise<void> {
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    await updateDoc(coupleRef, {
+      status,
+      updatedAt: now(),
+    });
+  },
+
+  // Update user status (male/female)
+  async updateUserStatus(coupleId: string, gender: 'male' | 'female', status: 'active' | 'inactive' | 'pending'): Promise<void> {
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    await updateDoc(coupleRef, {
+      [`${gender}.status`]: status,
+      updatedAt: now(),
+    });
+  },
+
+  // Update user details
+  async updateUser(coupleId: string, gender: 'male' | 'female', data: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    age?: number;
+    weight?: number;
+    height?: number;
+  }): Promise<void> {
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    const updateData: any = { updatedAt: now() };
+    
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined) {
+        updateData[`${gender}.${key}`] = value;
+      }
+    });
+    
+    // Calculate BMI if both weight and height are provided
+    if (data.weight && data.height) {
+      const heightInMeters = data.height / 100;
+      updateData[`${gender}.bmi`] = Math.round((data.weight / (heightInMeters * heightInMeters)) * 10) / 10;
+    }
+    
+    await updateDoc(coupleRef, updateData);
+  },
+
+  // Force password reset for user
+  async forcePasswordReset(coupleId: string, gender: 'male' | 'female'): Promise<string> {
+    const newTempPassword = generateTempPassword();
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    await updateDoc(coupleRef, {
+      [`${gender}.password`]: '',
+      [`${gender}.isPasswordReset`]: false,
+      tempPassword: newTempPassword,
+      updatedAt: now(),
+    });
+    return newTempPassword;
+  },
+
+  // Delete couple
+  async delete(coupleId: string): Promise<void> {
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    await deleteDoc(coupleRef);
   },
 };
 

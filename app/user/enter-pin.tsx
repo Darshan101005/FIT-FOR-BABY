@@ -1,5 +1,7 @@
 import { useTheme } from '@/context/ThemeContext';
+import { coupleService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -23,28 +25,6 @@ interface ProfileData {
   initials: string;
 }
 
-// Mock profiles for the couple
-const profiles: Record<string, ProfileData> = {
-  male: {
-    name: 'John Doe',
-    gender: 'male',
-    userId: 'C_001_M',
-    initials: 'JD',
-  },
-  female: {
-    name: 'Sarah Doe',
-    gender: 'female',
-    userId: 'C_001_F',
-    initials: 'SD',
-  },
-};
-
-// Mock stored PINs (in real app, these would be securely stored)
-const storedPins: Record<string, string> = {
-  male: '1234',
-  female: '5678',
-};
-
 export default function EnterPinScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -52,8 +32,16 @@ export default function EnterPinScreen() {
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
 
-  const targetProfile = (params.profile as 'male' | 'female') || 'male';
-  const profileData = profiles[targetProfile];
+  // Get params
+  const coupleId = params.coupleId as string;
+  const gender = (params.gender as 'male' | 'female') || 'male';
+  
+  const [profileData, setProfileData] = useState<ProfileData>({
+    name: 'Loading...',
+    gender: gender,
+    userId: '',
+    initials: '...',
+  });
 
   const [pin, setPin] = useState<string[]>(['', '', '', '']);
   const [error, setError] = useState('');
@@ -64,6 +52,35 @@ export default function EnterPinScreen() {
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnims = useRef([...Array(4)].map(() => new Animated.Value(1))).current;
   const dotAnims = useRef([...Array(4)].map(() => new Animated.Value(0))).current;
+
+  // Load profile data
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        if (coupleId) {
+          const couple = await coupleService.get(coupleId);
+          if (couple) {
+            const user = couple[gender];
+            const names = user.name.split(' ');
+            const initials = names.length > 1 
+              ? `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
+              : user.name.substring(0, 2).toUpperCase();
+            
+            setProfileData({
+              name: user.name,
+              gender: gender,
+              userId: user.id,
+              initials: initials,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      }
+    };
+    
+    loadProfile();
+  }, [coupleId, gender]);
 
   useEffect(() => {
     if (isLocked && lockTimer > 0) {
@@ -132,39 +149,55 @@ export default function EnterPinScreen() {
     animateDot(lastFilledIndex, false);
   };
 
-  const verifyPin = (enteredPin: string) => {
-    const correctPin = storedPins[targetProfile];
-    
-    if (enteredPin === correctPin) {
-      // Success - switch profile
-      if (!isWeb) Vibration.vibrate(50);
-      // In real app, update context/state with new profile
-      router.replace('/user/home' as any);
-    } else {
-      // Wrong PIN
-      if (!isWeb) Vibration.vibrate([0, 100, 50, 100]);
+  const verifyPin = async (enteredPin: string) => {
+    try {
+      const isValid = await coupleService.verifyPin(coupleId, gender, enteredPin);
       
-      const newAttempts = attempts + 1;
-      setAttempts(newAttempts);
-      
-      if (newAttempts >= 3) {
-        setIsLocked(true);
-        setLockTimer(30);
-        setError('Too many attempts. Try again in 30 seconds.');
+      if (isValid) {
+        // Success - update last login and go home
+        if (!isWeb) Vibration.vibrate(50);
+        
+        await coupleService.updateLastLogin(coupleId, gender);
+        await AsyncStorage.setItem('userRole', 'user');
+        await AsyncStorage.setItem('coupleId', coupleId);
+        await AsyncStorage.setItem('userGender', gender);
+        await AsyncStorage.setItem('userId', profileData.userId);
+        await AsyncStorage.setItem('userName', profileData.name);
+        
+        router.replace('/user/home' as any);
       } else {
-        setError(`Incorrect PIN. ${3 - newAttempts} attempts remaining.`);
-      }
-      
-      // Shake animation
-      Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
-      ]).start();
+        // Wrong PIN
+        if (!isWeb) Vibration.vibrate([0, 100, 50, 100]);
+        
+        const newAttempts = attempts + 1;
+        setAttempts(newAttempts);
+        
+        if (newAttempts >= 3) {
+          setIsLocked(true);
+          setLockTimer(30);
+          setError('Too many attempts. Try again in 30 seconds.');
+        } else {
+          setError(`Incorrect PIN. ${3 - newAttempts} attempts remaining.`);
+        }
+        
+        // Shake animation
+        Animated.sequence([
+          Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+        ]).start();
 
-      // Reset PIN
+        // Reset PIN
+        setPin(['', '', '', '']);
+        dotAnims.forEach((anim) => {
+          Animated.timing(anim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+        });
+      }
+    } catch (error) {
+      console.error('PIN verification error:', error);
+      setError('Something went wrong. Please try again.');
       setPin(['', '', '', '']);
       dotAnims.forEach((anim) => {
         Animated.timing(anim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
@@ -241,13 +274,13 @@ export default function EnterPinScreen() {
       <View style={[styles.content, isMobile && styles.contentMobile]}>
         {/* Profile Avatar */}
         <View style={styles.profileSection}>
-          <View style={[styles.avatar, { backgroundColor: getGenderColor(targetProfile) + '20' }]}>
-            <Text style={[styles.avatarText, { color: getGenderColor(targetProfile) }]}>
+          <View style={[styles.avatar, { backgroundColor: getGenderColor(gender) + '20' }]}>
+            <Text style={[styles.avatarText, { color: getGenderColor(gender) }]}>
               {profileData.initials}
             </Text>
-            <View style={[styles.genderBadge, { backgroundColor: getGenderColor(targetProfile) }]}>
+            <View style={[styles.genderBadge, { backgroundColor: getGenderColor(gender) }]}>
               <Ionicons 
-                name={targetProfile === 'male' ? 'male' : 'female'} 
+                name={gender === 'male' ? 'male' : 'female'} 
                 size={14} 
                 color="#fff" 
               />
@@ -326,7 +359,10 @@ export default function EnterPinScreen() {
         {/* Forgot PIN */}
         <TouchableOpacity 
           style={styles.forgotButton}
-          onPress={() => router.push('/user/manage-pin?mode=reset' as any)}
+          onPress={() => router.push({
+            pathname: '/user/manage-pin',
+            params: { mode: 'reset', coupleId, gender }
+          } as any)}
         >
           <Text style={[styles.forgotText, { color: colors.primary }]}>Forgot PIN?</Text>
         </TouchableOpacity>

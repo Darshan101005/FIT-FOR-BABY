@@ -1,6 +1,8 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
+import { coupleService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -22,9 +24,6 @@ const isWeb = Platform.OS === 'web';
 type Mode = 'view' | 'setup' | 'update' | 'reset';
 type Step = 'main' | 'verify-otp' | 'enter-pin' | 'confirm-pin' | 'success';
 
-// Mock data - whether PIN is already set
-const hasPinSet = true;
-
 export default function ManagePinScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -32,10 +31,21 @@ export default function ManagePinScreen() {
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
 
-  // If coming from forgot PIN, go directly to reset flow
-  const initialMode = (params.mode as Mode) || 'view';
+  // Get params
+  const paramMode = params.mode as Mode;
+  const paramCoupleId = params.coupleId as string;
+  const paramGender = params.gender as 'male' | 'female';
+  
+  // State for user data
+  const [coupleId, setCoupleId] = useState(paramCoupleId || '');
+  const [gender, setGender] = useState<'male' | 'female'>(paramGender || 'male');
+  const [hasPinSet, setHasPinSet] = useState(false);
+  const [maskedEmail, setMaskedEmail] = useState('');
+
+  // If coming from forgot PIN or setup, go directly to appropriate flow
+  const initialMode = paramMode || 'view';
   const [mode, setMode] = useState<Mode>(initialMode);
-  const [step, setStep] = useState<Step>(initialMode === 'reset' ? 'verify-otp' : 'main');
+  const [step, setStep] = useState<Step>(initialMode === 'reset' || initialMode === 'setup' ? 'enter-pin' : 'main');
   
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [pin, setPin] = useState(['', '', '', '']);
@@ -52,8 +62,39 @@ export default function ManagePinScreen() {
   const pinRefs = useRef<(TextInput | null)[]>([]);
   const confirmPinRefs = useRef<(TextInput | null)[]>([]);
 
-  // Mock user email (masked)
-  const maskedEmail = 'j***@example.com';
+  // Load user data
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const storedCoupleId = paramCoupleId || await AsyncStorage.getItem('coupleId') || '';
+        const storedGender = paramGender || (await AsyncStorage.getItem('userGender') as 'male' | 'female') || 'male';
+        
+        setCoupleId(storedCoupleId);
+        setGender(storedGender);
+        
+        if (storedCoupleId) {
+          const couple = await coupleService.get(storedCoupleId);
+          if (couple) {
+            const user = couple[storedGender];
+            setHasPinSet(user.isPinSet || false);
+            
+            // Mask email
+            if (user.email) {
+              const [name, domain] = user.email.split('@');
+              const masked = name.length > 2 
+                ? `${name[0]}***@${domain}`
+                : `${name}***@${domain}`;
+              setMaskedEmail(masked);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+      }
+    };
+    
+    loadUserData();
+  }, [paramCoupleId, paramGender]);
 
   useEffect(() => {
     if (resendTimer > 0) {
@@ -186,12 +227,21 @@ export default function ManagePinScreen() {
     }
   };
 
-  const savePIN = (pinValue: string) => {
+  const savePIN = async (pinValue: string) => {
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      await coupleService.setPin(coupleId, gender, pinValue);
+      
+      // Update AsyncStorage
+      await AsyncStorage.setItem('userPinSet', 'true');
+      
       setStep('success');
+    } catch (error) {
+      console.error('Error saving PIN:', error);
+      setError('Failed to save PIN. Please try again.');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const getTitle = () => {

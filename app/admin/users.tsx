@@ -1,17 +1,21 @@
+import { coupleService } from '@/services/firestore.service';
+import { Couple as FirestoreCouple } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -36,30 +40,12 @@ const COLORS = {
   borderLight: '#f1f5f9',
 };
 
-interface CoupleUser {
+// Extended Couple type for UI
+interface Couple extends FirestoreCouple {
   id: string;
-  name: string;
-  email: string;
-  phone: string;
-  age: number;
-  weight: number;
-  height: number;
-  bmi: number;
-  status: 'active' | 'inactive' | 'pending';
-  lastActive: string;
-  forceReset: boolean;
 }
 
-interface Couple {
-  id: string;
-  coupleId: string;
-  enrollmentDate: string;
-  status: 'active' | 'inactive';
-  male: CoupleUser;
-  female: CoupleUser;
-}
-
-// Mock appointments data for users
+// Mock appointments data for users (will be replaced with real data later)
 interface UserAppointment {
   id: string;
   date: string;
@@ -69,13 +55,7 @@ interface UserAppointment {
   type: 'checkup' | 'consultation' | 'follow-up' | 'counseling';
 }
 
-const mockUserAppointments: Record<string, UserAppointment | null> = {
-  'C_001': { id: 'APT001', date: '2024-11-29', time: '10:00 AM', doctor: 'Dr. Priya Sharma', purpose: 'Monthly health checkup', type: 'checkup' },
-  'C_002': { id: 'APT002', date: '2024-11-29', time: '11:30 AM', doctor: 'Dr. Anita Reddy', purpose: 'Nutrition consultation', type: 'consultation' },
-  'C_003': { id: 'APT003', date: '2024-11-30', time: '09:00 AM', doctor: 'Dr. Vikram Singh', purpose: 'Follow-up on exercise plan', type: 'follow-up' },
-  'C_004': { id: 'APT004', date: '2024-11-30', time: '02:00 PM', doctor: 'Dr. Lakshmi N', purpose: 'Couple counseling session', type: 'counseling' },
-  'C_005': null,
-};
+const mockUserAppointments: Record<string, UserAppointment | null> = {};
 
 const getAppointmentTypeColor = (type: string) => {
   switch (type) {
@@ -87,59 +67,6 @@ const getAppointmentTypeColor = (type: string) => {
   }
 };
 
-// Mock couples data
-const mockCouples: Couple[] = [
-  {
-    id: '1',
-    coupleId: 'C_001',
-    enrollmentDate: '2024-10-01',
-    status: 'active',
-    male: { id: 'C_001_M', name: 'John Doe', email: 'john@example.com', phone: '+91 98765 43210', age: 32, weight: 75, height: 175, bmi: 24.5, status: 'active', lastActive: '2024-11-25 09:45 AM', forceReset: false },
-    female: { id: 'C_001_F', name: 'Sarah Doe', email: 'sarah@example.com', phone: '+91 98765 43211', age: 28, weight: 58, height: 162, bmi: 22.1, status: 'active', lastActive: '2024-11-25 10:30 AM', forceReset: false },
-  },
-  {
-    id: '2',
-    coupleId: 'C_002',
-    enrollmentDate: '2024-10-15',
-    status: 'active',
-    male: { id: 'C_002_M', name: 'Raj Kumar', email: 'raj@example.com', phone: '+91 98765 43212', age: 30, weight: 70, height: 170, bmi: 24.2, status: 'active', lastActive: '2024-11-24 03:15 PM', forceReset: false },
-    female: { id: 'C_002_F', name: 'Priya Kumar', email: 'priya@example.com', phone: '+91 98765 43213', age: 27, weight: 55, height: 158, bmi: 22.0, status: 'inactive', lastActive: '2024-11-10 08:20 AM', forceReset: false },
-  },
-  {
-    id: '3',
-    coupleId: 'C_003',
-    enrollmentDate: '2024-11-01',
-    status: 'active',
-    male: { id: 'C_003_M', name: 'Anand M', email: 'anand@example.com', phone: '+91 98765 43214', age: 35, weight: 80, height: 178, bmi: 25.2, status: 'pending', lastActive: '2024-11-20 11:45 AM', forceReset: true },
-    female: { id: 'C_003_F', name: 'Meena S', email: 'meena@example.com', phone: '+91 98765 43215', age: 31, weight: 62, height: 160, bmi: 24.2, status: 'pending', lastActive: '2024-11-22 02:00 PM', forceReset: true },
-  },
-  {
-    id: '4',
-    coupleId: 'C_004',
-    enrollmentDate: '2024-11-10',
-    status: 'active',
-    male: { id: 'C_004_M', name: 'Vikram S', email: 'vikram@example.com', phone: '+91 98765 43216', age: 29, weight: 68, height: 172, bmi: 23.0, status: 'active', lastActive: '2024-11-26 06:30 PM', forceReset: false },
-    female: { id: 'C_004_F', name: 'Lakshmi V', email: 'lakshmi@example.com', phone: '+91 98765 43217', age: 26, weight: 52, height: 155, bmi: 21.6, status: 'active', lastActive: '2024-11-26 07:15 PM', forceReset: false },
-  },
-  {
-    id: '5',
-    coupleId: 'C_005',
-    enrollmentDate: '2024-11-15',
-    status: 'inactive',
-    male: { id: 'C_005_M', name: 'Suresh R', email: 'suresh@example.com', phone: '+91 98765 43218', age: 33, weight: 82, height: 180, bmi: 25.3, status: 'inactive', lastActive: '2024-11-05 04:45 PM', forceReset: false },
-    female: { id: 'C_005_F', name: 'Geetha R', email: 'geetha@example.com', phone: '+91 98765 43219', age: 30, weight: 60, height: 165, bmi: 22.0, status: 'inactive', lastActive: '2024-11-05 05:00 PM', forceReset: false },
-  },
-];
-
-// Generate next couple ID
-const generateNextCoupleId = () => {
-  const maxId = mockCouples.reduce((max, couple) => {
-    const num = parseInt(couple.coupleId.split('_')[1]);
-    return num > max ? num : max;
-  }, 0);
-  return `C_${String(maxId + 1).padStart(3, '0')}`;
-};
-
 export default function AdminUsersScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -148,16 +75,29 @@ export default function AdminUsersScreen() {
   const toastAnim = useRef(new Animated.Value(-100)).current;
 
   // State
+  const [couples, setCouples] = useState<Couple[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'pending'>('all');
   const [expandedCouples, setExpandedCouples] = useState<string[]>([]);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [enrollStep, setEnrollStep] = useState<1 | 2>(1);
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
+  const [nextCoupleId, setNextCoupleId] = useState('C_001');
+  const [showTempPasswordModal, setShowTempPasswordModal] = useState(false);
+  const [tempPasswordInfo, setTempPasswordInfo] = useState({ 
+    coupleId: '', 
+    maleName: '',
+    maleTempPassword: '', 
+    femaleName: '',
+    femaleTempPassword: '' 
+  });
+  const [currentAdminUid, setCurrentAdminUid] = useState('');
 
   // Enrollment form state
   const [enrollForm, setEnrollForm] = useState({
-    coupleId: generateNextCoupleId(),
+    coupleId: 'C_001',
     enrollmentDate: new Date().toISOString().split('T')[0],
     maleName: '',
     maleEmail: '',
@@ -168,6 +108,63 @@ export default function AdminUsersScreen() {
     femalePhone: '',
     femaleAge: '',
   });
+
+  // Load couples from Firestore
+  useEffect(() => {
+    let isMounted = true;
+    
+    const loadInitialData = async () => {
+      try {
+        // Get current admin UID
+        const adminUid = await AsyncStorage.getItem('adminUid');
+        if (adminUid && isMounted) setCurrentAdminUid(adminUid);
+        
+        // Get next couple ID
+        const nextId = await coupleService.getNextCoupleId();
+        if (isMounted) {
+          setNextCoupleId(nextId);
+          setEnrollForm(prev => ({ ...prev, coupleId: nextId }));
+        }
+      } catch (error) {
+        console.error('Error loading initial data:', error);
+        // Don't show error toast for initial data load - not critical
+      }
+    };
+    
+    loadInitialData();
+    
+    // Subscribe to real-time updates
+    const unsubscribe = coupleService.subscribe(
+      (coupleList) => {
+        if (isMounted) {
+          setCouples(coupleList as Couple[]);
+          setLoading(false);
+        }
+      },
+      (error) => {
+        // Only log error, don't show toast - empty collection is not an error
+        console.error('Subscription error:', error);
+        if (isMounted) {
+          // Still set loading to false and show empty state
+          setCouples([]);
+          setLoading(false);
+          
+          // Only show error if it's a permission/auth error (not empty collection)
+          const errorMessage = error?.message?.toLowerCase() || '';
+          if (errorMessage.includes('permission') || errorMessage.includes('unauthorized')) {
+            showToast('Permission denied. Please check your access.', 'error');
+          }
+          // For network errors, users can try refreshing
+          // For empty collection, just show empty state - no error needed
+        }
+      }
+    );
+    
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   // Check for action param to open enrollment modal
   useEffect(() => {
@@ -202,59 +199,145 @@ export default function AdminUsersScreen() {
     }
   };
 
-  const filteredCouples = mockCouples.filter(couple => {
+  const filteredCouples = couples.filter(couple => {
     const matchesSearch = 
       couple.coupleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       couple.male.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       couple.female.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      couple.male.phone.includes(searchQuery);
+      (couple.male.phone || '').includes(searchQuery) ||
+      (couple.female.phone || '').includes(searchQuery);
     
     const matchesStatus = filterStatus === 'all' || 
+      couple.status === filterStatus ||
       couple.male.status === filterStatus || 
       couple.female.status === filterStatus;
     
     return matchesSearch && matchesStatus;
   });
 
-  const handleEnrollSubmit = () => {
+  // Validate contact info - at least 1 mobile AND 1 email between the couple
+  const validateContactInfo = (): boolean => {
+    const hasMobile = (enrollForm.malePhone.trim() !== '' || enrollForm.femalePhone.trim() !== '');
+    const hasEmail = (enrollForm.maleEmail.trim() !== '' || enrollForm.femaleEmail.trim() !== '');
+    return hasMobile && hasEmail;
+  };
+
+  const handleEnrollSubmit = async () => {
     if (enrollStep === 1) {
       setEnrollStep(2);
     } else {
-      // Validate and submit - phone and age are mandatory, email is optional
-      if (!enrollForm.maleName || !enrollForm.malePhone || !enrollForm.maleAge || !enrollForm.femaleName || !enrollForm.femalePhone || !enrollForm.femaleAge) {
-        showToast('Please fill all required fields (Name, Phone, Age)', 'error');
+      // Validate required fields
+      if (!enrollForm.maleName.trim() || !enrollForm.femaleName.trim()) {
+        showToast('Please enter names for both male and female', 'error');
         return;
       }
-      // Submit enrollment
-      showToast(`Couple ${enrollForm.coupleId} enrolled successfully!`, 'success');
-      setShowEnrollModal(false);
-      setEnrollStep(1);
-      setEnrollForm({
-        ...enrollForm,
-        coupleId: generateNextCoupleId(),
-        maleName: '',
-        maleEmail: '',
-        malePhone: '',
-        maleAge: '',
-        femaleName: '',
-        femaleEmail: '',
-        femalePhone: '',
-        femaleAge: '',
-      });
+      
+      // Validate contact info - at least 1 mobile AND 1 email between the couple
+      if (!validateContactInfo()) {
+        showToast('Couple must have at least 1 mobile number AND 1 email between them', 'error');
+        return;
+      }
+      
+      setActionLoading(true);
+      
+      try {
+        // Create couple in Firestore
+        const result = await coupleService.create({
+          coupleId: enrollForm.coupleId,
+          enrollmentDate: enrollForm.enrollmentDate,
+          enrolledBy: currentAdminUid,
+          male: {
+            name: enrollForm.maleName.trim(),
+            email: enrollForm.maleEmail.trim() || undefined,
+            phone: enrollForm.malePhone.trim() || undefined,
+            age: enrollForm.maleAge ? parseInt(enrollForm.maleAge) : undefined,
+          },
+          female: {
+            name: enrollForm.femaleName.trim(),
+            email: enrollForm.femaleEmail.trim() || undefined,
+            phone: enrollForm.femalePhone.trim() || undefined,
+            age: enrollForm.femaleAge ? parseInt(enrollForm.femaleAge) : undefined,
+          },
+        });
+        
+        // Show temp password modal with individual passwords
+        setTempPasswordInfo({
+          coupleId: result.coupleId,
+          maleName: enrollForm.maleName.trim(),
+          maleTempPassword: result.maleTempPassword,
+          femaleName: enrollForm.femaleName.trim(),
+          femaleTempPassword: result.femaleTempPassword,
+        });
+        setShowEnrollModal(false);
+        setShowTempPasswordModal(true);
+        
+        // Reset form
+        setEnrollStep(1);
+        const newNextId = await coupleService.getNextCoupleId();
+        setNextCoupleId(newNextId);
+        setEnrollForm({
+          coupleId: newNextId,
+          enrollmentDate: new Date().toISOString().split('T')[0],
+          maleName: '',
+          maleEmail: '',
+          malePhone: '',
+          maleAge: '',
+          femaleName: '',
+          femaleEmail: '',
+          femalePhone: '',
+          femaleAge: '',
+        });
+        
+        showToast(`Couple ${result.coupleId} enrolled successfully!`, 'success');
+      } catch (error: any) {
+        console.error('Error enrolling couple:', error);
+        showToast(error.message || 'Failed to enroll couple', 'error');
+      } finally {
+        setActionLoading(false);
+      }
     }
   };
 
-  const handleUserAction = (action: 'edit' | 'reset' | 'toggle', userId: string) => {
-    switch (action) {
-      case 'edit':
-        showToast(`Edit profile for ${userId}`, 'success');
-        break;
-      case 'reset':
-        showToast(`Password reset email sent to ${userId}`, 'success');
-        break;
-      case 'toggle':
-        showToast(`Status toggled for ${userId}`, 'success');
-        break;
+  const handleUserAction = async (action: 'edit' | 'reset' | 'toggle', coupleId: string, gender: 'male' | 'female') => {
+    try {
+      const couple = couples.find(c => c.coupleId === coupleId);
+      const userName = couple ? couple[gender].name : '';
+      const userId = `${coupleId}_${gender.charAt(0).toUpperCase()}`;
+      
+      switch (action) {
+        case 'edit':
+          showToast(`Edit profile for ${userId}`, 'success');
+          break;
+        case 'reset':
+          setActionLoading(true);
+          const newPassword = await coupleService.forcePasswordReset(coupleId, gender);
+          // Show single user password reset modal
+          setTempPasswordInfo({ 
+            coupleId: coupleId,
+            maleName: gender === 'male' ? userName : '',
+            maleTempPassword: gender === 'male' ? newPassword : '',
+            femaleName: gender === 'female' ? userName : '',
+            femaleTempPassword: gender === 'female' ? newPassword : '',
+          });
+          setShowTempPasswordModal(true);
+          showToast(`Password reset for ${userId}`, 'success');
+          setActionLoading(false);
+          break;
+        case 'toggle':
+          setActionLoading(true);
+          if (couple) {
+            const currentStatus = couple[gender].status;
+            const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+            await coupleService.updateUserStatus(coupleId, gender, newStatus);
+            showToast(`${userId} is now ${newStatus}`, 'success');
+          }
+          setActionLoading(false);
+          break;
+      }
+    } catch (error: any) {
+      console.error('Error with user action:', error);
+      showToast(error.message || 'Action failed', 'error');
+      setActionLoading(false);
     }
   };
 
@@ -264,7 +347,7 @@ export default function AdminUsersScreen() {
       <View style={styles.headerTop}>
         <View>
           <Text style={styles.headerTitle}>User Management</Text>
-          <Text style={styles.headerSubtitle}>{mockCouples.length} couples enrolled</Text>
+          <Text style={styles.headerSubtitle}>{couples.length} couples enrolled</Text>
         </View>
         <TouchableOpacity
           style={styles.addButton}
@@ -416,30 +499,55 @@ export default function AdminUsersScreen() {
                   <Ionicons name="time" size={14} color={COLORS.textMuted} />
                   <Text style={styles.userDetailText}>Last Login: {couple.male.lastActive}</Text>
                 </View>
+                
+                {/* Setup Status & Temp Password */}
+                <View style={styles.setupStatusRow}>
+                  <View style={[styles.setupBadge, { backgroundColor: couple.male.isPasswordReset ? COLORS.success + '20' : COLORS.warning + '20' }]}>
+                    <Ionicons name={couple.male.isPasswordReset ? 'checkmark-circle' : 'alert-circle'} size={12} color={couple.male.isPasswordReset ? COLORS.success : COLORS.warning} />
+                    <Text style={[styles.setupBadgeText, { color: couple.male.isPasswordReset ? COLORS.success : COLORS.warning }]}>
+                      {couple.male.isPasswordReset ? 'Password Set' : 'Needs Reset'}
+                    </Text>
+                  </View>
+                  <View style={[styles.setupBadge, { backgroundColor: couple.male.isPinSet ? COLORS.success + '20' : COLORS.warning + '20' }]}>
+                    <Ionicons name={couple.male.isPinSet ? 'checkmark-circle' : 'alert-circle'} size={12} color={couple.male.isPinSet ? COLORS.success : COLORS.warning} />
+                    <Text style={[styles.setupBadgeText, { color: couple.male.isPinSet ? COLORS.success : COLORS.warning }]}>
+                      {couple.male.isPinSet ? 'PIN Set' : 'Needs PIN'}
+                    </Text>
+                  </View>
+                </View>
+                
+                {/* Show temp password if not yet reset */}
+                {!couple.male.isPasswordReset && couple.male.tempPassword && (
+                  <View style={styles.tempPasswordRow}>
+                    <Ionicons name="key" size={14} color={COLORS.warning} />
+                    <Text style={styles.tempPasswordLabel}>Temp Password:</Text>
+                    <Text style={styles.tempPasswordValue}>{couple.male.tempPassword}</Text>
+                  </View>
+                )}
               </View>
 
               <View style={styles.userActions}>
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => handleUserAction('edit', couple.male.id)}
+                  onPress={() => handleUserAction('edit', couple.coupleId, 'male')}
                 >
                   <Ionicons name="create-outline" size={16} color={COLORS.primary} />
                   <Text style={[styles.actionButtonText, { color: COLORS.primary }]}>Edit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => handleUserAction('reset', couple.male.id)}
+                  onPress={() => handleUserAction('reset', couple.coupleId, 'male')}
                 >
                   <Ionicons name="key-outline" size={16} color={COLORS.warning} />
                   <Text style={[styles.actionButtonText, { color: COLORS.warning }]}>Reset Password</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => handleUserAction('toggle', couple.male.id)}
+                  onPress={() => handleUserAction('toggle', couple.coupleId, 'male')}
                 >
                   <Ionicons name={couple.male.status === 'active' ? 'pause-circle-outline' : 'play-circle-outline'} size={16} color={couple.male.status === 'active' ? COLORS.error : COLORS.success} />
                   <Text style={[styles.actionButtonText, { color: couple.male.status === 'active' ? COLORS.error : COLORS.success }]}>
-                    {couple.male.status === 'active' ? 'Delete' : 'Activate'}
+                    {couple.male.status === 'active' ? 'Pause' : 'Activate'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -497,30 +605,55 @@ export default function AdminUsersScreen() {
                   <Ionicons name="time" size={14} color={COLORS.textMuted} />
                   <Text style={styles.userDetailText}>Last Login: {couple.female.lastActive}</Text>
                 </View>
+                
+                {/* Setup Status & Temp Password */}
+                <View style={styles.setupStatusRow}>
+                  <View style={[styles.setupBadge, { backgroundColor: couple.female.isPasswordReset ? COLORS.success + '20' : COLORS.warning + '20' }]}>
+                    <Ionicons name={couple.female.isPasswordReset ? 'checkmark-circle' : 'alert-circle'} size={12} color={couple.female.isPasswordReset ? COLORS.success : COLORS.warning} />
+                    <Text style={[styles.setupBadgeText, { color: couple.female.isPasswordReset ? COLORS.success : COLORS.warning }]}>
+                      {couple.female.isPasswordReset ? 'Password Set' : 'Needs Reset'}
+                    </Text>
+                  </View>
+                  <View style={[styles.setupBadge, { backgroundColor: couple.female.isPinSet ? COLORS.success + '20' : COLORS.warning + '20' }]}>
+                    <Ionicons name={couple.female.isPinSet ? 'checkmark-circle' : 'alert-circle'} size={12} color={couple.female.isPinSet ? COLORS.success : COLORS.warning} />
+                    <Text style={[styles.setupBadgeText, { color: couple.female.isPinSet ? COLORS.success : COLORS.warning }]}>
+                      {couple.female.isPinSet ? 'PIN Set' : 'Needs PIN'}
+                    </Text>
+                  </View>
+                </View>
+                
+                {/* Show temp password if not yet reset */}
+                {!couple.female.isPasswordReset && couple.female.tempPassword && (
+                  <View style={styles.tempPasswordRow}>
+                    <Ionicons name="key" size={14} color={COLORS.warning} />
+                    <Text style={styles.tempPasswordLabel}>Temp Password:</Text>
+                    <Text style={styles.tempPasswordValue}>{couple.female.tempPassword}</Text>
+                  </View>
+                )}
               </View>
 
               <View style={styles.userActions}>
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => handleUserAction('edit', couple.female.id)}
+                  onPress={() => handleUserAction('edit', couple.coupleId, 'female')}
                 >
                   <Ionicons name="create-outline" size={16} color={COLORS.primary} />
                   <Text style={[styles.actionButtonText, { color: COLORS.primary }]}>Edit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => handleUserAction('reset', couple.female.id)}
+                  onPress={() => handleUserAction('reset', couple.coupleId, 'female')}
                 >
                   <Ionicons name="key-outline" size={16} color={COLORS.warning} />
                   <Text style={[styles.actionButtonText, { color: COLORS.warning }]}>Reset Password</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => handleUserAction('toggle', couple.female.id)}
+                  onPress={() => handleUserAction('toggle', couple.coupleId, 'female')}
                 >
                   <Ionicons name={couple.female.status === 'active' ? 'pause-circle-outline' : 'play-circle-outline'} size={16} color={couple.female.status === 'active' ? COLORS.error : COLORS.success} />
                   <Text style={[styles.actionButtonText, { color: couple.female.status === 'active' ? COLORS.error : COLORS.success }]}>
-                    {couple.female.status === 'active' ? 'Delete' : 'Activate'}
+                    {couple.female.status === 'active' ? 'Pause' : 'Activate'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -684,7 +817,7 @@ export default function AdminUsersScreen() {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Email (Optional)</Text>
+                    <Text style={styles.inputLabel}>Email</Text>
                     <TextInput
                       style={styles.input}
                       value={enrollForm.maleEmail}
@@ -749,7 +882,7 @@ export default function AdminUsersScreen() {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Email (Optional)</Text>
+                    <Text style={styles.inputLabel}>Email</Text>
                     <TextInput
                       style={styles.input}
                       value={enrollForm.femaleEmail}
@@ -813,6 +946,130 @@ export default function AdminUsersScreen() {
     </Animated.View>
   );
 
+  // Temp Password Modal
+  const renderTempPasswordModal = () => (
+    <Modal
+      visible={showTempPasswordModal}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setShowTempPasswordModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.tempPasswordModal, isMobile && styles.modalContentMobile]}>
+          <View style={styles.tempPasswordHeader}>
+            <View style={[styles.tempPasswordIcon, { backgroundColor: COLORS.success + '15' }]}>
+              <Ionicons name="checkmark-circle" size={48} color={COLORS.success} />
+            </View>
+            <Text style={styles.tempPasswordTitle}>Enrollment Successful!</Text>
+            <Text style={styles.tempPasswordSubtitle}>
+              Share these credentials with each user individually
+            </Text>
+          </View>
+
+          <View style={styles.credentialBox}>
+            <Text style={styles.credentialLabel}>Couple ID</Text>
+            <View style={styles.credentialValue}>
+              <Text style={styles.credentialText}>{tempPasswordInfo.coupleId}</Text>
+            </View>
+          </View>
+
+          {/* Male User Credentials */}
+          <View style={[styles.credentialBox, { borderLeftColor: COLORS.primary, borderLeftWidth: 3 }]}>
+            <View style={styles.credentialUserHeader}>
+              <Ionicons name="male" size={16} color={COLORS.primary} />
+              <Text style={[styles.credentialLabel, { color: COLORS.primary }]}>{tempPasswordInfo.maleName} ({tempPasswordInfo.coupleId}_M)</Text>
+            </View>
+            <View style={styles.credentialValue}>
+              <Text style={[styles.credentialText, styles.passwordText]}>{tempPasswordInfo.maleTempPassword}</Text>
+            </View>
+          </View>
+
+          {/* Female User Credentials */}
+          <View style={[styles.credentialBox, { borderLeftColor: COLORS.accent, borderLeftWidth: 3 }]}>
+            <View style={styles.credentialUserHeader}>
+              <Ionicons name="female" size={16} color={COLORS.accentDark} />
+              <Text style={[styles.credentialLabel, { color: COLORS.accentDark }]}>{tempPasswordInfo.femaleName} ({tempPasswordInfo.coupleId}_F)</Text>
+            </View>
+            <View style={styles.credentialValue}>
+              <Text style={[styles.credentialText, styles.passwordText]}>{tempPasswordInfo.femaleTempPassword}</Text>
+            </View>
+          </View>
+
+          <View style={styles.tempPasswordNote}>
+            <Ionicons name="information-circle" size={16} color={COLORS.info} />
+            <Text style={styles.tempPasswordNoteText}>
+              Each user must login with their own ID/Phone/Email and reset their password individually.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.tempPasswordButton}
+            onPress={() => setShowTempPasswordModal(false)}
+          >
+            <Text style={styles.tempPasswordButtonText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Loading state
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading couples...</Text>
+      </View>
+    );
+  }
+
+  // Empty state with helpful message
+  const renderEmptyState = () => {
+    const isFiltered = searchQuery || filterStatus !== 'all';
+    const hasNoCouples = couples.length === 0;
+    
+    return (
+      <View style={styles.emptyState}>
+        <View style={[styles.emptyIconCircle, { backgroundColor: COLORS.primary + '10' }]}>
+          <Ionicons 
+            name={hasNoCouples ? "people-outline" : "search-outline"} 
+            size={48} 
+            color={COLORS.primary} 
+          />
+        </View>
+        <Text style={styles.emptyTitle}>
+          {hasNoCouples ? 'No couples enrolled yet' : 'No couples found'}
+        </Text>
+        <Text style={styles.emptySubtitle}>
+          {hasNoCouples 
+            ? 'Get started by enrolling your first couple using the button above' 
+            : 'Try adjusting your search or filters'}
+        </Text>
+        {hasNoCouples && (
+          <TouchableOpacity
+            style={styles.emptyActionButton}
+            onPress={() => setShowEnrollModal(true)}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={styles.emptyActionText}>Enroll First Couple</Text>
+          </TouchableOpacity>
+        )}
+        {isFiltered && !hasNoCouples && (
+          <TouchableOpacity
+            style={[styles.emptyActionButton, { backgroundColor: COLORS.textSecondary }]}
+            onPress={() => {
+              setSearchQuery('');
+              setFilterStatus('all');
+            }}
+          >
+            <Ionicons name="refresh" size={20} color="#fff" />
+            <Text style={styles.emptyActionText}>Clear Filters</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {renderHeader()}
@@ -823,11 +1080,7 @@ export default function AdminUsersScreen() {
       >
         <View style={[styles.content, !isMobile && styles.contentDesktop]}>
           {filteredCouples.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="people-outline" size={64} color={COLORS.textMuted} />
-              <Text style={styles.emptyTitle}>No couples found</Text>
-              <Text style={styles.emptySubtitle}>Try adjusting your search or filters</Text>
-            </View>
+            renderEmptyState()
           ) : (
             filteredCouples.map(renderCoupleRow)
           )}
@@ -835,7 +1088,15 @@ export default function AdminUsersScreen() {
       </ScrollView>
 
       {renderEnrollmentModal()}
+      {renderTempPasswordModal()}
       {toast.visible && renderToast()}
+      
+      {/* Loading overlay for actions */}
+      {actionLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      )}
     </View>
   );
 }
@@ -1103,6 +1364,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.textPrimary,
+  },
+  setupStatusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  setupBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  setupBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  tempPasswordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.warning + '10',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: COLORS.warning + '30',
+  },
+  tempPasswordLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.warning,
+  },
+  tempPasswordValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   userActions: {
     flexDirection: 'row',
@@ -1442,17 +1744,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
+    paddingHorizontal: 24,
+  },
+  emptyIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: COLORS.textPrimary,
     marginTop: 16,
+    textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 14,
     color: COLORS.textSecondary,
-    marginTop: 4,
+    marginTop: 8,
+    textAlign: 'center',
+    maxWidth: 300,
+    lineHeight: 20,
+  },
+  emptyActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 8,
+    marginTop: 24,
+  },
+  emptyActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
 
   // Toast
@@ -1483,6 +1813,125 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
+    color: '#fff',
+  },
+
+  // Loading States
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+
+  // Temp Password Modal
+  tempPasswordModal: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  tempPasswordHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  tempPasswordIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  tempPasswordTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  tempPasswordSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  credentialBox: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  credentialLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  credentialUserHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  credentialValue: {
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+  },
+  credentialText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
+  },
+  passwordText: {
+    fontFamily: 'monospace',
+  },
+  tempPasswordNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: COLORS.info + '10',
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+    marginBottom: 24,
+    width: '100%',
+  },
+  tempPasswordNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.info,
+    lineHeight: 18,
+  },
+  tempPasswordButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  tempPasswordButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#fff',
   },
 });

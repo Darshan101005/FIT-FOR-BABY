@@ -1,7 +1,8 @@
+import { coupleService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useRef, useState } from 'react';
 import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
@@ -9,12 +10,19 @@ const isWeb = Platform.OS === 'web';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { width: screenWidth } = useWindowDimensions();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(true); // Visible by default
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
+  
+  // Mode from params: 'first-login' = password reset after enrollment
+  const mode = params.mode as string;
+  const coupleId = params.coupleId as string;
+  const gender = params.gender as 'male' | 'female';
 
   const isMobileWeb = useMemo(() => {
     if (!isWeb) return false;
@@ -60,7 +68,7 @@ export default function ResetPasswordScreen() {
     return null;
   };
 
-  const handleResetPassword = () => {
+  const handleResetPassword = async () => {
     if (!newPassword.trim()) {
       showToast('Please enter new password', 'error');
       return;
@@ -82,11 +90,48 @@ export default function ResetPasswordScreen() {
       return;
     }
 
-    // Password reset successful
-    showToast('Password reset successfully!', 'success');
-    setTimeout(() => {
-      router.replace('/login');
-    }, 1500);
+    setIsSubmitting(true);
+    
+    try {
+      if (mode === 'first-login' && coupleId && gender) {
+        // First-time password reset after enrollment
+        await coupleService.resetPassword(coupleId, gender, newPassword);
+        
+        // Check if PIN needs to be set
+        const couple = await coupleService.get(coupleId);
+        const user = couple?.[gender];
+        
+        showToast('Password set successfully!', 'success');
+        
+        setTimeout(() => {
+          if (!user?.isPinSet) {
+            // Navigate to PIN setup
+            router.replace({
+              pathname: '/user/manage-pin',
+              params: { 
+                mode: 'setup',
+                coupleId: coupleId,
+                gender: gender,
+              }
+            });
+          } else {
+            // Navigate to home
+            router.replace('/user/home');
+          }
+        }, 1000);
+      } else {
+        // Generic password reset - navigate back to login
+        showToast('Password reset successfully!', 'success');
+        setTimeout(() => {
+          router.replace('/login');
+        }, 1500);
+      }
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      showToast(error.message || 'Failed to reset password', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getPasswordStrength = () => {
@@ -281,25 +326,30 @@ export default function ResetPasswordScreen() {
               </View>
 
               <TouchableOpacity 
-                style={styles.resetButton}
+                style={[styles.resetButton, isSubmitting && styles.resetButtonDisabled]}
                 onPress={handleResetPassword}
                 activeOpacity={0.85}
+                disabled={isSubmitting}
               >
                 <LinearGradient
-                  colors={['#006dab', '#005a8f']}
+                  colors={isSubmitting ? ['#94a3b8', '#94a3b8'] : ['#006dab', '#005a8f']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.gradientButton}
                 >
-                  <Text style={styles.resetButtonText}>Reset Password</Text>
+                  <Text style={styles.resetButtonText}>
+                    {isSubmitting ? 'Saving...' : (mode === 'first-login' ? 'Set Password' : 'Reset Password')}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
 
-              <View style={styles.backContainer}>
-                <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
-                  <Text style={styles.backLink}>← Back to Login</Text>
-                </TouchableOpacity>
-              </View>
+              {mode !== 'first-login' && (
+                <View style={styles.backContainer}>
+                  <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
+                    <Text style={styles.backLink}>← Back to Login</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </View>
         </ScrollView>
@@ -509,6 +559,10 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
     marginBottom: 24,
+  },
+  resetButtonDisabled: {
+    shadowOpacity: 0.1,
+    elevation: 2,
   },
   gradientButton: {
     paddingVertical: 20,
