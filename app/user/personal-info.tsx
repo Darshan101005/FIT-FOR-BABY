@@ -113,6 +113,7 @@ export default function PersonalInfoScreen() {
   
   // State picker modal
   const [showStatePicker, setShowStatePicker] = useState(false);
+  const [stateSearchQuery, setStateSearchQuery] = useState('');
   
   // Fetch user data
   useFocusEffect(
@@ -446,160 +447,217 @@ export default function PersonalInfoScreen() {
   };
 
   // State Picker Modal
-  const renderStatePicker = () => (
-    <Modal
-      visible={showStatePicker}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowStatePicker(false)}
-    >
-      <View style={styles.statePickerOverlay}>
-        <View style={[styles.statePickerContent, { backgroundColor: colors.cardBackground }]}>
-          <View style={styles.statePickerHeader}>
-            <Text style={[styles.statePickerTitle, { color: colors.text }]}>Select State</Text>
-            <TouchableOpacity onPress={() => setShowStatePicker(false)}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.stateList}>
-            {INDIAN_STATES.map((state) => (
-              <TouchableOpacity
-                key={state}
-                style={[
-                  styles.stateItem,
-                  { borderBottomColor: colors.border },
-                  userData.address.state === state && { backgroundColor: colors.primary + '15' },
-                ]}
-                onPress={async () => {
-                  const newAddress = { ...userData.address, state };
-                  setUserData(prev => ({ ...prev, address: newAddress }));
+  const renderStatePicker = () => {
+    const filteredStates = INDIAN_STATES.filter(state => 
+      state.toLowerCase().includes(stateSearchQuery.toLowerCase())
+    );
+    
+    return (
+      <Modal
+        visible={showStatePicker}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowStatePicker(false);
+          setStateSearchQuery('');
+        }}
+      >
+        <View style={styles.statePickerOverlay}>
+          <View style={[styles.statePickerContent, { backgroundColor: colors.cardBackground }]}>
+            {/* Header */}
+            <View style={[styles.statePickerHeader, { borderBottomColor: colors.borderLight }]}>
+              <View style={styles.statePickerHeaderLeft}>
+                <Ionicons name="map-outline" size={22} color={colors.primary} />
+                <Text style={[styles.statePickerTitle, { color: colors.text }]}>Select State</Text>
+              </View>
+              <TouchableOpacity 
+                style={[styles.statePickerCloseBtn, { backgroundColor: colors.inputBackground }]}
+                onPress={() => {
                   setShowStatePicker(false);
-                  
-                  try {
-                    const userGender = await AsyncStorage.getItem('userGender') as 'male' | 'female';
-                    await coupleService.updateUserField(userData.coupleId, userGender, {
-                      [`${userGender}.address`]: newAddress,
-                    });
-                    showToast('State updated', 'success');
-                  } catch (error) {
-                    showToast('Failed to save', 'error');
-                  }
+                  setStateSearchQuery('');
                 }}
               >
-                <Text style={[
-                  styles.stateItemText, 
-                  { color: colors.text },
-                  userData.address.state === state && { color: colors.primary, fontWeight: '700' },
-                ]}>
-                  {state}
-                </Text>
-                {userData.address.state === state && (
-                  <Ionicons name="checkmark" size={20} color={colors.primary} />
-                )}
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
-            ))}
-          </ScrollView>
+            </View>
+            
+            {/* Search Bar */}
+            <View style={[styles.stateSearchContainer, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+              <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
+              <TextInput
+                style={[styles.stateSearchInput, { color: colors.text }]}
+                placeholder="Search state..."
+                placeholderTextColor={colors.textMuted}
+                value={stateSearchQuery}
+                onChangeText={setStateSearchQuery}
+                autoCorrect={false}
+              />
+              {stateSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setStateSearchQuery('')}>
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            {/* Results Count */}
+            <View style={styles.stateResultsCount}>
+              <Text style={[styles.stateResultsText, { color: colors.textSecondary }]}>
+                {filteredStates.length} {filteredStates.length === 1 ? 'state' : 'states'} found
+              </Text>
+            </View>
+            
+            {/* State List */}
+            <ScrollView 
+              style={styles.stateList}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {filteredStates.length === 0 ? (
+                <View style={styles.stateEmptyContainer}>
+                  <Ionicons name="search-outline" size={40} color={colors.textMuted} />
+                  <Text style={[styles.stateEmptyText, { color: colors.textMuted }]}>
+                    No states found
+                  </Text>
+                </View>
+              ) : (
+                filteredStates.map((state, index) => {
+                  const isSelected = userData.address.state === state;
+                  return (
+                    <TouchableOpacity
+                      key={state}
+                      style={[
+                        styles.stateItem,
+                        { backgroundColor: isSelected ? colors.primary + '12' : 'transparent' },
+                        isSelected && { borderColor: colors.primary, borderWidth: 1.5 },
+                        index === filteredStates.length - 1 && { marginBottom: 16 },
+                      ]}
+                      onPress={async () => {
+                        const newAddress = { ...userData.address, state };
+                        setUserData(prev => ({ ...prev, address: newAddress }));
+                        setShowStatePicker(false);
+                        setStateSearchQuery('');
+                        
+                        try {
+                          const userGender = await AsyncStorage.getItem('userGender') as 'male' | 'female';
+                          await coupleService.updateUserField(userData.coupleId, userGender, {
+                            [`${userGender}.address`]: newAddress,
+                          });
+                          showToast('State updated', 'success');
+                        } catch (error) {
+                          showToast('Failed to save', 'error');
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.stateItemLeft}>
+                        <View style={[
+                          styles.stateRadio, 
+                          { borderColor: isSelected ? colors.primary : colors.border },
+                          isSelected && { backgroundColor: colors.primary }
+                        ]}>
+                          {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                        </View>
+                        <Text style={[
+                          styles.stateItemText, 
+                          { color: isSelected ? colors.primary : colors.text },
+                          isSelected && { fontWeight: '700' },
+                        ]}>
+                          {state}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <View style={[styles.stateSelectedBadge, { backgroundColor: colors.primary }]}>
+                          <Text style={styles.stateSelectedBadgeText}>Selected</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
         </View>
-      </View>
-    </Modal>
-  );
+      </Modal>
+    );
+  };
 
   // Address Section
   const renderAddressSection = () => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <View style={[styles.sectionIcon, { backgroundColor: '#f59e0b15' }]}>
-          <Ionicons name="location" size={18} color="#f59e0b" />
+        <View style={[styles.sectionIcon, { backgroundColor: '#f59e0b15' }]}> 
+          <Ionicons name="location-outline" size={18} color="#f59e0b" />
         </View>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Address</Text>
       </View>
-      <View style={[styles.sectionContent, { backgroundColor: colors.cardBackground }]}>
-        {/* Country - Fixed to India */}
-        <View style={[styles.infoField]}>
-          <View style={[styles.fieldIcon, { backgroundColor: '#22c55e15' }]}>
-            <Ionicons name="globe-outline" size={20} color="#22c55e" />
-          </View>
-          <View style={styles.fieldContent}>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Country</Text>
-            <Text style={[styles.fieldValue, { color: colors.text }]}>🇮🇳 India</Text>
-          </View>
+      <View style={[styles.sectionContent, { backgroundColor: colors.cardBackground, padding: 20 }]}> 
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Country</Text>
+  <View style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, marginBottom: 16, flexDirection: 'row', alignItems: 'center' }]}> 
+          <Ionicons name="flag-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+          <Text style={{ color: colors.text, fontSize: 16 }}>🇮🇳 India</Text>
         </View>
-        
-        <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
-        
-        {/* Address Line 1 */}
-        {renderEditableField(
-          'addressLine1',
-          'Address Line 1',
-          userData.address.addressLine1,
-          'home-outline',
-          '#3b82f6',
-          'default',
-          'House/Flat No, Building Name'
-        )}
-        
-        <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
-        
-        {/* Address Line 2 */}
-        {renderEditableField(
-          'addressLine2',
-          'Address Line 2',
-          userData.address.addressLine2,
-          'location-outline',
-          '#3b82f6',
-          'default',
-          'Street, Area, Landmark'
-        )}
-        
-        <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
-        
-        {/* City */}
-        {renderEditableField(
-          'city',
-          'City',
-          userData.address.city,
-          'business-outline',
-          '#8b5cf6',
-          'default',
-          'Enter city name'
-        )}
-        
-        <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
-        
-        {/* State - Dropdown */}
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Address Line 1</Text>
+        <TextInput
+          style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border, marginBottom: 16 }]}
+          placeholder="House/Flat No, Building Name"
+          placeholderTextColor={colors.textMuted}
+          value={userData.address.addressLine1}
+          onChangeText={text => setUserData(prev => ({ ...prev, address: { ...prev.address, addressLine1: text } }))}
+        />
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Address Line 2</Text>
+        <TextInput
+          style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border, marginBottom: 16 }]}
+          placeholder="Street, Area, Landmark"
+          placeholderTextColor={colors.textMuted}
+          value={userData.address.addressLine2}
+          onChangeText={text => setUserData(prev => ({ ...prev, address: { ...prev.address, addressLine2: text } }))}
+        />
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>City</Text>
+        <TextInput
+          style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border, marginBottom: 16 }]}
+          placeholder="Enter city name"
+          placeholderTextColor={colors.textMuted}
+          value={userData.address.city}
+          onChangeText={text => setUserData(prev => ({ ...prev, address: { ...prev.address, city: text } }))}
+        />
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>State</Text>
         <TouchableOpacity
-          style={[styles.editableFieldContainer, { backgroundColor: colors.cardBackground }]}
+          style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, marginBottom: 16, flexDirection: 'row', alignItems: 'center' }]}
           onPress={() => setShowStatePicker(true)}
           activeOpacity={0.7}
         >
-          <View style={styles.editableFieldTop}>
-            <View style={[styles.fieldIcon, { backgroundColor: '#ec489915' }]}>
-              <Ionicons name="map-outline" size={20} color="#ec4899" />
-            </View>
-            <View style={styles.fieldContent}>
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>State</Text>
-              <Text style={[styles.fieldValue, { color: colors.text }]}>
-                {userData.address.state || 'Select state'}
-              </Text>
-            </View>
-            <View style={[styles.editFieldButton, { backgroundColor: colors.inputBackground }]}>
-              <Ionicons name="chevron-down" size={16} color={colors.primary} />
-            </View>
-          </View>
+          <Ionicons name="map-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+          <Text style={{ color: userData.address.state ? colors.text : colors.textMuted, fontSize: 16 }}>
+            {userData.address.state || 'Select state'}
+          </Text>
+          <Ionicons name="chevron-down" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
-        
-        <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
-        
-        {/* Pincode */}
-        {renderEditableField(
-          'pincode',
-          'Pincode',
-          userData.address.pincode,
-          'keypad-outline',
-          '#f59e0b',
-          'numeric',
-          '6-digit pincode'
-        )}
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Pincode</Text>
+        <TextInput
+          style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border, marginBottom: 24 }]}
+          placeholder="6-digit pincode"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="numeric"
+          maxLength={6}
+          value={userData.address.pincode}
+          onChangeText={text => setUserData(prev => ({ ...prev, address: { ...prev.address, pincode: text.replace(/[^0-9]/g, '') } }))}
+        />
+        <TouchableOpacity
+          style={{ backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 14, alignItems: 'center' }}
+          onPress={async () => {
+            try {
+              const userGender = await AsyncStorage.getItem('userGender') as 'male' | 'female';
+              await coupleService.updateUserField(userData.coupleId, userGender, {
+                [`${userGender}.address`]: userData.address,
+              });
+              showToast('Address updated', 'success');
+            } catch (error) {
+              showToast('Failed to save', 'error');
+            }
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Save Address</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -632,7 +690,7 @@ export default function PersonalInfoScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <View style={[styles.sectionIcon, { backgroundColor: '#ef444415' }]}>
-            <Ionicons name="heart" size={18} color="#ef4444" />
+            <Ionicons name="people-outline" size={18} color="#ef4444" />
           </View>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Partner Details</Text>
         </View>
@@ -718,11 +776,11 @@ export default function PersonalInfoScreen() {
 
           <View style={[styles.content, isMobile && styles.contentMobile]}>
             {/* User Identification */}
-            {renderSection('Identification', 'id-card', colors.primary, (
+            {renderSection('Identification', 'card-outline', colors.primary, (
               <>
                 <View style={styles.idRow}>
                   <View style={styles.idItemFull}>
-                    <Text style={[styles.idLabel, { color: colors.textSecondary }]}>User ID</Text>
+                    <Text style={[styles.idLabel, { color: colors.textSecondary }]}>Couple ID</Text>
                     <View style={[styles.idValueContainer, { backgroundColor: colors.inputBackground }]}>
                       <MaterialCommunityIcons name="identifier" size={18} color={colors.primary} />
                       <Text style={[styles.idValue, { color: colors.text }]}>{userData.coupleId}</Text>
@@ -733,9 +791,9 @@ export default function PersonalInfoScreen() {
             ))}
 
             {/* Basic Information (Non-editable) */}
-            {renderSection('Basic Information', 'person', '#8b5cf6', (
+            {renderSection('Basic Information', 'person-outline', '#8b5cf6', (
               <>
-                {renderInfoField('Full Name', userData.name, 'person-outline', '#8b5cf6')}
+                {renderInfoField('Full Name', userData.name, 'person-circle-outline', '#8b5cf6')}
                 <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
                 {renderInfoField(
                   'Gender', 
@@ -759,9 +817,9 @@ export default function PersonalInfoScreen() {
                       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Date of Birth</Text>
                       <Text style={[styles.fieldValue, { color: colors.text }]}>
                         {userData.dateOfBirth 
-                          ? new Date(userData.dateOfBirth).toLocaleDateString('en-IN', {
+                          ? new Date(userData.dateOfBirth).toLocaleDateString('en-GB', {
                               day: '2-digit',
-                              month: 'long',
+                              month: '2-digit',
                               year: 'numeric',
                             })
                           : 'Select date of birth'
@@ -785,19 +843,32 @@ export default function PersonalInfoScreen() {
                       <View style={styles.dobModalOverlay}>
                         <View style={[styles.dobModalContent, { backgroundColor: colors.cardBackground }]}>
                           <Text style={[styles.dobModalTitle, { color: colors.text }]}>Select Date of Birth</Text>
-                          <TextInput
-                            style={[styles.dobInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border }]}
-                            placeholder="YYYY-MM-DD"
-                            placeholderTextColor={colors.textMuted}
+                          
+                          {/* Single Input - Type or Pick Calendar */}
+                          <Text style={[styles.dobInputLabel, { color: colors.textSecondary, marginBottom: 8 }]}>
+                            Select a date of birth
+                          </Text>
+                          <input
+                            type="date"
                             defaultValue={userData.dateOfBirth || ''}
-                            onChangeText={(text) => {
-                              // Store temporarily
-                              setTempValue(text);
+                            max={new Date().toISOString().split('T')[0]}
+                            min="1950-01-01"
+                            onChange={(e) => setTempValue(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: 14,
+                              fontSize: 16,
+                              borderRadius: 10,
+                              border: '2px solid #006dab',
+                              backgroundColor: '#eaf6fb',
+                              color: '#006dab',
+                              cursor: 'pointer',
+                              boxSizing: 'border-box',
+                              outline: 'none',
+                              accentColor: '#98be4e',
                             }}
                           />
-                          <Text style={[styles.dobHelperText, { color: colors.textSecondary }]}>
-                            Format: YYYY-MM-DD (e.g., 1990-05-15)
-                          </Text>
+                          
                           <View style={styles.dobModalButtons}>
                             <TouchableOpacity
                               style={[styles.dobModalCancelBtn, { borderColor: colors.border }]}
@@ -812,6 +883,13 @@ export default function PersonalInfoScreen() {
                               style={[styles.dobModalSaveBtn, { backgroundColor: colors.primary }]}
                               onPress={async () => {
                                 if (tempValue && /^\d{4}-\d{2}-\d{2}$/.test(tempValue)) {
+                                  const parsedDate = new Date(tempValue);
+                                  
+                                  if (isNaN(parsedDate.getTime())) {
+                                    showToast('Please select a valid date', 'error');
+                                    return;
+                                  }
+                                  
                                   try {
                                     const userGender = await AsyncStorage.getItem('userGender') as 'male' | 'female';
                                     await coupleService.updateUserField(userData.coupleId, userGender, {
@@ -825,7 +903,7 @@ export default function PersonalInfoScreen() {
                                     showToast('Failed to save', 'error');
                                   }
                                 } else {
-                                  showToast('Please enter date in YYYY-MM-DD format', 'error');
+                                  showToast('Please select or enter a valid date', 'error');
                                 }
                               }}
                             >
@@ -853,7 +931,7 @@ export default function PersonalInfoScreen() {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View style={[styles.sectionIcon, { backgroundColor: '#22c55e15' }]}>
-                  <Ionicons name="call" size={18} color="#22c55e" />
+                  <Ionicons name="chatbox-ellipses-outline" size={18} color="#22c55e" />
                 </View>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Contact Information</Text>
               </View>
@@ -1351,42 +1429,120 @@ const styles = StyleSheet.create({
   // State Picker Modal Styles
   statePickerOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: isWeb ? 20 : 16,
   },
   statePickerContent: {
-    maxHeight: '70%',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    width: '100%',
+    maxWidth: isWeb ? 420 : '100%',
+    maxHeight: isWeb ? '80%' : '85%',
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   statePickerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  statePickerHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   statePickerTitle: {
     fontSize: 18,
     fontWeight: '700',
   },
+  statePickerCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44, // Touch-friendly
+    minHeight: 44,
+  },
+  stateSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+    minHeight: 48,
+  },
+  stateSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    padding: 0,
+  },
+  stateResultsCount: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  stateResultsText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   stateList: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
   },
   stateItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: isWeb ? 14 : 16,
     paddingHorizontal: 16,
-    marginHorizontal: 8,
-    marginVertical: 2,
-    borderRadius: 10,
+    marginVertical: 4,
+    borderRadius: 12,
+    minHeight: 48, // Touch-friendly minimum height
+  },
+  stateItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  stateRadio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stateItemText: {
     fontSize: 15,
+    fontWeight: '500',
+  },
+  stateSelectedBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  stateSelectedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  stateEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  stateEmptyText: {
+    fontSize: 14,
     fontWeight: '500',
   },
   // DOB Web Modal Styles
@@ -1406,8 +1562,36 @@ const styles = StyleSheet.create({
   dobModalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 16,
+    marginBottom: 20,
     textAlign: 'center',
+  },
+  dobInputContainer: {
+    marginBottom: 8,
+  },
+  dobInputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  dobTextInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 16,
+  },
+  dobDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    gap: 12,
+  },
+  dobDividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dobDividerText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   dobInput: {
     borderWidth: 1,

@@ -52,20 +52,41 @@ export default function ResetPasswordScreen() {
     }, 3000);
   };
 
-  const validatePassword = (password: string) => {
-    if (password.length < 8) {
-      return 'Password must be at least 8 characters';
+  const validatePassword = (password: string): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+    
+    // Trim and check for empty
+    const trimmedPassword = password.trim();
+    
+    // Check minimum length
+    if (trimmedPassword.length < 8) {
+      errors.push('At least 8 characters required');
     }
-    if (!/[A-Z]/.test(password)) {
-      return 'Password must contain at least one uppercase letter';
+    
+    // Check for uppercase letter
+    if (!/[A-Z]/.test(trimmedPassword)) {
+      errors.push('One uppercase letter required');
     }
-    if (!/[a-z]/.test(password)) {
-      return 'Password must contain at least one lowercase letter';
+    
+    // Check for lowercase letter  
+    if (!/[a-z]/.test(trimmedPassword)) {
+      errors.push('One lowercase letter required');
     }
-    if (!/[0-9]/.test(password)) {
-      return 'Password must contain at least one number';
+    
+    // Check for number
+    if (!/[0-9]/.test(trimmedPassword)) {
+      errors.push('One number required');
     }
-    return null;
+    
+    // Check for spaces (not allowed in password)
+    if (/\s/.test(password)) {
+      errors.push('Spaces are not allowed');
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
   };
 
   const handleResetPassword = async () => {
@@ -79,9 +100,9 @@ export default function ResetPasswordScreen() {
       return;
     }
 
-    const validationError = validatePassword(newPassword);
-    if (validationError) {
-      showToast(validationError, 'error');
+    const validation = validatePassword(newPassword);
+    if (!validation.isValid) {
+      showToast(validation.errors[0], 'error');
       return;
     }
 
@@ -137,15 +158,20 @@ export default function ResetPasswordScreen() {
   const getPasswordStrength = () => {
     if (!newPassword) return { level: 0, text: '', color: '#e2e8f0' };
     
+    const trimmedPassword = newPassword.trim();
     let strength = 0;
-    // Check all 4 required rules
-    if (newPassword.length >= 8) strength++;
-    if (/[A-Z]/.test(newPassword)) strength++;
-    if (/[a-z]/.test(newPassword)) strength++;
-    if (/[0-9]/.test(newPassword)) strength++;
+    
+    // Check all 4 required rules (same as validation)
+    if (trimmedPassword.length >= 8) strength++;
+    if (/[A-Z]/.test(trimmedPassword)) strength++;
+    if (/[a-z]/.test(trimmedPassword)) strength++;
+    if (/[0-9]/.test(trimmedPassword)) strength++;
+    
+    // Deduct if spaces are present (invalid)
+    const hasSpaces = /\s/.test(newPassword);
 
     // Strength levels based on rules met (out of 4)
-    if (strength === 0) return { level: 0, text: '', color: '#e2e8f0' };
+    if (strength === 0 || hasSpaces) return { level: 0, text: hasSpaces ? 'Invalid' : '', color: hasSpaces ? '#ef4444' : '#e2e8f0' };
     if (strength === 1) return { level: 1, text: 'Weak', color: '#ef4444' };
     if (strength === 2) return { level: 2, text: 'Weak', color: '#ef4444' };
     if (strength === 3) return { level: 3, text: 'Medium', color: '#f59e0b' };
@@ -153,6 +179,21 @@ export default function ResetPasswordScreen() {
   };
 
   const passwordStrength = getPasswordStrength();
+
+  // Check if all password rules are satisfied and passwords match
+  const isPasswordValid = () => {
+    const trimmedPassword = newPassword.trim();
+    const hasMinLength = trimmedPassword.length >= 8;
+    const hasUppercase = /[A-Z]/.test(trimmedPassword);
+    const hasLowercase = /[a-z]/.test(trimmedPassword);
+    const hasNumber = /[0-9]/.test(trimmedPassword);
+    const hasNoSpaces = !/\s/.test(newPassword);
+    const passwordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
+    
+    return hasMinLength && hasUppercase && hasLowercase && hasNumber && hasNoSpaces && passwordsMatch;
+  };
+
+  const canSubmit = isPasswordValid() && !isSubmitting;
 
   return (
     <View style={styles.container}>
@@ -287,54 +328,66 @@ export default function ResetPasswordScreen() {
                 <Text style={styles.requirementsTitle}>Password must contain:</Text>
                 <View style={styles.requirementItem}>
                   <Ionicons 
-                    name={newPassword.length >= 8 ? 'checkmark-circle' : 'ellipse-outline'} 
+                    name={newPassword.trim().length >= 8 ? 'checkmark-circle' : 'ellipse-outline'} 
                     size={14} 
-                    color={newPassword.length >= 8 ? '#22c55e' : '#94a3b8'} 
+                    color={newPassword.trim().length >= 8 ? '#22c55e' : '#94a3b8'} 
                   />
-                  <Text style={[styles.requirementText, newPassword.length >= 8 && styles.requirementMet]}>
+                  <Text style={[styles.requirementText, newPassword.trim().length >= 8 && styles.requirementMet]}>
                     At least 8 characters
                   </Text>
                 </View>
                 <View style={styles.requirementItem}>
                   <Ionicons 
-                    name={/[A-Z]/.test(newPassword) ? 'checkmark-circle' : 'ellipse-outline'} 
+                    name={/[A-Z]/.test(newPassword.trim()) ? 'checkmark-circle' : 'ellipse-outline'} 
                     size={14} 
-                    color={/[A-Z]/.test(newPassword) ? '#22c55e' : '#94a3b8'} 
+                    color={/[A-Z]/.test(newPassword.trim()) ? '#22c55e' : '#94a3b8'} 
                   />
-                  <Text style={[styles.requirementText, /[A-Z]/.test(newPassword) && styles.requirementMet]}>
+                  <Text style={[styles.requirementText, /[A-Z]/.test(newPassword.trim()) && styles.requirementMet]}>
                     One uppercase letter
                   </Text>
                 </View>
                 <View style={styles.requirementItem}>
                   <Ionicons 
-                    name={/[a-z]/.test(newPassword) ? 'checkmark-circle' : 'ellipse-outline'} 
+                    name={/[a-z]/.test(newPassword.trim()) ? 'checkmark-circle' : 'ellipse-outline'} 
                     size={14} 
-                    color={/[a-z]/.test(newPassword) ? '#22c55e' : '#94a3b8'} 
+                    color={/[a-z]/.test(newPassword.trim()) ? '#22c55e' : '#94a3b8'} 
                   />
-                  <Text style={[styles.requirementText, /[a-z]/.test(newPassword) && styles.requirementMet]}>
+                  <Text style={[styles.requirementText, /[a-z]/.test(newPassword.trim()) && styles.requirementMet]}>
                     One lowercase letter
                   </Text>
                 </View>
                 <View style={styles.requirementItem}>
                   <Ionicons 
-                    name={/[0-9]/.test(newPassword) ? 'checkmark-circle' : 'ellipse-outline'} 
+                    name={/[0-9]/.test(newPassword.trim()) ? 'checkmark-circle' : 'ellipse-outline'} 
                     size={14} 
-                    color={/[0-9]/.test(newPassword) ? '#22c55e' : '#94a3b8'} 
+                    color={/[0-9]/.test(newPassword.trim()) ? '#22c55e' : '#94a3b8'} 
                   />
-                  <Text style={[styles.requirementText, /[0-9]/.test(newPassword) && styles.requirementMet]}>
+                  <Text style={[styles.requirementText, /[0-9]/.test(newPassword.trim()) && styles.requirementMet]}>
                     One number
                   </Text>
                 </View>
+                {/\s/.test(newPassword) && (
+                  <View style={styles.requirementItem}>
+                    <Ionicons 
+                      name="close-circle" 
+                      size={14} 
+                      color="#ef4444" 
+                    />
+                    <Text style={[styles.requirementText, { color: '#ef4444' }]}>
+                      Spaces are not allowed
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <TouchableOpacity 
-                style={[styles.resetButton, isSubmitting && styles.resetButtonDisabled]}
+                style={[styles.resetButton, !canSubmit && styles.resetButtonDisabled]}
                 onPress={handleResetPassword}
                 activeOpacity={0.85}
-                disabled={isSubmitting}
+                disabled={!canSubmit}
               >
                 <LinearGradient
-                  colors={isSubmitting ? ['#94a3b8', '#94a3b8'] : ['#006dab', '#005a8f']}
+                  colors={!canSubmit ? ['#94a3b8', '#94a3b8'] : ['#006dab', '#005a8f']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.gradientButton}
@@ -418,11 +471,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: isWeb ? 20 : 20,
     paddingTop: isWeb ? 30 : 40,
-    paddingBottom: isWeb ? 40 : 120,
+    paddingBottom: isWeb ? 40 : 40,
   },
   mobileWebScrollContent: {
     paddingTop: 0,
-    paddingBottom: 100,
+    paddingBottom: 0,
   },
   contentWrapper: {
     maxWidth: 500,
@@ -436,7 +489,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 20,
     paddingTop: 0,
-    paddingBottom: 100,
+    paddingBottom: 80,
   },
   logoSection: {
     alignItems: 'center',
@@ -452,26 +505,29 @@ const styles = StyleSheet.create({
   headerSection: {
     marginBottom: isWeb ? 24 : 20,
     alignItems: 'center',
+    paddingHorizontal: 10,
   },
   title: {
-    fontSize: 32,
+    fontSize: isWeb ? 32 : 28,
     fontWeight: '900',
     color: '#006dab',
     marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#64748b',
     textAlign: 'center',
   },
+  subtitle: {
+    fontSize: isWeb ? 15 : 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: isWeb ? 20 : 16,
   },
   inputLabel: {
-    fontSize: 16,
+    fontSize: isWeb ? 16 : 15,
     fontWeight: '700',
     color: '#006dab',
-    marginBottom: 10,
+    marginBottom: isWeb ? 10 : 8,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -481,8 +537,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#006dab',
     borderStyle: 'solid',
-    paddingHorizontal: 16,
-    height: 58,
+    paddingHorizontal: isWeb ? 16 : 14,
+    height: isWeb ? 58 : 52,
     shadowColor: '#006dab',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -494,7 +550,7 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: isWeb ? 16 : 15,
     color: '#1e293b',
     fontWeight: '600',
     height: '100%',
@@ -540,23 +596,23 @@ const styles = StyleSheet.create({
   requirementsContainer: {
     backgroundColor: '#f8fafc',
     borderRadius: 12,
-    padding: 14,
-    marginBottom: 24,
+    padding: isWeb ? 14 : 12,
+    marginBottom: isWeb ? 24 : 20,
   },
   requirementsTitle: {
-    fontSize: 13,
+    fontSize: isWeb ? 13 : 12,
     fontWeight: '600',
     color: '#64748b',
-    marginBottom: 10,
+    marginBottom: isWeb ? 10 : 8,
   },
   requirementItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 6,
+    marginBottom: isWeb ? 6 : 4,
   },
   requirementText: {
-    fontSize: 13,
+    fontSize: isWeb ? 13 : 12,
     color: '#94a3b8',
   },
   requirementMet: {
@@ -570,30 +626,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 6,
-    marginBottom: 24,
+    marginBottom: isWeb ? 24 : 20,
   },
   resetButtonDisabled: {
     shadowOpacity: 0.1,
     elevation: 2,
   },
   gradientButton: {
-    paddingVertical: 20,
+    paddingVertical: isWeb ? 20 : 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 64,
+    minHeight: isWeb ? 64 : 56,
   },
   resetButtonText: {
     color: '#ffffff',
-    fontSize: 19,
+    fontSize: isWeb ? 19 : 17,
     fontWeight: '800',
   },
   backContainer: {
     alignItems: 'center',
-    marginBottom: isWeb ? 20 : 40,
-    paddingBottom: 20,
+    marginBottom: isWeb ? 20 : 30,
+    paddingBottom: isWeb ? 20 : 10,
   },
   backLink: {
-    fontSize: 15,
+    fontSize: isWeb ? 15 : 14,
     color: '#006dab',
     fontWeight: '600',
   },
