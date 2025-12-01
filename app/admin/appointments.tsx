@@ -1,16 +1,20 @@
+import { useApp } from '@/context/AppContext';
+import { coupleService, doctorVisitService, formatDateString, nursingVisitService } from '@/services/firestore.service';
+import { Couple, DoctorVisit, NursingDepartmentVisit } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -35,294 +39,347 @@ const COLORS = {
   borderLight: '#f1f5f9',
 };
 
-interface Appointment {
-  id: string;
-  coupleId: string;
-  maleName: string;
-  femaleName: string;
-  type: 'checkup' | 'consultation' | 'follow-up' | 'counseling';
-  date: string;
-  time: string;
-  status: 'upcoming' | 'completed' | 'cancelled' | 'rescheduled';
-  notes: string;
-  doctor?: string;
-  location?: string;
-}
-
-// Mock appointments data
-const mockAppointments: Appointment[] = [
-  {
-    id: 'APT001',
-    coupleId: 'C_001',
-    maleName: 'John Doe',
-    femaleName: 'Sarah Doe',
-    type: 'checkup',
-    date: '2024-11-29',
-    time: '10:00 AM',
-    status: 'upcoming',
-    notes: 'Monthly health checkup',
-    doctor: 'Dr. Priya Sharma',
-    location: 'Room 101',
-  },
-  {
-    id: 'APT002',
-    coupleId: 'C_002',
-    maleName: 'Raj Kumar',
-    femaleName: 'Priya Kumar',
-    type: 'consultation',
-    date: '2024-11-29',
-    time: '11:30 AM',
-    status: 'upcoming',
-    notes: 'Nutrition consultation',
-    doctor: 'Dr. Anita Reddy',
-    location: 'Room 203',
-  },
-  {
-    id: 'APT003',
-    coupleId: 'C_003',
-    maleName: 'Amit Patel',
-    femaleName: 'Neha Patel',
-    type: 'follow-up',
-    date: '2024-11-30',
-    time: '09:00 AM',
-    status: 'upcoming',
-    notes: 'Follow-up on exercise plan',
-    doctor: 'Dr. Vikram Singh',
-    location: 'Room 105',
-  },
-  {
-    id: 'APT004',
-    coupleId: 'C_004',
-    maleName: 'Sanjay M',
-    femaleName: 'Kavitha S',
-    type: 'counseling',
-    date: '2024-11-30',
-    time: '02:00 PM',
-    status: 'upcoming',
-    notes: 'Couples counseling session',
-    doctor: 'Dr. Meera Nair',
-    location: 'Room 302',
-  },
-  {
-    id: 'APT005',
-    coupleId: 'C_005',
-    maleName: 'Arjun R',
-    femaleName: 'Deepa V',
-    type: 'checkup',
-    date: '2024-12-01',
-    time: '10:30 AM',
-    status: 'upcoming',
-    notes: 'Quarterly assessment',
-    doctor: 'Dr. Priya Sharma',
-    location: 'Room 101',
-  },
-  {
-    id: 'APT006',
-    coupleId: 'C_001',
-    maleName: 'John Doe',
-    femaleName: 'Sarah Doe',
-    type: 'consultation',
-    date: '2024-12-02',
-    time: '03:00 PM',
-    status: 'upcoming',
-    notes: 'Diet plan review',
-    doctor: 'Dr. Anita Reddy',
-    location: 'Room 203',
-  },
-  {
-    id: 'APT007',
-    coupleId: 'C_006',
-    maleName: 'Venkat K',
-    femaleName: 'Sudha P',
-    type: 'follow-up',
-    date: '2024-12-03',
-    time: '11:00 AM',
-    status: 'rescheduled',
-    notes: 'Weight management follow-up',
-    doctor: 'Dr. Vikram Singh',
-    location: 'Room 105',
-  },
-  {
-    id: 'APT008',
-    coupleId: 'C_007',
-    maleName: 'Prakash S',
-    femaleName: 'Lakshmi R',
-    type: 'checkup',
-    date: '2024-11-25',
-    time: '09:30 AM',
-    status: 'completed',
-    notes: 'Routine checkup completed',
-    doctor: 'Dr. Priya Sharma',
-    location: 'Room 101',
-  },
-];
-
-const appointmentTypes = [
-  { id: 'all', label: 'All Types' },
-  { id: 'checkup', label: 'Checkup' },
-  { id: 'consultation', label: 'Consultation' },
-  { id: 'follow-up', label: 'Follow-up' },
-  { id: 'counseling', label: 'Counseling' },
-];
-
-// Calendar constants
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const HOURS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
 const MINUTES = ['00', '15', '30', '45'];
-
-// Mock couples data for search
-const mockCouplesData = [
-  { coupleId: 'C_001', maleName: 'John Doe', femaleName: 'Sarah Doe' },
-  { coupleId: 'C_002', maleName: 'Raj Kumar', femaleName: 'Priya Kumar' },
-  { coupleId: 'C_003', maleName: 'Amit Patel', femaleName: 'Neha Patel' },
-  { coupleId: 'C_004', maleName: 'Sanjay M', femaleName: 'Kavitha S' },
-  { coupleId: 'C_005', maleName: 'Arjun R', femaleName: 'Deepa V' },
-  { coupleId: 'C_006', maleName: 'Venkat K', femaleName: 'Sudha P' },
-  { coupleId: 'C_007', maleName: 'Prakash S', femaleName: 'Lakshmi R' },
-  { coupleId: 'C_008', maleName: 'Karthik N', femaleName: 'Divya M' },
+const SCHEDULE_DAYS = [
+  { value: 1, label: 'Monday' },
+  { value: 2, label: 'Tuesday' },
+  { value: 3, label: 'Wednesday' },
+  { value: 4, label: 'Thursday' },
+  { value: 5, label: 'Friday' },
+  { value: 6, label: 'Saturday' },
 ];
 
 export default function AdminAppointmentsScreen() {
   const router = useRouter();
+  const { user } = useApp();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
-  const isTablet = screenWidth >= 768 && screenWidth < 1024;
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'doctorVisit' | 'nursingVisit'>('doctorVisit');
+  
+  // Data states
+  const [couples, setCouples] = useState<Couple[]>([]);
+  const [doctorVisits, setDoctorVisits] = useState<DoctorVisit[]>([]);
+  const [nursingVisits, setNursingVisits] = useState<NursingDepartmentVisit[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType, setSelectedType] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('upcoming');
-  const [appointments] = useState<Appointment[]>(mockAppointments);
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
-  
-  // New appointment form state
-  const [newAppointmentCoupleSearch, setNewAppointmentCoupleSearch] = useState('');
-  const [selectedCouple, setSelectedCouple] = useState<{coupleId: string; maleName: string; femaleName: string} | null>(null);
-  const [newAppointmentDate, setNewAppointmentDate] = useState('');
-  const [newAppointmentTime, setNewAppointmentTime] = useState('');
-  const [newAppointmentType, setNewAppointmentType] = useState<'checkup' | 'consultation' | 'follow-up' | 'counseling'>('checkup');
-  const [newAppointmentNotes, setNewAppointmentNotes] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+
+  // Schedule modal states
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleMode, setScheduleMode] = useState<'manual' | 'automatic'>('manual');
+  const [selectedCouple, setSelectedCouple] = useState<Couple | null>(null);
   const [showCoupleDropdown, setShowCoupleDropdown] = useState(false);
+  const [coupleSearchQuery, setCoupleSearchQuery] = useState('');
   
-  // Calendar and time picker state
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  // Manual scheduling
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [showCalendar, setShowCalendar] = useState(false);
   const [selectedHour, setSelectedHour] = useState('10');
   const [selectedMinute, setSelectedMinute] = useState('00');
   const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('AM');
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [visitPurpose, setVisitPurpose] = useState('');
+  const [visitNotes, setVisitNotes] = useState('');
+  
+  // Automatic scheduling
+  const [autoScheduleDay, setAutoScheduleDay] = useState<number>(1); // Monday default
+  const [showDayDropdown, setShowDayDropdown] = useState(false);
+  
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Filter appointments
-  const filteredAppointments = appointments.filter(apt => {
-    const matchesSearch = 
-      apt.coupleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      apt.maleName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      apt.femaleName.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesType = selectedType === 'all' || apt.type === selectedType;
-    const matchesStatus = selectedStatus === 'all' || apt.status === selectedStatus;
-    
-    return matchesSearch && matchesType && matchesStatus;
-  });
-
-  // Group appointments by date
-  const groupedAppointments = filteredAppointments.reduce((groups, apt) => {
-    const date = apt.date;
-    if (!groups[date]) {
-      groups[date] = [];
-    }
-    groups[date].push(apt);
-    return groups;
-  }, {} as Record<string, Appointment[]>);
-
-  // Sort dates
-  const sortedDates = Object.keys(groupedAppointments).sort((a, b) => 
-    new Date(a).getTime() - new Date(b).getTime()
+  // Load data
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
   );
 
-  const getTypeIcon = (type: Appointment['type']) => {
-    switch (type) {
-      case 'checkup': return 'medical';
-      case 'consultation': return 'chatbubbles';
-      case 'follow-up': return 'refresh-circle';
-      case 'counseling': return 'heart';
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      // Load all couples
+      const allCouples = await coupleService.getAll();
+      setCouples(allCouples);
+
+      // Load all doctor visits from all couples
+      const allDoctorVisits: DoctorVisit[] = [];
+      const allNursingVisits: NursingDepartmentVisit[] = [];
+      
+      for (const couple of allCouples) {
+        const dv = await doctorVisitService.getAllForCouple(couple.coupleId);
+        allDoctorVisits.push(...dv);
+        
+        const nv = await nursingVisitService.getAll(couple.coupleId);
+        allNursingVisits.push(...nv);
+      }
+
+      setDoctorVisits(allDoctorVisits);
+      setNursingVisits(allNursingVisits);
+    } catch (error) {
+      console.error('Error loading appointments:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const getTypeColor = (type: Appointment['type']) => {
-    switch (type) {
-      case 'checkup': return COLORS.primary;
-      case 'consultation': return COLORS.accent;
-      case 'follow-up': return COLORS.info;
-      case 'counseling': return COLORS.warning;
+  // Get couple name by ID
+  const getCoupleName = (coupleId: string) => {
+    const couple = couples.find(c => c.coupleId === coupleId);
+    if (couple) {
+      const maleName = couple.male?.name || 'Male';
+      const femaleName = couple.female?.name || 'Female';
+      return `${maleName} & ${femaleName}`;
+    }
+    return coupleId;
+  };
+
+  // Filter doctor visits
+  const filteredDoctorVisits = doctorVisits.filter(visit => {
+    const coupleName = getCoupleName(visit.coupleId).toLowerCase();
+    const matchesSearch = 
+      visit.coupleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      coupleName.includes(searchQuery.toLowerCase()) ||
+      (visit.doctorName?.toLowerCase() || '').includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = selectedStatus === 'all' || visit.status === selectedStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Filter nursing visits
+  const filteredNursingVisits = nursingVisits.filter(visit => {
+    const matchesSearch = 
+      visit.coupleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (visit.coupleName?.toLowerCase() || '').includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = selectedStatus === 'all' || visit.status === selectedStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Filter couples for dropdown
+  const filteredCouples = couples.filter(couple => {
+    const maleName = couple.male?.name || '';
+    const femaleName = couple.female?.name || '';
+    const fullName = `${maleName} ${femaleName}`.toLowerCase();
+    return fullName.includes(coupleSearchQuery.toLowerCase()) || 
+           couple.coupleId.toLowerCase().includes(coupleSearchQuery.toLowerCase());
+  });
+
+  // Calendar helpers
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDay = firstDay.getDay();
+    
+    const days: (number | null)[] = [];
+    for (let i = 0; i < startingDay; i++) {
+      days.push(null);
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(i);
+    }
+    return days;
+  };
+
+  const isPastDate = (day: number) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
+    return checkDate < today;
+  };
+
+  const isDateSelected = (day: number) => {
+    if (!selectedDate || !day) return false;
+    return (
+      selectedDate.getDate() === day &&
+      selectedDate.getMonth() === calendarMonth.getMonth() &&
+      selectedDate.getFullYear() === calendarMonth.getFullYear()
+    );
+  };
+
+  // Generate automatic schedule dates (every 4 weeks for 3 months, starting from next week)
+  const generateAutoScheduleDates = (startDate: Date, dayOfWeek: number): Date[] => {
+    const dates: Date[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Calculate end date (3 months from today)
+    const endDate = new Date(today);
+    endDate.setMonth(endDate.getMonth() + 3);
+
+    // Start from next week - add 7 days to today first
+    let currentDate = new Date(today);
+    currentDate.setDate(currentDate.getDate() + 7); // Move to next week
+    
+    // Find the first occurrence of the selected day in next week or after
+    while (currentDate.getDay() !== dayOfWeek) {
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Add dates every 4 weeks (limit to 4 visits)
+    let visitCount = 0;
+    while (currentDate <= endDate && visitCount < 4) {
+      dates.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 28); // 4 weeks
+      visitCount++;
+    }
+
+    return dates;
+  };
+
+  // Handle schedule appointment
+  const handleScheduleAppointment = async () => {
+    if (!selectedCouple) {
+      alert('Please select a couple');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const timeStr = `${selectedHour}:${selectedMinute} ${selectedPeriod}`;
+      const adminName = user?.name || user?.email || 'Admin';
+
+      if (scheduleMode === 'manual') {
+        if (!selectedDate) {
+          alert('Please select a date');
+          setIsSaving(false);
+          return;
+        }
+
+        await nursingVisitService.schedule(selectedCouple.coupleId, {
+          coupleName: `${selectedCouple.male?.name || 'Male'} & ${selectedCouple.female?.name || 'Female'}`,
+          date: formatDateString(selectedDate),
+          time: timeStr,
+          purpose: visitPurpose || 'Nursing Department Visit',
+          notes: visitNotes,
+          scheduledBy: user?.id || 'admin',
+          scheduledByName: adminName,
+        });
+
+        alert('Appointment scheduled successfully!');
+      } else {
+        // Automatic scheduling
+        const scheduleDates = generateAutoScheduleDates(new Date(), autoScheduleDay);
+        
+        let visitNum = 1;
+        for (const date of scheduleDates) {
+          await nursingVisitService.schedule(selectedCouple.coupleId, {
+            coupleName: `${selectedCouple.male?.name || 'Male'} & ${selectedCouple.female?.name || 'Female'}`,
+            date: formatDateString(date),
+            time: timeStr,
+            visitNumber: visitNum,
+            purpose: visitPurpose || 'Nursing Department Visit',
+            notes: visitNotes,
+            scheduledBy: user?.id || 'admin',
+            scheduledByName: adminName,
+          });
+          visitNum++;
+        }
+
+        alert(`${scheduleDates.length} appointments scheduled successfully!`);
+      }
+
+      // Reset form and reload
+      resetScheduleForm();
+      setShowScheduleModal(false);
+      loadData();
+    } catch (error) {
+      console.error('Error scheduling appointment:', error);
+      alert('Failed to schedule appointment');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const getStatusColor = (status: Appointment['status']) => {
+  const resetScheduleForm = () => {
+    setSelectedCouple(null);
+    setCoupleSearchQuery('');
+    setSelectedDate(null);
+    setScheduleMode('manual');
+    setVisitPurpose('');
+    setVisitNotes('');
+    setAutoScheduleDay(1);
+    setSelectedHour('10');
+    setSelectedMinute('00');
+    setSelectedPeriod('AM');
+  };
+
+  // Status color helper
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'upcoming': return COLORS.info;
+      case 'scheduled': return COLORS.info;
+      case 'confirmed': return COLORS.success;
       case 'completed': return COLORS.success;
       case 'cancelled': return COLORS.error;
-      case 'rescheduled': return COLORS.warning;
+      case 'missed': return COLORS.warning;
+      default: return COLORS.textMuted;
     }
   };
 
-  const getStatusIcon = (status: Appointment['status']) => {
-    switch (status) {
-      case 'upcoming': return 'time-outline';
-      case 'completed': return 'checkmark-circle';
-      case 'cancelled': return 'close-circle';
-      case 'rescheduled': return 'calendar';
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    if (dateString === today.toISOString().split('T')[0]) {
-      return 'Today';
-    } else if (dateString === tomorrow.toISOString().split('T')[0]) {
-      return 'Tomorrow';
-    }
-    
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      month: 'short', 
-      day: 'numeric' 
-    });
-  };
-
-  // Summary stats
-  const stats = {
-    total: appointments.filter(a => a.status === 'upcoming').length,
-    today: appointments.filter(a => a.date === '2024-11-29' && a.status === 'upcoming').length,
-    thisWeek: appointments.filter(a => a.status === 'upcoming').length,
-  };
-
-  // Header
+  // Render Header with Tabs
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <View>
           <Text style={styles.headerTitle}>Appointments</Text>
-          <Text style={styles.headerSubtitle}>Manage upcoming appointments</Text>
+          <Text style={styles.headerSubtitle}>
+            {activeTab === 'doctorVisit' ? 'View doctor visits logged by users' : 'Schedule nursing department visits'}
+          </Text>
         </View>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => setShowNewAppointmentModal(true)}
+        {activeTab === 'nursingVisit' && (
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => setShowScheduleModal(true)}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            {!isMobile && <Text style={styles.addButtonText}>Schedule Visit</Text>}
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'doctorVisit' && styles.tabActive]}
+          onPress={() => setActiveTab('doctorVisit')}
         >
-          <Ionicons name="add" size={20} color="#fff" />
-          {!isMobile && <Text style={styles.addButtonText}>Schedule Appointment</Text>}
+          <Ionicons 
+            name="medical-outline" 
+            size={18} 
+            color={activeTab === 'doctorVisit' ? COLORS.primary : COLORS.textMuted} 
+          />
+          <Text style={[styles.tabText, activeTab === 'doctorVisit' && styles.tabTextActive]}>
+            Doctor Visit
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'nursingVisit' && styles.tabActive]}
+          onPress={() => setActiveTab('nursingVisit')}
+        >
+          <Ionicons 
+            name="medkit-outline" 
+            size={18} 
+            color={activeTab === 'nursingVisit' ? COLORS.primary : COLORS.textMuted} 
+          />
+          <Text style={[styles.tabText, activeTab === 'nursingVisit' && styles.tabTextActive]}>
+            Nursing Dept Visit
+          </Text>
         </TouchableOpacity>
       </View>
 
       {/* Filters */}
-      <View style={[styles.filtersContainer, isMobile && styles.filtersContainerMobile]}>
+      <View style={styles.filtersContainer}>
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={18} color={COLORS.textMuted} />
           <TextInput
@@ -334,730 +391,675 @@ export default function AdminAppointmentsScreen() {
           />
         </View>
 
-        <View style={styles.filterChips}>
-          {['upcoming', 'completed', 'cancelled', 'all'].map(status => (
-            <TouchableOpacity
-              key={status}
-              style={[styles.filterChip, selectedStatus === status && styles.filterChipActive]}
-              onPress={() => setSelectedStatus(status)}
-            >
-              <Text style={[styles.filterChipText, selectedStatus === status && styles.filterChipTextActive]}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-
-  // Stats Cards
-  const renderStats = () => (
-    <View style={[styles.statsContainer, isMobile && styles.statsContainerMobile]}>
-      <View style={[styles.statCard, { borderLeftColor: COLORS.info }]}>
-        <View style={[styles.statIcon, { backgroundColor: COLORS.info + '15' }]}>
-          <Ionicons name="calendar" size={22} color={COLORS.info} />
-        </View>
-        <View>
-          <Text style={styles.statValue}>{stats.total}</Text>
-          <Text style={styles.statLabel}>Upcoming</Text>
-        </View>
-      </View>
-
-      <View style={[styles.statCard, { borderLeftColor: COLORS.success }]}>
-        <View style={[styles.statIcon, { backgroundColor: COLORS.success + '15' }]}>
-          <Ionicons name="today" size={22} color={COLORS.success} />
-        </View>
-        <View>
-          <Text style={styles.statValue}>{stats.today}</Text>
-          <Text style={styles.statLabel}>Today</Text>
-        </View>
-      </View>
-
-      <View style={[styles.statCard, { borderLeftColor: COLORS.primary }]}>
-        <View style={[styles.statIcon, { backgroundColor: COLORS.primary + '15' }]}>
-          <Ionicons name="calendar-outline" size={22} color={COLORS.primary} />
-        </View>
-        <View>
-          <Text style={styles.statValue}>{stats.thisWeek}</Text>
-          <Text style={styles.statLabel}>This Week</Text>
-        </View>
-      </View>
-
-      <View style={[styles.statCard, { borderLeftColor: COLORS.error }]}>
-        <View style={[styles.statIcon, { backgroundColor: COLORS.error + '15' }]}>
-          <Ionicons name="close-circle" size={22} color={COLORS.error} />
-        </View>
-        <View>
-          <Text style={styles.statValue}>{appointments.filter(a => a.status === 'cancelled').length}</Text>
-          <Text style={styles.statLabel}>Cancelled</Text>
-        </View>
-      </View>
-    </View>
-  );
-
-  // Appointment Card
-  const renderAppointmentCard = (appointment: Appointment) => (
-    <TouchableOpacity
-      key={appointment.id}
-      style={styles.appointmentCard}
-      onPress={() => {
-        setSelectedAppointment(appointment);
-        setShowDetailModal(true);
-      }}
-      activeOpacity={0.7}
-    >
-      <View style={styles.appointmentLeft}>
-        <View style={[styles.typeIcon, { backgroundColor: getTypeColor(appointment.type) + '15' }]}>
-          <Ionicons name={getTypeIcon(appointment.type) as any} size={20} color={getTypeColor(appointment.type)} />
-        </View>
-        <View style={styles.appointmentInfo}>
-          <Text style={styles.appointmentTime}>{appointment.time}</Text>
-          <View style={styles.coupleInfo}>
-            <View style={styles.coupleAvatars}>
-              <View style={[styles.avatarSmall, { backgroundColor: COLORS.primary }]}>
-                <Ionicons name="male" size={12} color="#fff" />
-              </View>
-              <View style={[styles.avatarSmall, { backgroundColor: COLORS.accent, marginLeft: -6 }]}>
-                <Ionicons name="female" size={12} color="#fff" />
-              </View>
-            </View>
-            <View>
-              <Text style={styles.coupleId}>{appointment.coupleId}</Text>
-              <Text style={styles.coupleNames} numberOfLines={1}>
-                {appointment.maleName} & {appointment.femaleName}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.appointmentType}>
-            {appointment.type.charAt(0).toUpperCase() + appointment.type.slice(1)}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.appointmentRight}>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(appointment.status) + '15' }]}>
-          <Ionicons name={getStatusIcon(appointment.status) as any} size={14} color={getStatusColor(appointment.status)} />
-          <Text style={[styles.statusText, { color: getStatusColor(appointment.status) }]}>
-            {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
-      </View>
-    </TouchableOpacity>
-  );
-
-  // Appointments List grouped by date
-  const renderAppointmentsList = () => (
-    <View style={styles.listContainer}>
-      {sortedDates.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="calendar-outline" size={48} color={COLORS.textMuted} />
-          <Text style={styles.emptyStateText}>No appointments found</Text>
-          <Text style={styles.emptyStateSubtext}>Try adjusting your filters</Text>
-        </View>
-      ) : (
-        sortedDates.map(date => (
-          <View key={date} style={styles.dateGroup}>
-            <View style={styles.dateHeader}>
-              <View style={styles.dateBadge}>
-                <Ionicons name="calendar" size={14} color={COLORS.primary} />
-                <Text style={styles.dateText}>{formatDate(date)}</Text>
-              </View>
-              <Text style={styles.appointmentCount}>
-                {groupedAppointments[date].length} appointment{groupedAppointments[date].length > 1 ? 's' : ''}
-              </Text>
-            </View>
-            <View style={styles.appointmentsGroup}>
-              {groupedAppointments[date].map(renderAppointmentCard)}
-            </View>
-          </View>
-        ))
-      )}
-    </View>
-  );
-
-  // Appointment Detail Modal
-  const renderDetailModal = () => {
-    if (!selectedAppointment) return null;
-
-    return (
-      <Modal
-        visible={showDetailModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowDetailModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, isMobile && styles.modalContentMobile]}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderLeft}>
-                <View style={[styles.modalTypeIcon, { backgroundColor: getTypeColor(selectedAppointment.type) + '15' }]}>
-                  <Ionicons name={getTypeIcon(selectedAppointment.type) as any} size={24} color={getTypeColor(selectedAppointment.type)} />
-                </View>
-                <View>
-                  <Text style={styles.modalTitle}>Appointment Details</Text>
-                  <Text style={styles.modalSubtitle}>{selectedAppointment.id}</Text>
-                </View>
-              </View>
-              <TouchableOpacity onPress={() => setShowDetailModal(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody}>
-              {/* Couple Info */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionLabel}>Couple</Text>
-                <View style={styles.detailCard}>
-                  <View style={styles.coupleAvatars}>
-                    <View style={[styles.avatarMedium, { backgroundColor: COLORS.primary }]}>
-                      <Ionicons name="male" size={16} color="#fff" />
-                    </View>
-                    <View style={[styles.avatarMedium, { backgroundColor: COLORS.accent, marginLeft: -8 }]}>
-                      <Ionicons name="female" size={16} color="#fff" />
-                    </View>
-                  </View>
-                  <View style={styles.detailCardContent}>
-                    <Text style={styles.detailCardTitle}>{selectedAppointment.coupleId}</Text>
-                    <Text style={styles.detailCardSubtitle}>
-                      {selectedAppointment.maleName} & {selectedAppointment.femaleName}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Date & Time */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionLabel}>Date & Time</Text>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailItem}>
-                    <Ionicons name="calendar" size={18} color={COLORS.textSecondary} />
-                    <Text style={styles.detailItemText}>{formatDate(selectedAppointment.date)}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Ionicons name="time" size={18} color={COLORS.textSecondary} />
-                    <Text style={styles.detailItemText}>{selectedAppointment.time}</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Type & Status */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionLabel}>Type & Status</Text>
-                <View style={styles.detailRow}>
-                  <View style={[styles.typeBadge, { backgroundColor: getTypeColor(selectedAppointment.type) + '15' }]}>
-                    <Ionicons name={getTypeIcon(selectedAppointment.type) as any} size={16} color={getTypeColor(selectedAppointment.type)} />
-                    <Text style={[styles.typeBadgeText, { color: getTypeColor(selectedAppointment.type) }]}>
-                      {selectedAppointment.type.charAt(0).toUpperCase() + selectedAppointment.type.slice(1)}
-                    </Text>
-                  </View>
-                  <View style={[styles.statusBadgeLarge, { backgroundColor: getStatusColor(selectedAppointment.status) + '15' }]}>
-                    <Ionicons name={getStatusIcon(selectedAppointment.status) as any} size={16} color={getStatusColor(selectedAppointment.status)} />
-                    <Text style={[styles.statusBadgeText, { color: getStatusColor(selectedAppointment.status) }]}>
-                      {selectedAppointment.status.charAt(0).toUpperCase() + selectedAppointment.status.slice(1)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Doctor & Location */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionLabel}>Doctor & Location</Text>
-                <View style={styles.detailCard}>
-                  <View style={styles.detailCardRow}>
-                    <Ionicons name="person" size={18} color={COLORS.primary} />
-                    <Text style={styles.detailCardText}>{selectedAppointment.doctor || 'Not assigned'}</Text>
-                  </View>
-                  <View style={styles.detailCardRow}>
-                    <Ionicons name="location" size={18} color={COLORS.accent} />
-                    <Text style={styles.detailCardText}>{selectedAppointment.location || 'TBD'}</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Notes */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionLabel}>Notes</Text>
-                <View style={styles.notesCard}>
-                  <Text style={styles.notesText}>{selectedAppointment.notes || 'No notes available'}</Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            {/* Modal Footer */}
-            <View style={styles.modalFooter}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterChipsScroll}>
+          <View style={styles.filterChips}>
+            {['all', 'scheduled', 'completed', 'cancelled'].map(status => (
               <TouchableOpacity
-                style={styles.modalPrimaryButton}
-                onPress={() => {
-                  setShowDetailModal(false);
-                  router.push(`/admin/users?couple=${selectedAppointment.coupleId}` as any);
-                }}
+                key={status}
+                style={[styles.filterChip, selectedStatus === status && styles.filterChipActive]}
+                onPress={() => setSelectedStatus(status)}
               >
-                <Ionicons name="person" size={18} color="#fff" />
-                <Text style={styles.modalPrimaryButtonText}>View Couple</Text>
+                <Text style={[styles.filterChipText, selectedStatus === status && styles.filterChipTextActive]}>
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </Text>
               </TouchableOpacity>
-            </View>
+            ))}
           </View>
-        </View>
-      </Modal>
-    );
-  };
-
-  // Filter couples for search
-  const filteredCouples = mockCouplesData.filter(couple => 
-    couple.coupleId.toLowerCase().includes(newAppointmentCoupleSearch.toLowerCase()) ||
-    couple.maleName.toLowerCase().includes(newAppointmentCoupleSearch.toLowerCase()) ||
-    couple.femaleName.toLowerCase().includes(newAppointmentCoupleSearch.toLowerCase())
+        </ScrollView>
+      </View>
+    </View>
   );
 
-  // Handle couple selection
-  const handleCoupleSelect = (couple: {coupleId: string; maleName: string; femaleName: string}) => {
-    setSelectedCouple(couple);
-    setNewAppointmentCoupleSearch(couple.coupleId);
+  // Render Doctor Visit Card
+  const renderDoctorVisitCard = (visit: DoctorVisit) => (
+    <View key={visit.id} style={styles.visitCard}>
+      <View style={styles.visitDateBadge}>
+        <Text style={styles.visitDateDay}>{new Date(visit.date).getDate()}</Text>
+        <Text style={styles.visitDateMonth}>{MONTHS_SHORT[new Date(visit.date).getMonth()]}</Text>
+      </View>
+      
+      <View style={styles.visitContent}>
+        <View style={styles.visitHeader}>
+          <Text style={styles.visitTime}>{visit.time}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(visit.status) + '20' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(visit.status) }]}>
+              {visit.status}
+            </Text>
+          </View>
+        </View>
+        
+        <Text style={styles.coupleName}>{getCoupleName(visit.coupleId)}</Text>
+        <View style={styles.visitMeta}>
+          <Ionicons name={visit.gender === 'male' ? 'male' : 'female'} size={14} color={COLORS.textMuted} />
+          <Text style={styles.visitMetaText}>Logged by {visit.loggedBy}</Text>
+        </View>
+        
+        {visit.doctorName && (
+          <View style={styles.visitMeta}>
+            <Ionicons name="person" size={14} color={COLORS.textMuted} />
+            <Text style={styles.visitMetaText}>{visit.doctorName}</Text>
+          </View>
+        )}
+        
+        {visit.purpose && (
+          <Text style={styles.visitPurpose}>{visit.purpose}</Text>
+        )}
+      </View>
+    </View>
+  );
+
+  // Render Nursing Visit Card
+  const renderNursingVisitCard = (visit: NursingDepartmentVisit) => (
+    <View key={visit.id} style={styles.visitCard}>
+      <View style={[styles.visitDateBadge, { backgroundColor: COLORS.accent + '20' }]}>
+        <Text style={[styles.visitDateDay, { color: COLORS.accentDark }]}>{new Date(visit.date).getDate()}</Text>
+        <Text style={[styles.visitDateMonth, { color: COLORS.accentDark }]}>{MONTHS_SHORT[new Date(visit.date).getMonth()]}</Text>
+      </View>
+      
+      <View style={styles.visitContent}>
+        <View style={styles.visitHeader}>
+          <Text style={styles.visitTime}>{visit.time}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(visit.status) + '20' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(visit.status) }]}>
+              {visit.status}
+            </Text>
+          </View>
+        </View>
+        
+        <Text style={styles.coupleName}>{visit.coupleName || getCoupleName(visit.coupleId)}</Text>
+        
+        {visit.visitNumber && (
+          <View style={styles.visitMeta}>
+            <Ionicons name="calendar-number" size={14} color={COLORS.textMuted} />
+            <Text style={styles.visitMetaText}>Visit #{visit.visitNumber}</Text>
+          </View>
+        )}
+        
+        {visit.scheduledByName && (
+          <View style={styles.visitMeta}>
+            <Ionicons name="person" size={14} color={COLORS.textMuted} />
+            <Text style={styles.visitMetaText}>Scheduled by {visit.scheduledByName}</Text>
+          </View>
+        )}
+        
+        {visit.purpose && (
+          <Text style={styles.visitPurpose}>{visit.purpose}</Text>
+        )}
+      </View>
+      
+      <TouchableOpacity style={styles.visitAction}>
+        <Ionicons name="ellipsis-vertical" size={18} color={COLORS.textMuted} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Close all dropdowns
+  const closeAllDropdowns = () => {
     setShowCoupleDropdown(false);
+    setShowDayDropdown(false);
+    setShowCalendar(false);
+    setShowTimePicker(false);
   };
 
-  // Handle schedule appointment
-  const handleScheduleAppointment = () => {
-    if (!selectedCouple || !newAppointmentDate || !newAppointmentTime) {
-      return;
-    }
-    
-    // Here you would add the new appointment to the database
-    console.log('Scheduling appointment:', {
-      coupleId: selectedCouple.coupleId,
-      maleName: selectedCouple.maleName,
-      femaleName: selectedCouple.femaleName,
-      date: newAppointmentDate,
-      time: newAppointmentTime,
-      type: newAppointmentType,
-      notes: newAppointmentNotes,
-    });
-    
-    // Reset form and close modal
-    setSelectedCouple(null);
-    setNewAppointmentCoupleSearch('');
-    setNewAppointmentDate('');
-    setNewAppointmentTime('');
-    setNewAppointmentType('checkup');
-    setNewAppointmentNotes('');
-    setShowNewAppointmentModal(false);
-  };
-
-  // New Appointment Modal
-  const renderNewAppointmentModal = () => (
+  // Render Schedule Modal
+  const renderScheduleModal = () => (
     <Modal
-      visible={showNewAppointmentModal}
+      visible={showScheduleModal}
       animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowNewAppointmentModal(false)}
+      transparent
+      onRequestClose={() => {
+        closeAllDropdowns();
+        setShowScheduleModal(false);
+      }}
     >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, isMobile && styles.modalContentMobile]}>
+      <TouchableOpacity 
+        style={styles.modalOverlay} 
+        activeOpacity={1} 
+        onPress={closeAllDropdowns}
+      >
+        <TouchableOpacity 
+          style={[styles.modalContent, isMobile && styles.modalContentMobile]} 
+          activeOpacity={1}
+          onPress={closeAllDropdowns}
+        >
           {/* Modal Header */}
           <View style={styles.modalHeader}>
-            <View style={styles.modalHeaderLeft}>
-              <View style={[styles.modalTypeIcon, { backgroundColor: COLORS.primary + '15' }]}>
-                <Ionicons name="calendar-outline" size={24} color={COLORS.primary} />
-              </View>
-              <View>
-                <Text style={styles.modalTitle}>Schedule Appointment</Text>
-                <Text style={styles.modalSubtitle}>Create a new appointment for a couple</Text>
-              </View>
+            <View>
+              <Text style={styles.modalTitle}>Schedule Nursing Visit</Text>
+              <Text style={styles.modalSubtitle}>Schedule appointments for couples</Text>
             </View>
-            <TouchableOpacity onPress={() => setShowNewAppointmentModal(false)}>
-              <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+            <TouchableOpacity 
+              style={styles.modalCloseButton}
+              onPress={() => {
+                closeAllDropdowns();
+                resetScheduleForm();
+                setShowScheduleModal(false);
+              }}
+            >
+              <Ionicons name="close" size={22} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody}>
-            {/* Couple Search */}
-            <View style={[styles.formSection, { zIndex: 100 }]}>
-              <Text style={styles.formLabel}>Select Couple *</Text>
-              <View style={styles.coupleSearchContainer}>
-                <View style={styles.coupleSearchInputWrapper}>
-                  <Ionicons name="search" size={18} color={COLORS.textMuted} />
-                  <TextInput
-                    style={styles.coupleSearchInput}
-                    placeholder="Search by Couple ID or name..."
-                    placeholderTextColor={COLORS.textMuted}
-                    value={newAppointmentCoupleSearch}
-                    onChangeText={(text) => {
-                      setNewAppointmentCoupleSearch(text);
-                      setShowCoupleDropdown(true);
-                      if (!text) setSelectedCouple(null);
-                    }}
-                    onFocus={() => setShowCoupleDropdown(true)}
-                  />
-                  {selectedCouple && (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setSelectedCouple(null);
-                        setNewAppointmentCoupleSearch('');
-                      }}
-                    >
-                      <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
-                    </TouchableOpacity>
-                  )}
+          <ScrollView 
+            style={styles.modalBody} 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Step 1: Select Couple */}
+            <View style={styles.formSection}>
+              <View style={styles.formSectionHeader}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepBadgeText}>1</Text>
                 </View>
-                
-                {/* Dropdown */}
-                {showCoupleDropdown && newAppointmentCoupleSearch.length > 0 && !selectedCouple && (
-                  <View style={styles.coupleDropdown}>
-                    {filteredCouples.length === 0 ? (
-                      <View style={styles.coupleDropdownEmpty}>
-                        <Text style={styles.coupleDropdownEmptyText}>No couples found</Text>
-                      </View>
-                    ) : (
-                      filteredCouples.slice(0, 5).map((couple) => (
-                        <TouchableOpacity
-                          key={couple.coupleId}
-                          style={styles.coupleDropdownItem}
-                          onPress={() => handleCoupleSelect(couple)}
-                        >
-                          <View style={styles.coupleDropdownAvatars}>
-                            <View style={[styles.dropdownAvatar, { backgroundColor: COLORS.primary }]}>
-                              <Ionicons name="male" size={10} color="#fff" />
-                            </View>
-                            <View style={[styles.dropdownAvatar, { backgroundColor: COLORS.accent, marginLeft: -4 }]}>
-                              <Ionicons name="female" size={10} color="#fff" />
-                            </View>
-                          </View>
-                          <View style={styles.coupleDropdownInfo}>
-                            <Text style={styles.coupleDropdownId}>{couple.coupleId}</Text>
-                            <Text style={styles.coupleDropdownNames}>{couple.maleName} & {couple.femaleName}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      ))
-                    )}
-                  </View>
-                )}
+                <Text style={styles.formSectionTitle}>Select Couple</Text>
               </View>
               
-              {/* Selected Couple Card */}
-              {selectedCouple && (
-                <View style={styles.selectedCoupleCard}>
-                  <View style={styles.coupleAvatars}>
-                    <View style={[styles.avatarMedium, { backgroundColor: COLORS.primary }]}>
-                      <Ionicons name="male" size={14} color="#fff" />
-                    </View>
-                    <View style={[styles.avatarMedium, { backgroundColor: COLORS.accent, marginLeft: -6 }]}>
-                      <Ionicons name="female" size={14} color="#fff" />
-                    </View>
+              <TouchableOpacity 
+                style={[
+                  styles.dropdownButton,
+                  selectedCouple && styles.dropdownButtonSelected,
+                  showCoupleDropdown && styles.dropdownButtonActive
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setShowDayDropdown(false);
+                  setShowCalendar(false);
+                  setShowTimePicker(false);
+                  setShowCoupleDropdown(!showCoupleDropdown);
+                }}
+              >
+                <View style={styles.dropdownButtonContent}>
+                  {selectedCouple ? (
+                    <>
+                      <Ionicons name="people" size={18} color={COLORS.primary} />
+                      <View style={styles.dropdownSelectedInfo}>
+                        <Text style={styles.dropdownText}>
+                          {selectedCouple.male?.name || 'Male'} & {selectedCouple.female?.name || 'Female'}
+                        </Text>
+                        <Text style={styles.dropdownSubtext}>{selectedCouple.coupleId}</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="people-outline" size={18} color={COLORS.textMuted} />
+                      <Text style={styles.dropdownPlaceholder}>Select a couple...</Text>
+                    </>
+                  )}
+                </View>
+                <Ionicons 
+                  name={showCoupleDropdown ? "chevron-up" : "chevron-down"} 
+                  size={18} 
+                  color={COLORS.textMuted} 
+                />
+              </TouchableOpacity>
+              
+              {showCoupleDropdown && (
+                <View style={styles.dropdownList}>
+                  <View style={styles.dropdownSearchContainer}>
+                    <Ionicons name="search" size={16} color={COLORS.textMuted} />
+                    <TextInput
+                      style={styles.dropdownSearch}
+                      placeholder="Search by name or ID..."
+                      placeholderTextColor={COLORS.textMuted}
+                      value={coupleSearchQuery}
+                      onChangeText={setCoupleSearchQuery}
+                    />
                   </View>
-                  <View style={styles.selectedCoupleInfo}>
-                    <Text style={styles.selectedCoupleId}>{selectedCouple.coupleId}</Text>
-                    <Text style={styles.selectedCoupleNames}>{selectedCouple.maleName} & {selectedCouple.femaleName}</Text>
-                  </View>
-                  <Ionicons name="checkmark-circle" size={22} color={COLORS.success} />
+                  <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+                    {filteredCouples.length > 0 ? (
+                      filteredCouples.map(couple => (
+                        <TouchableOpacity
+                          key={couple.coupleId}
+                          style={[
+                            styles.dropdownItem,
+                            selectedCouple?.coupleId === couple.coupleId && styles.dropdownItemSelected
+                          ]}
+                          onPress={() => {
+                            setSelectedCouple(couple);
+                            setShowCoupleDropdown(false);
+                            setCoupleSearchQuery('');
+                          }}
+                        >
+                          <View style={styles.dropdownItemIcon}>
+                            <Ionicons name="people" size={16} color={COLORS.primary} />
+                          </View>
+                          <View style={styles.dropdownItemContent}>
+                            <Text style={styles.dropdownItemText}>
+                              {couple.male?.name || 'Male'} & {couple.female?.name || 'Female'}
+                            </Text>
+                            <Text style={styles.dropdownItemSubtext}>{couple.coupleId}</Text>
+                          </View>
+                          {selectedCouple?.coupleId === couple.coupleId && (
+                            <Ionicons name="checkmark-circle" size={18} color={COLORS.primary} />
+                          )}
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      <View style={styles.dropdownEmpty}>
+                        <Text style={styles.dropdownEmptyText}>No couples found</Text>
+                      </View>
+                    )}
+                  </ScrollView>
                 </View>
               )}
             </View>
 
-            {/* Date & Time */}
+            {/* Step 2: Schedule Mode */}
             <View style={styles.formSection}>
-              <Text style={styles.formLabel}>Date & Time *</Text>
-              <View style={styles.dateTimeRow}>
-                <TouchableOpacity 
-                  style={styles.dateInputWrapper}
-                  onPress={() => {
-                    setShowCalendar(!showCalendar);
-                    setShowTimePicker(false);
-                  }}
-                >
-                  <Ionicons name="calendar" size={18} color={COLORS.primary} />
-                  <Text style={[styles.dateTimeText, !newAppointmentDate && styles.dateTimePlaceholder]}>
-                    {newAppointmentDate || 'Select Date'}
-                  </Text>
-                  <Ionicons name={showCalendar ? "chevron-up" : "chevron-down"} size={16} color={COLORS.textMuted} />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.timeInputWrapper}
-                  onPress={() => {
-                    setShowTimePicker(!showTimePicker);
-                    setShowCalendar(false);
-                  }}
-                >
-                  <Ionicons name="time" size={18} color={COLORS.primary} />
-                  <Text style={[styles.dateTimeText, !newAppointmentTime && styles.dateTimePlaceholder]}>
-                    {newAppointmentTime || 'Select Time'}
-                  </Text>
-                  <Ionicons name={showTimePicker ? "chevron-up" : "chevron-down"} size={16} color={COLORS.textMuted} />
-                </TouchableOpacity>
+              <View style={styles.formSectionHeader}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepBadgeText}>2</Text>
+                </View>
+                <Text style={styles.formSectionTitle}>Schedule Mode</Text>
               </View>
               
-              {/* Calendar Picker */}
-              {showCalendar && (
-                <View style={styles.calendarContainer}>
-                  <View style={styles.calendarHeader}>
-                    <TouchableOpacity
-                      style={styles.calendarNavButton}
-                      onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
-                    >
-                      <Ionicons name="chevron-back" size={20} color={COLORS.textSecondary} />
-                    </TouchableOpacity>
-                    <Text style={styles.calendarMonthTitle}>
-                      {MONTHS[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+              <View style={styles.modeToggle}>
+                <TouchableOpacity
+                  style={[styles.modeButton, scheduleMode === 'manual' && styles.modeButtonActive]}
+                  onPress={() => {
+                    closeAllDropdowns();
+                    setScheduleMode('manual');
+                  }}
+                >
+                  <Ionicons 
+                    name="calendar-outline" 
+                    size={20} 
+                    color={scheduleMode === 'manual' ? '#fff' : COLORS.textSecondary} 
+                  />
+                  <Text style={[styles.modeButtonText, scheduleMode === 'manual' && styles.modeButtonTextActive]}>
+                    Manual
+                  </Text>
+                  <Text style={[styles.modeButtonHint, scheduleMode === 'manual' && styles.modeButtonHintActive]}>
+                    Single date
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.modeButton, scheduleMode === 'automatic' && styles.modeButtonActive]}
+                  onPress={() => {
+                    closeAllDropdowns();
+                    setScheduleMode('automatic');
+                  }}
+                >
+                  <Ionicons 
+                    name="repeat-outline" 
+                    size={20} 
+                    color={scheduleMode === 'automatic' ? '#fff' : COLORS.textSecondary} 
+                  />
+                  <Text style={[styles.modeButtonText, scheduleMode === 'automatic' && styles.modeButtonTextActive]}>
+                    Automatic
+                  </Text>
+                  <Text style={[styles.modeButtonHint, scheduleMode === 'automatic' && styles.modeButtonHintActive]}>
+                    4 visits
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Step 3: Date/Day Selection */}
+            <View style={styles.formSection}>
+              <View style={styles.formSectionHeader}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepBadgeText}>3</Text>
+                </View>
+                <Text style={styles.formSectionTitle}>
+                  {scheduleMode === 'manual' ? 'Select Date' : 'Select Day of Week'}
+                </Text>
+              </View>
+
+              {scheduleMode === 'manual' ? (
+                <>
+                  <TouchableOpacity 
+                    style={[
+                      styles.dateButton,
+                      selectedDate && styles.dateButtonSelected,
+                      showCalendar && styles.dateButtonActive
+                    ]}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setShowCoupleDropdown(false);
+                      setShowDayDropdown(false);
+                      setShowTimePicker(false);
+                      setShowCalendar(!showCalendar);
+                    }}
+                  >
+                    <Ionicons name="calendar" size={18} color={selectedDate ? COLORS.primary : COLORS.textMuted} />
+                    <Text style={selectedDate ? styles.dateButtonText : styles.dateButtonPlaceholder}>
+                      {selectedDate 
+                        ? `${selectedDate.getDate()} ${MONTHS[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
+                        : 'Tap to select date...'}
                     </Text>
-                    <TouchableOpacity
-                      style={styles.calendarNavButton}
-                      onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
-                    >
-                      <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  <View style={styles.calendarWeekdays}>
-                    {WEEKDAYS.map((day) => (
-                      <Text key={day} style={styles.calendarWeekdayText}>{day}</Text>
-                    ))}
-                  </View>
-                  
-                  <View style={styles.calendarDays}>
-                    {(() => {
-                      const year = calendarMonth.getFullYear();
-                      const month = calendarMonth.getMonth();
-                      const daysInMonth = new Date(year, month + 1, 0).getDate();
-                      const firstDay = new Date(year, month, 1).getDay();
-                      const today = new Date();
-                      const days = [];
-                      
-                      // Empty cells for days before the first day
-                      for (let i = 0; i < firstDay; i++) {
-                        days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
-                      }
-                      
-                      // Days of the month
-                      for (let day = 1; day <= daysInMonth; day++) {
-                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                        const isSelected = newAppointmentDate === dateStr;
-                        const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
-                        const isPast = new Date(year, month, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                        
-                        days.push(
+                    <Ionicons name={showCalendar ? "chevron-up" : "chevron-down"} size={18} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+
+                  {showCalendar && (
+                    <View style={styles.calendarContainer}>
+                      <View style={styles.calendarHeader}>
+                        <TouchableOpacity 
+                          style={styles.calendarNavButton}
+                          onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}
+                        >
+                          <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
+                        </TouchableOpacity>
+                        <Text style={styles.calendarMonthText}>
+                          {MONTHS[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                        </Text>
+                        <TouchableOpacity 
+                          style={styles.calendarNavButton}
+                          onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}
+                        >
+                          <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={styles.calendarWeekdays}>
+                        {WEEKDAYS.map(day => (
+                          <Text key={day} style={styles.calendarWeekday}>{day}</Text>
+                        ))}
+                      </View>
+
+                      <View style={styles.calendarDays}>
+                        {getDaysInMonth(calendarMonth).map((day, index) => (
                           <TouchableOpacity
-                            key={day}
+                            key={index}
                             style={[
                               styles.calendarDay,
-                              isSelected && styles.calendarDaySelected,
-                              isToday && !isSelected && styles.calendarDayToday,
+                              day !== null && isDateSelected(day) && styles.calendarDaySelected,
+                              day !== null && isPastDate(day) && styles.calendarDayDisabled,
                             ]}
                             onPress={() => {
-                              if (!isPast) {
-                                setNewAppointmentDate(dateStr);
+                              if (day && !isPastDate(day)) {
+                                setSelectedDate(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day));
                                 setShowCalendar(false);
                               }
                             }}
-                            disabled={isPast}
+                            disabled={!day || isPastDate(day)}
                           >
-                            <Text style={[
-                              styles.calendarDayText,
-                              isSelected && styles.calendarDayTextSelected,
-                              isToday && !isSelected && styles.calendarDayTextToday,
-                              isPast && styles.calendarDayTextPast,
-                            ]}>
-                              {day}
-                            </Text>
+                            {day && (
+                              <Text style={[
+                                styles.calendarDayText,
+                                isDateSelected(day) && styles.calendarDayTextSelected,
+                                isPastDate(day) && styles.calendarDayTextDisabled,
+                              ]}>
+                                {day}
+                              </Text>
+                            )}
                           </TouchableOpacity>
-                        );
-                      }
-                      
-                      return days;
-                    })()}
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                    style={[styles.dropdownButton, showDayDropdown && styles.dropdownButtonActive]}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setShowCoupleDropdown(false);
+                      setShowCalendar(false);
+                      setShowTimePicker(false);
+                      setShowDayDropdown(!showDayDropdown);
+                    }}
+                  >
+                    <View style={styles.dropdownButtonContent}>
+                      <Ionicons name="today" size={18} color={COLORS.primary} />
+                      <Text style={styles.dropdownText}>
+                        {SCHEDULE_DAYS.find(d => d.value === autoScheduleDay)?.label || 'Monday'}
+                      </Text>
+                    </View>
+                    <Ionicons name={showDayDropdown ? "chevron-up" : "chevron-down"} size={18} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+
+                  {showDayDropdown && (
+                    <View style={styles.dropdownListCompact}>
+                      {SCHEDULE_DAYS.map(day => (
+                        <TouchableOpacity
+                          key={day.value}
+                          style={[styles.dropdownItemCompact, autoScheduleDay === day.value && styles.dropdownItemSelected]}
+                          onPress={() => {
+                            setAutoScheduleDay(day.value);
+                            setShowDayDropdown(false);
+                          }}
+                        >
+                          <Text style={[styles.dropdownItemText, autoScheduleDay === day.value && styles.dropdownItemTextSelected]}>
+                            {day.label}
+                          </Text>
+                          {autoScheduleDay === day.value && (
+                            <Ionicons name="checkmark" size={18} color={COLORS.primary} />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Preview auto-scheduled dates */}
+                  <View style={styles.autoSchedulePreview}>
+                    <View style={styles.autoSchedulePreviewHeader}>
+                      <Ionicons name="eye-outline" size={16} color={COLORS.accent} />
+                      <Text style={styles.autoSchedulePreviewTitle}>Preview: 4 visits scheduled</Text>
+                    </View>
+                    {generateAutoScheduleDates(new Date(), autoScheduleDay).map((date, index) => (
+                      <View key={index} style={styles.autoScheduleDate}>
+                        <View style={styles.autoScheduleDateBadge}>
+                          <Text style={styles.autoScheduleDateBadgeText}>#{index + 1}</Text>
+                        </View>
+                        <Text style={styles.autoScheduleDateText}>
+                          {SCHEDULE_DAYS.find(d => d.value === date.getDay())?.label}, {date.getDate()} {MONTHS[date.getMonth()]} {date.getFullYear()}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
-                </View>
+                </>
               )}
-              
-              {/* Time Picker */}
+            </View>
+
+            {/* Step 4: Time Selection */}
+            <View style={styles.formSection}>
+              <View style={styles.formSectionHeader}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepBadgeText}>4</Text>
+                </View>
+                <Text style={styles.formSectionTitle}>Select Time</Text>
+              </View>
+
+              <TouchableOpacity 
+                style={[styles.dateButton, showTimePicker && styles.dateButtonActive]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setShowCoupleDropdown(false);
+                  setShowDayDropdown(false);
+                  setShowCalendar(false);
+                  setShowTimePicker(!showTimePicker);
+                }}
+              >
+                <Ionicons name="time" size={18} color={COLORS.primary} />
+                <Text style={styles.dateButtonText}>
+                  {selectedHour}:{selectedMinute} {selectedPeriod}
+                </Text>
+                <Ionicons name={showTimePicker ? "chevron-up" : "chevron-down"} size={18} color={COLORS.textMuted} />
+              </TouchableOpacity>
+
               {showTimePicker && (
                 <View style={styles.timePickerContainer}>
-                  <Text style={styles.timePickerTitle}>Select Time</Text>
-                  <View style={styles.timePickerContent}>
-                    {/* Hours */}
+                  <View style={styles.timePickerRow}>
                     <View style={styles.timePickerColumn}>
                       <Text style={styles.timePickerLabel}>Hour</Text>
-                      <ScrollView style={styles.timePickerScroll} showsVerticalScrollIndicator={false}>
-                        {HOURS.map((hour) => (
+                      <ScrollView style={styles.timePickerScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                        {HOURS.map(hour => (
                           <TouchableOpacity
                             key={hour}
-                            style={[
-                              styles.timePickerOption,
-                              selectedHour === hour && styles.timePickerOptionSelected,
-                            ]}
+                            style={[styles.timePickerOption, selectedHour === hour && styles.timePickerOptionSelected]}
                             onPress={() => setSelectedHour(hour)}
                           >
-                            <Text style={[
-                              styles.timePickerOptionText,
-                              selectedHour === hour && styles.timePickerOptionTextSelected,
-                            ]}>
+                            <Text style={[styles.timePickerOptionText, selectedHour === hour && styles.timePickerOptionTextSelected]}>
                               {hour}
                             </Text>
                           </TouchableOpacity>
                         ))}
                       </ScrollView>
                     </View>
-                    
-                    {/* Minutes */}
+
                     <View style={styles.timePickerColumn}>
                       <Text style={styles.timePickerLabel}>Min</Text>
-                      <ScrollView style={styles.timePickerScroll} showsVerticalScrollIndicator={false}>
-                        {MINUTES.map((minute) => (
+                      <ScrollView style={styles.timePickerScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                        {MINUTES.map(minute => (
                           <TouchableOpacity
                             key={minute}
-                            style={[
-                              styles.timePickerOption,
-                              selectedMinute === minute && styles.timePickerOptionSelected,
-                            ]}
+                            style={[styles.timePickerOption, selectedMinute === minute && styles.timePickerOptionSelected]}
                             onPress={() => setSelectedMinute(minute)}
                           >
-                            <Text style={[
-                              styles.timePickerOptionText,
-                              selectedMinute === minute && styles.timePickerOptionTextSelected,
-                            ]}>
+                            <Text style={[styles.timePickerOptionText, selectedMinute === minute && styles.timePickerOptionTextSelected]}>
                               {minute}
                             </Text>
                           </TouchableOpacity>
                         ))}
                       </ScrollView>
                     </View>
-                    
-                    {/* AM/PM */}
+
                     <View style={styles.timePickerColumn}>
-                      <Text style={styles.timePickerLabel}>Period</Text>
-                      <View style={styles.timePickerPeriod}>
-                        <TouchableOpacity
-                          style={[
-                            styles.timePickerPeriodOption,
-                            selectedPeriod === 'AM' && styles.timePickerPeriodOptionSelected,
-                          ]}
-                          onPress={() => setSelectedPeriod('AM')}
-                        >
-                          <Text style={[
-                            styles.timePickerPeriodText,
-                            selectedPeriod === 'AM' && styles.timePickerPeriodTextSelected,
-                          ]}>
-                            AM
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.timePickerPeriodOption,
-                            selectedPeriod === 'PM' && styles.timePickerPeriodOptionSelected,
-                          ]}
-                          onPress={() => setSelectedPeriod('PM')}
-                        >
-                          <Text style={[
-                            styles.timePickerPeriodText,
-                            selectedPeriod === 'PM' && styles.timePickerPeriodTextSelected,
-                          ]}>
-                            PM
-                          </Text>
-                        </TouchableOpacity>
+                      <Text style={styles.timePickerLabel}>AM/PM</Text>
+                      <View style={styles.periodOptionsContainer}>
+                        {(['AM', 'PM'] as const).map(period => (
+                          <TouchableOpacity
+                            key={period}
+                            style={[styles.timePickerOption, selectedPeriod === period && styles.timePickerOptionSelected]}
+                            onPress={() => setSelectedPeriod(period)}
+                          >
+                            <Text style={[styles.timePickerOptionText, selectedPeriod === period && styles.timePickerOptionTextSelected]}>
+                              {period}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
                       </View>
                     </View>
                   </View>
-                  
-                  <TouchableOpacity
-                    style={styles.timePickerConfirm}
-                    onPress={() => {
-                      setNewAppointmentTime(`${selectedHour}:${selectedMinute} ${selectedPeriod}`);
-                      setShowTimePicker(false);
-                    }}
-                  >
-                    <Text style={styles.timePickerConfirmText}>Confirm Time</Text>
-                  </TouchableOpacity>
                 </View>
               )}
             </View>
 
-            {/* Appointment Type */}
+            {/* Optional: Purpose & Notes */}
             <View style={styles.formSection}>
-              <Text style={styles.formLabel}>Appointment Type</Text>
-              <View style={styles.typeSelector}>
-                {appointmentTypes.filter(t => t.id !== 'all').map((type) => (
-                  <TouchableOpacity
-                    key={type.id}
-                    style={[
-                      styles.typeOption,
-                      newAppointmentType === type.id && styles.typeOptionActive,
-                    ]}
-                    onPress={() => setNewAppointmentType(type.id as any)}
-                  >
-                    <Ionicons
-                      name={type.id === 'checkup' ? 'medical' : type.id === 'consultation' ? 'chatbubbles' : type.id === 'follow-up' ? 'refresh-circle' : 'heart'}
-                      size={16}
-                      color={newAppointmentType === type.id ? '#fff' : COLORS.textSecondary}
-                    />
-                    <Text style={[
-                      styles.typeOptionText,
-                      newAppointmentType === type.id && styles.typeOptionTextActive,
-                    ]}>
-                      {type.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.formSectionHeader}>
+                <View style={[styles.stepBadge, styles.stepBadgeOptional]}>
+                  <Ionicons name="create-outline" size={12} color={COLORS.textMuted} />
+                </View>
+                <Text style={styles.formSectionTitle}>Additional Info</Text>
+                <Text style={styles.formSectionOptional}>(Optional)</Text>
               </View>
-            </View>
 
-            {/* Notes */}
-            <View style={styles.formSection}>
-              <Text style={styles.formLabel}>Notes (Optional)</Text>
-              <TextInput
-                style={styles.notesInput}
-                placeholder="Add any notes for this appointment..."
-                placeholderTextColor={COLORS.textMuted}
-                value={newAppointmentNotes}
-                onChangeText={setNewAppointmentNotes}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Purpose</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g., Regular checkup, Follow-up..."
+                  placeholderTextColor={COLORS.textMuted}
+                  value={visitPurpose}
+                  onChangeText={setVisitPurpose}
+                  onFocus={closeAllDropdowns}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Notes</Text>
+                <TextInput
+                  style={[styles.textInput, styles.textArea]}
+                  placeholder="Any additional notes..."
+                  placeholderTextColor={COLORS.textMuted}
+                  value={visitNotes}
+                  onChangeText={setVisitNotes}
+                  multiline
+                  numberOfLines={3}
+                  onFocus={closeAllDropdowns}
+                />
+              </View>
             </View>
           </ScrollView>
 
           {/* Modal Footer */}
           <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={styles.modalSecondaryButton}
-              onPress={() => setShowNewAppointmentModal(false)}
+            <TouchableOpacity 
+              style={styles.cancelButton}
+              onPress={() => {
+                closeAllDropdowns();
+                resetScheduleForm();
+                setShowScheduleModal(false);
+              }}
             >
-              <Text style={styles.modalSecondaryButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity
+            
+            <TouchableOpacity 
               style={[
-                styles.modalPrimaryButton,
-                (!selectedCouple || !newAppointmentDate || !newAppointmentTime) && styles.modalButtonDisabled,
+                styles.submitButton, 
+                isSaving && styles.submitButtonDisabled,
+                !selectedCouple && styles.submitButtonDisabled
               ]}
               onPress={handleScheduleAppointment}
-              disabled={!selectedCouple || !newAppointmentDate || !newAppointmentTime}
+              disabled={isSaving || !selectedCouple}
             >
-              <Ionicons name="checkmark" size={18} color="#fff" />
-              <Text style={styles.modalPrimaryButtonText}>Schedule</Text>
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                  <Text style={styles.submitButtonText}>
+                    {scheduleMode === 'automatic' 
+                      ? 'Schedule 4 Visits'
+                      : 'Schedule Visit'}
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
+
+  // Main Content
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading appointments...</Text>
+        </View>
+      );
+    }
+
+    const visits = activeTab === 'doctorVisit' ? filteredDoctorVisits : filteredNursingVisits;
+
+    if (visits.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="calendar-outline" size={64} color={COLORS.textMuted} />
+          <Text style={styles.emptyStateText}>No appointments found</Text>
+          <Text style={styles.emptyStateSubtext}>
+            {activeTab === 'doctorVisit' 
+              ? 'Doctor visits logged by users will appear here'
+              : 'Click "Schedule Visit" to create nursing department appointments'}
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
+        {activeTab === 'doctorVisit' 
+          ? filteredDoctorVisits.map(renderDoctorVisitCard)
+          : filteredNursingVisits.map(renderNursingVisitCard)
+        }
+        <View style={{ height: 20 }} />
+      </ScrollView>
+    );
+  };
 
   return (
     <View style={styles.container}>
       {renderHeader()}
-
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.content, !isMobile && styles.contentDesktop]}>
-          {renderStats()}
-          {renderAppointmentsList()}
-        </View>
-      </ScrollView>
-
-      {renderDetailModal()}
-      {renderNewAppointmentModal()}
+      {renderContent()}
+      {renderScheduleModal()}
     </View>
   );
 }
@@ -1067,45 +1069,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 100,
-  },
-  scrollContentDesktop: {
-    paddingBottom: 40,
-  },
-  content: {
-    padding: 16,
-  },
-  contentDesktop: {
-    padding: 24,
-    maxWidth: 1400,
-    alignSelf: 'center',
-    width: '100%',
-  },
-
-  // Header
   header: {
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   headerTop: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: COLORS.textPrimary,
   },
   headerSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.textSecondary,
     marginTop: 2,
   },
@@ -1115,51 +1099,69 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 10,
-    gap: 8,
+    borderRadius: 8,
+    gap: 6,
   },
   addButtonText: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-    color: '#fff',
   },
-
-  // Filters
-  filtersContainer: {
+  tabsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: COLORS.borderLight,
+    gap: 6,
   },
-  filtersContainerMobile: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
+  tabActive: {
+    backgroundColor: COLORS.primary + '15',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textMuted,
+  },
+  tabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  filtersContainer: {
+    gap: 12,
   },
   searchContainer: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.borderLight,
-    borderRadius: 10,
+    borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 10,
     gap: 8,
-    minWidth: 200,
   },
   searchInput: {
     flex: 1,
+    paddingVertical: 10,
     fontSize: 14,
     color: COLORS.textPrimary,
+  },
+  filterChipsScroll: {
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
   },
   filterChips: {
     flexDirection: 'row',
     gap: 8,
-    flexWrap: 'wrap',
   },
   filterChip: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 6,
+    borderRadius: 16,
     backgroundColor: COLORS.borderLight,
   },
   filterChipActive: {
@@ -1173,247 +1175,149 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: '#fff',
   },
-
-  // Stats
-  statsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  statsContainerMobile: {
-    flexWrap: 'wrap',
-  },
-  statCard: {
+  loadingContainer: {
     flex: 1,
-    minWidth: 140,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 4,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  statIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 11,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  statLabel: {
-    fontSize: 12,
+  loadingText: {
+    fontSize: 14,
     color: COLORS.textSecondary,
-    marginTop: 2,
   },
-
-  // Appointments List
   listContainer: {
     flex: 1,
+    padding: 16,
   },
-  dateGroup: {
-    marginBottom: 20,
-  },
-  dateHeader: {
+  visitCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  dateBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.primary + '10',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 6,
-  },
-  dateText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  appointmentCount: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  appointmentsGroup: {
     backgroundColor: COLORS.surface,
     borderRadius: 12,
-    overflow: 'hidden',
+    padding: 14,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
     shadowRadius: 4,
-    elevation: 1,
+    elevation: 2,
   },
-
-  // Appointment Card
-  appointmentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-  },
-  appointmentLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 12,
-  },
-  typeIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 11,
-    alignItems: 'center',
+  visitDateBadge: {
+    width: 50,
+    height: 56,
+    backgroundColor: COLORS.primary + '15',
+    borderRadius: 10,
     justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
   },
-  appointmentInfo: {
-    flex: 1,
-  },
-  appointmentTime: {
-    fontSize: 14,
+  visitDateDay: {
+    fontSize: 20,
     fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 4,
+    color: COLORS.primary,
   },
-  coupleInfo: {
+  visitDateMonth: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+  },
+  visitContent: {
+    flex: 1,
+  },
+  visitHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  coupleAvatars: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatarSmall: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.surface,
-  },
-  avatarMedium: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.surface,
-  },
-  coupleId: {
-    fontSize: 13,
+  visitTime: {
+    fontSize: 14,
     fontWeight: '600',
     color: COLORS.textPrimary,
   },
-  coupleNames: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    maxWidth: 150,
-  },
-  appointmentType: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  appointmentRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
   statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
   },
   statusText: {
     fontSize: 11,
     fontWeight: '600',
+    textTransform: 'capitalize',
   },
-
-  // Empty State
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-  },
-  emptyStateText: {
-    fontSize: 16,
+  coupleName: {
+    fontSize: 15,
     fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginTop: 12,
+    color: COLORS.textPrimary,
+    marginBottom: 4,
   },
-  emptyStateSubtext: {
-    fontSize: 13,
+  visitMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  visitMetaText: {
+    fontSize: 12,
     color: COLORS.textMuted,
-    marginTop: 4,
   },
-
-  // Modal
-  modalOverlay: {
+  visitPurpose: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  visitAction: {
+    justifyContent: 'center',
+    paddingLeft: 8,
+  },
+  emptyState: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 40,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginTop: 16,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
+    maxWidth: 280,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
     backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    width: '100%',
+    borderRadius: 16,
+    width: '90%',
     maxWidth: 500,
     maxHeight: '90%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
   },
   modalContentMobile: {
+    width: '100%',
     maxWidth: '100%',
-    maxHeight: '95%',
-    borderRadius: 16,
+    height: '100%',
+    maxHeight: '100%',
+    borderRadius: 0,
   },
   modalHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    alignItems: 'center',
+    padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-  },
-  modalHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  modalTypeIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderBottomColor: COLORS.border,
   },
   modalTitle: {
     fontSize: 18,
@@ -1422,375 +1326,286 @@ const styles = StyleSheet.create({
   },
   modalSubtitle: {
     fontSize: 13,
-    color: COLORS.textSecondary,
+    color: COLORS.textMuted,
     marginTop: 2,
   },
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.borderLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   modalBody: {
-    flex: 1,
     padding: 20,
   },
-
-  // Detail Sections
-  detailSection: {
-    marginBottom: 20,
-  },
-  detailSectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  detailCard: {
+  formSection: {
+    marginBottom: 24,
     backgroundColor: COLORS.borderLight,
     borderRadius: 12,
-    padding: 14,
+    padding: 16,
+  },
+  formSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    marginBottom: 14,
   },
-  detailCardContent: {
-    flex: 1,
+  stepBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  detailCardTitle: {
+  stepBadgeOptional: {
+    backgroundColor: COLORS.textMuted,
+  },
+  stepBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  formSectionTitle: {
     fontSize: 15,
     fontWeight: '600',
     color: COLORS.textPrimary,
   },
-  detailCardSubtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+  formSectionOptional: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginLeft: 4,
   },
-  detailCardRow: {
+  formGroup: {
+    marginBottom: 20,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  formHint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  dropdownButtonSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary + '08',
+  },
+  dropdownButtonActive: {
+    borderColor: COLORS.primary,
+  },
+  dropdownButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 4,
-  },
-  detailCardText: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    gap: 12,
-    flexWrap: 'wrap',
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.borderLight,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    gap: 8,
-  },
-  detailItemText: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-  },
-  typeBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  statusBadgeLarge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-  },
-  statusBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  notesCard: {
-    backgroundColor: COLORS.borderLight,
-    borderRadius: 12,
-    padding: 14,
-  },
-  notesText: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    lineHeight: 20,
-  },
-
-  // Modal Footer
-  modalFooter: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
-  },
-  modalSecondaryButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: COLORS.borderLight,
-    gap: 8,
   },
-  modalSecondaryButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  modalPrimaryButton: {
+  dropdownSelectedInfo: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
-    gap: 8,
   },
-  modalPrimaryButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
+  dropdownSubtext: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
-  modalButtonDisabled: {
-    backgroundColor: COLORS.textMuted,
-    opacity: 0.6,
-  },
-
-  // Form Styles
-  formSection: {
-    marginBottom: 20,
-    zIndex: 1,
-  },
-  formLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginBottom: 10,
-  },
-  coupleSearchContainer: {
-    position: 'relative',
-    zIndex: 1000,
-  },
-  coupleSearchInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.borderLight,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  coupleSearchInput: {
-    flex: 1,
+  dropdownText: {
     fontSize: 14,
     color: COLORS.textPrimary,
   },
-  coupleDropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
+  dropdownPlaceholder: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+  },
+  dropdownList: {
     backgroundColor: COLORS.surface,
-    borderRadius: 10,
-    marginTop: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 10,
+    borderRadius: 8,
+    marginTop: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
     maxHeight: 200,
-    zIndex: 1001,
   },
-  coupleDropdownItem: {
+  dropdownListCompact: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  dropdownSearchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    gap: 8,
+  },
+  dropdownSearch: {
+    flex: 1,
+    padding: 0,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  dropdownScroll: {
+    maxHeight: 150,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+    gap: 10,
+  },
+  dropdownItemCompact: {
+    padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
-  coupleDropdownAvatars: {
-    flexDirection: 'row',
-    marginRight: 10,
-  },
-  dropdownAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
+  dropdownItemIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary + '15',
     justifyContent: 'center',
-  },
-  coupleDropdownInfo: {
-    flex: 1,
-  },
-  coupleDropdownId: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  coupleDropdownNames: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 1,
-  },
-  coupleDropdownEmpty: {
-    paddingVertical: 16,
     alignItems: 'center',
   },
-  coupleDropdownEmptyText: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-  },
-  selectedCoupleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.success + '10',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: COLORS.success + '30',
-  },
-  selectedCoupleInfo: {
+  dropdownItemContent: {
     flex: 1,
-    marginLeft: 8,
   },
-  selectedCoupleId: {
+  dropdownItemSelected: {
+    backgroundColor: COLORS.primary + '10',
+  },
+  dropdownItemText: {
     fontSize: 14,
-    fontWeight: '600',
     color: COLORS.textPrimary,
+    fontWeight: '500',
   },
-  selectedCoupleNames: {
+  dropdownItemTextSelected: {
+    color: COLORS.primary,
+  },
+  dropdownItemSubtext: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: COLORS.textMuted,
     marginTop: 2,
   },
-  dateTimeRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  dateInputWrapper: {
-    flex: 1,
-    flexDirection: 'row',
+  dropdownEmpty: {
+    padding: 20,
     alignItems: 'center',
-    backgroundColor: COLORS.borderLight,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
   },
-  timeInputWrapper: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.borderLight,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  dateTimeInput: {
-    flex: 1,
+  dropdownEmptyText: {
     fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  typeSelector: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  typeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: COLORS.borderLight,
-    gap: 6,
-  },
-  typeOptionActive: {
-    backgroundColor: COLORS.primary,
-  },
-  typeOptionText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-  },
-  typeOptionTextActive: {
-    color: '#fff',
-  },
-  notesInput: {
-    backgroundColor: COLORS.borderLight,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    minHeight: 80,
-  },
-  dateTimeText: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  dateTimePlaceholder: {
     color: COLORS.textMuted,
   },
-  
-  // Calendar Styles
+  modeToggle: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  modeButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  modeButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  modeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  modeButtonTextActive: {
+    color: '#fff',
+  },
+  modeButtonHint: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  modeButtonHintActive: {
+    color: 'rgba(255,255,255,0.8)',
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  dateButtonSelected: {
+    borderColor: COLORS.primary,
+  },
+  dateButtonActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary + '08',
+  },
+  dateButtonText: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  dateButtonPlaceholder: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+  },
   calendarContainer: {
+    marginTop: 12,
     backgroundColor: COLORS.surface,
     borderRadius: 12,
-    marginTop: 12,
     padding: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
   },
   calendarHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
   },
   calendarNavButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: COLORS.borderLight,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  calendarMonthTitle: {
+  calendarMonthText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: COLORS.textPrimary,
   },
   calendarWeekdays: {
     flexDirection: 'row',
     marginBottom: 8,
   },
-  calendarWeekdayText: {
+  calendarWeekday: {
     flex: 1,
     textAlign: 'center',
     fontSize: 12,
@@ -1804,80 +1619,98 @@ const styles = StyleSheet.create({
   calendarDay: {
     width: '14.28%',
     aspectRatio: 1,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   calendarDaySelected: {
     backgroundColor: COLORS.primary,
     borderRadius: 20,
   },
-  calendarDayToday: {
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    borderRadius: 20,
+  calendarDayDisabled: {
+    opacity: 0.3,
   },
   calendarDayText: {
     fontSize: 14,
-    fontWeight: '500',
     color: COLORS.textPrimary,
   },
   calendarDayTextSelected: {
     color: '#fff',
-    fontWeight: '700',
+    fontWeight: '600',
   },
-  calendarDayTextToday: {
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  calendarDayTextPast: {
+  calendarDayTextDisabled: {
     color: COLORS.textMuted,
-    opacity: 0.5,
   },
-  
-  // Time Picker Styles
+  autoSchedulePreview: {
+    marginTop: 16,
+    padding: 14,
+    backgroundColor: COLORS.accent + '10',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '30',
+  },
+  autoSchedulePreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  autoSchedulePreviewTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.accentDark,
+  },
+  autoScheduleDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  autoScheduleDateBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  autoScheduleDateBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  autoScheduleDateText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
   timePickerContainer: {
+    marginTop: 12,
     backgroundColor: COLORS.surface,
     borderRadius: 12,
-    marginTop: 12,
     padding: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
   },
-  timePickerTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  timePickerContent: {
+  timePickerRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
+    gap: 12,
   },
   timePickerColumn: {
-    alignItems: 'center',
-    width: 70,
+    flex: 1,
   },
   timePickerLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.textMuted,
+    textAlign: 'center',
     marginBottom: 8,
-    textTransform: 'uppercase',
   },
   timePickerScroll: {
-    maxHeight: 140,
+    maxHeight: 120,
   },
   timePickerOption: {
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
     marginBottom: 4,
     backgroundColor: COLORS.borderLight,
     alignItems: 'center',
@@ -1886,43 +1719,77 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   timePickerOptionText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '500',
     color: COLORS.textPrimary,
   },
   timePickerOptionTextSelected: {
     color: '#fff',
-    fontWeight: '700',
+    fontWeight: '600',
   },
-  timePickerPeriod: {
+  periodOptionsContainer: {
+    flexDirection: 'row',
     gap: 8,
   },
-  timePickerPeriodOption: {
+  timePickerDone: {
+    marginTop: 12,
     paddingVertical: 10,
-    paddingHorizontal: 20,
+    backgroundColor: COLORS.primary,
     borderRadius: 8,
-    backgroundColor: COLORS.borderLight,
-    marginBottom: 4,
-  },
-  timePickerPeriodOptionSelected: {
-    backgroundColor: COLORS.primary,
-  },
-  timePickerPeriodText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  timePickerPeriodTextSelected: {
-    color: '#fff',
-  },
-  timePickerConfirm: {
-    marginTop: 16,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
     alignItems: 'center',
   },
-  timePickerConfirmText: {
+  timePickerDoneText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  textInput: {
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  submitButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  submitButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',

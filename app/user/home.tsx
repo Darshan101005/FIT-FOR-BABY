@@ -1,8 +1,8 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { HomePageSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
-import { coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, formatDateString, globalSettingsService } from '@/services/firestore.service';
-import { GlobalSettings } from '@/types/firebase.types';
+import { coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, formatDateString, globalSettingsService, nursingVisitService } from '@/services/firestore.service';
+import { GlobalSettings, NursingDepartmentVisit } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -79,6 +79,9 @@ export default function UserHomeScreen() {
   
   // Global settings from Firestore
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
+  
+  // Upcoming nursing visits
+  const [upcomingNursingVisits, setUpcomingNursingVisits] = useState<NursingDepartmentVisit[]>([]);
   
   const dates = generateDates(isMobile);
   const todayIndex = isMobile ? 3 : 3; // Today is always at index 3
@@ -177,6 +180,10 @@ export default function UserHomeScreen() {
               date: new Date().toDateString(),
               totalSteps: totalSteps
             }));
+            
+            // Fetch upcoming nursing visits
+            const nursingVisits = await nursingVisitService.getUpcoming(coupleId);
+            setUpcomingNursingVisits(nursingVisits);
           }
 
           // Set user data
@@ -597,6 +604,62 @@ export default function UserHomeScreen() {
               <Ionicons name="bulb" size={16} color="#f59e0b" />
             </View>
           </View>
+
+          {/* Upcoming Nursing Department Visits */}
+          {upcomingNursingVisits.length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Upcoming Nursing Visits</Text>
+              <View style={styles.nursingVisitsContainer}>
+                {upcomingNursingVisits.slice(0, 3).map((visit, index) => {
+                  const visitDate = new Date(visit.date);
+                  const dayName = visitDate.toLocaleDateString('en-US', { weekday: 'short' });
+                  const monthName = visitDate.toLocaleDateString('en-US', { month: 'short' });
+                  const dayNum = visitDate.getDate();
+                  
+                  return (
+                    <TouchableOpacity
+                      key={visit.id || index}
+                      style={[styles.nursingVisitCard, { backgroundColor: colors.cardBackground }]}
+                      onPress={() => router.push('/user/appointments' as any)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.nursingVisitDateBadge}>
+                        <Text style={styles.nursingVisitDay}>{dayNum}</Text>
+                        <Text style={styles.nursingVisitMonth}>{monthName}</Text>
+                      </View>
+                      <View style={styles.nursingVisitInfo}>
+                        <Text style={[styles.nursingVisitTitle, { color: colors.text }]}>
+                          {visit.purpose || 'Nursing Department Visit'}
+                        </Text>
+                        <View style={styles.nursingVisitMeta}>
+                          <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+                          <Text style={[styles.nursingVisitTime, { color: colors.textSecondary }]}>
+                            {visit.time} • {dayName}
+                          </Text>
+                        </View>
+                        {visit.visitNumber && (
+                          <View style={styles.nursingVisitBadge}>
+                            <Text style={styles.nursingVisitBadgeText}>Visit #{visit.visitNumber}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  );
+                })}
+                {upcomingNursingVisits.length > 3 && (
+                  <TouchableOpacity
+                    style={styles.viewAllButton}
+                    onPress={() => router.push('/user/appointments' as any)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.viewAllText}>View all {upcomingNursingVisits.length} visits</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#006dab" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+          )}
 
         </View>
       </ScrollView>
@@ -1091,5 +1154,83 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
+  },
+  
+  // Nursing Visits Styles
+  nursingVisitsContainer: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  nursingVisitCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  nursingVisitDateBadge: {
+    width: 50,
+    height: 56,
+    backgroundColor: '#98be4e20',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  nursingVisitDay: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#7da33e',
+  },
+  nursingVisitMonth: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#7da33e',
+    textTransform: 'uppercase',
+  },
+  nursingVisitInfo: {
+    flex: 1,
+  },
+  nursingVisitTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  nursingVisitMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  nursingVisitTime: {
+    fontSize: 13,
+  },
+  nursingVisitBadge: {
+    backgroundColor: '#006dab15',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+  },
+  nursingVisitBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#006dab',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#006dab',
   },
 });

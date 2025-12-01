@@ -2,7 +2,7 @@
 // FIRESTORE SERVICE - CRUD OPERATIONS
 // ============================================
 
-import { Admin, Appointment, AppointmentStatus, COLLECTIONS, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
+import { Admin, Appointment, AppointmentStatus, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
 import {
   addDoc,
   collection,
@@ -1958,6 +1958,319 @@ export const globalSettingsService = {
 };
 
 // ============================================
+// DOCTOR VISIT SERVICE (User logs doctor visits)
+// Path: /couples/{coupleId}/doctorVisits/{visitId}
+// ============================================
+
+export const doctorVisitService = {
+  // Add a doctor visit (logged by user)
+  async add(coupleId: string, gender: 'male' | 'female', data: {
+    date: string;
+    time: string;
+    doctorName?: string;
+    purpose?: string;
+    location?: string;
+    notes?: string;
+    loggedBy: string;
+  }): Promise<string> {
+    try {
+      const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS);
+      const docRef = await addDoc(visitsRef, {
+        coupleId,
+        gender,
+        date: data.date,
+        time: data.time,
+        doctorName: data.doctorName || null,
+        purpose: data.purpose || null,
+        location: data.location || null,
+        notes: data.notes || null,
+        loggedBy: data.loggedBy,
+        status: 'upcoming' as DoctorVisitStatus,
+        loggedAt: now(),
+        createdAt: now(),
+        updatedAt: now(),
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding doctor visit:', error);
+      throw error;
+    }
+  },
+
+  // Get all doctor visits for a couple member
+  async getAll(coupleId: string, gender: 'male' | 'female'): Promise<DoctorVisit[]> {
+    try {
+      const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS);
+      const q = query(visitsRef, where('gender', '==', gender), orderBy('date', 'desc'));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DoctorVisit));
+    } catch (error) {
+      console.error('Error getting doctor visits:', error);
+      // Fallback without ordering if index doesn't exist
+      try {
+        const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS);
+        const snapshot = await getDocs(visitsRef);
+        return snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as DoctorVisit))
+          .filter(v => v.gender === gender)
+          .sort((a, b) => b.date.localeCompare(a.date));
+      } catch (err) {
+        console.error('Fallback also failed:', err);
+        return [];
+      }
+    }
+  },
+
+  // Get all doctor visits for a couple (both members) - for admin
+  async getAllForCouple(coupleId: string): Promise<DoctorVisit[]> {
+    try {
+      const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS);
+      const q = query(visitsRef, orderBy('date', 'desc'));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DoctorVisit));
+    } catch (error) {
+      console.error('Error getting all doctor visits for couple:', error);
+      // Fallback without ordering
+      try {
+        const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS);
+        const snapshot = await getDocs(visitsRef);
+        return snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as DoctorVisit))
+          .sort((a, b) => b.date.localeCompare(a.date));
+      } catch (err) {
+        return [];
+      }
+    }
+  },
+
+  // Get upcoming doctor visits
+  async getUpcoming(coupleId: string, gender: 'male' | 'female'): Promise<DoctorVisit[]> {
+    const today = formatDateString(new Date());
+    const visits = await this.getAll(coupleId, gender);
+    return visits.filter(v => v.date >= today && v.status === 'upcoming');
+  },
+
+  // Update doctor visit status
+  async updateStatus(coupleId: string, visitId: string, status: DoctorVisitStatus): Promise<void> {
+    try {
+      const visitRef = doc(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS, visitId);
+      await updateDoc(visitRef, {
+        status,
+        updatedAt: now(),
+      });
+    } catch (error) {
+      console.error('Error updating doctor visit status:', error);
+      throw error;
+    }
+  },
+
+  // Delete doctor visit
+  async delete(coupleId: string, visitId: string): Promise<void> {
+    try {
+      const visitRef = doc(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS, visitId);
+      await deleteDoc(visitRef);
+    } catch (error) {
+      console.error('Error deleting doctor visit:', error);
+      throw error;
+    }
+  },
+};
+
+// ============================================
+// NURSING DEPARTMENT VISIT SERVICE (Admin schedules visits)
+// Path: /couples/{coupleId}/nursingVisits/{visitId}
+// ============================================
+
+export const nursingVisitService = {
+  // Schedule a nursing department visit (by admin)
+  async schedule(coupleId: string, data: {
+    coupleName: string;
+    date: string;
+    time: string;
+    visitNumber?: number;
+    departmentName?: string;
+    assignedNurse?: string;
+    location?: string;
+    purpose?: string;
+    notes?: string;
+    scheduledBy: string;
+    scheduledByName?: string;
+  }): Promise<string> {
+    try {
+      const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.NURSING_VISITS);
+      const docRef = await addDoc(visitsRef, {
+        coupleId,
+        coupleName: data.coupleName,
+        date: data.date,
+        time: data.time,
+        visitNumber: data.visitNumber || null,
+        departmentName: data.departmentName || 'Nursing Department',
+        assignedNurse: data.assignedNurse || null,
+        location: data.location || null,
+        purpose: data.purpose || null,
+        notes: data.notes || null,
+        status: 'scheduled' as NursingVisitStatus,
+        scheduledBy: data.scheduledBy,
+        scheduledByName: data.scheduledByName || null,
+        createdAt: now(),
+        updatedAt: now(),
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error('Error scheduling nursing visit:', error);
+      throw error;
+    }
+  },
+
+  // Get all nursing visits for a couple
+  async getAll(coupleId: string): Promise<NursingDepartmentVisit[]> {
+    try {
+      const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.NURSING_VISITS);
+      const q = query(visitsRef, orderBy('date', 'desc'));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NursingDepartmentVisit));
+    } catch (error) {
+      console.error('Error getting nursing visits:', error);
+      // Fallback without ordering
+      try {
+        const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.NURSING_VISITS);
+        const snapshot = await getDocs(visitsRef);
+        return snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as NursingDepartmentVisit))
+          .sort((a, b) => b.date.localeCompare(a.date));
+      } catch (err) {
+        return [];
+      }
+    }
+  },
+
+  // Get upcoming nursing visits for a couple (for user dashboard)
+  async getUpcoming(coupleId: string): Promise<NursingDepartmentVisit[]> {
+    const today = formatDateString(new Date());
+    const visits = await this.getAll(coupleId);
+    return visits
+      .filter(v => v.date >= today && (v.status === 'scheduled' || v.status === 'confirmed'))
+      .sort((a, b) => a.date.localeCompare(b.date)); // Ascending for upcoming
+  },
+
+  // Get next nursing visit (for dashboard display)
+  async getNext(coupleId: string): Promise<NursingDepartmentVisit | null> {
+    const upcoming = await this.getUpcoming(coupleId);
+    return upcoming.length > 0 ? upcoming[0] : null;
+  },
+
+  // Update nursing visit status
+  async updateStatus(coupleId: string, visitId: string, status: NursingVisitStatus, completionNotes?: string): Promise<void> {
+    try {
+      const visitRef = doc(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.NURSING_VISITS, visitId);
+      const updateData: Record<string, any> = {
+        status,
+        updatedAt: now(),
+      };
+      if (status === 'completed') {
+        updateData.completedAt = now();
+        if (completionNotes) {
+          updateData.completionNotes = completionNotes;
+        }
+      }
+      await updateDoc(visitRef, updateData);
+    } catch (error) {
+      console.error('Error updating nursing visit status:', error);
+      throw error;
+    }
+  },
+
+  // Update nursing visit details
+  async update(coupleId: string, visitId: string, data: Partial<NursingDepartmentVisit>): Promise<void> {
+    try {
+      const visitRef = doc(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.NURSING_VISITS, visitId);
+      await updateDoc(visitRef, {
+        ...data,
+        updatedAt: now(),
+      });
+    } catch (error) {
+      console.error('Error updating nursing visit:', error);
+      throw error;
+    }
+  },
+
+  // Delete nursing visit
+  async delete(coupleId: string, visitId: string): Promise<void> {
+    try {
+      const visitRef = doc(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.NURSING_VISITS, visitId);
+      await deleteDoc(visitRef);
+    } catch (error) {
+      console.error('Error deleting nursing visit:', error);
+      throw error;
+    }
+  },
+
+  // Get all nursing visits across all couples (for admin) - requires fetching all couples first
+  async getAllForAdmin(limitCount: number = 100): Promise<(NursingDepartmentVisit & { coupleId: string })[]> {
+    try {
+      // Get all active couples first
+      const couplesRef = collection(db, COLLECTIONS.COUPLES);
+      const couplesSnapshot = await getDocs(query(couplesRef, where('status', '==', 'active'), limit(limitCount)));
+      
+      const allVisits: (NursingDepartmentVisit & { coupleId: string })[] = [];
+      
+      // Fetch nursing visits for each couple
+      for (const coupleDoc of couplesSnapshot.docs) {
+        const coupleId = coupleDoc.id;
+        const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.NURSING_VISITS);
+        const visitsSnapshot = await getDocs(visitsRef);
+        
+        visitsSnapshot.docs.forEach(visitDoc => {
+          allVisits.push({
+            id: visitDoc.id,
+            coupleId,
+            ...visitDoc.data(),
+          } as NursingDepartmentVisit & { coupleId: string });
+        });
+      }
+      
+      // Sort by date descending
+      return allVisits.sort((a, b) => b.date.localeCompare(a.date));
+    } catch (error) {
+      console.error('Error getting all nursing visits for admin:', error);
+      return [];
+    }
+  },
+
+  // Get all doctor visits across all couples (for admin view)
+  async getAllDoctorVisitsForAdmin(limitCount: number = 100): Promise<(DoctorVisit & { coupleId: string })[]> {
+    try {
+      // Get all active couples first
+      const couplesRef = collection(db, COLLECTIONS.COUPLES);
+      const couplesSnapshot = await getDocs(query(couplesRef, where('status', '==', 'active'), limit(limitCount)));
+      
+      const allVisits: (DoctorVisit & { coupleId: string })[] = [];
+      
+      // Fetch doctor visits for each couple
+      for (const coupleDoc of couplesSnapshot.docs) {
+        const coupleId = coupleDoc.id;
+        const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS);
+        const visitsSnapshot = await getDocs(visitsRef);
+        
+        visitsSnapshot.docs.forEach(visitDoc => {
+          allVisits.push({
+            id: visitDoc.id,
+            coupleId,
+            ...visitDoc.data(),
+          } as DoctorVisit & { coupleId: string });
+        });
+      }
+      
+      // Sort by date descending
+      return allVisits.sort((a, b) => b.date.localeCompare(a.date));
+    } catch (error) {
+      console.error('Error getting all doctor visits for admin:', error);
+      return [];
+    }
+  },
+};
+
+// ============================================
 // EXPORT ALL SERVICES
 // ============================================
 
@@ -1977,6 +2290,8 @@ export const firestoreServices = {
   nurseVisit: nurseVisitService,
   supportRequest: supportRequestService,
   notification: notificationService,
+  doctorVisit: doctorVisitService,
+  nursingVisit: nursingVisitService,
 };
 
 export default firestoreServices;

@@ -1,7 +1,11 @@
+import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useApp } from '@/context/AppContext';
+import { doctorVisitService, formatDateString, nursingVisitService } from '@/services/firestore.service';
+import { DoctorVisit, NursingDepartmentVisit } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
@@ -14,65 +18,8 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import BottomNavBar from '@/components/navigation/BottomNavBar';
 
 const isWeb = Platform.OS === 'web';
-
-interface DoctorAppointment {
-  id: string;
-  date: Date;
-  time: string;
-  period: 'AM' | 'PM';
-  doctorName?: string;
-  purpose?: string;
-  createdAt: Date;
-}
-
-interface NurseRequest {
-  id: string;
-  type: 'call' | 'video';
-  phone: string;
-  reason: string;
-  status: 'pending' | 'completed';
-  createdAt: Date;
-}
-
-interface NurseVisit {
-  id: string;
-  date: string;
-  time: string;
-  nurseName: string;
-  status: 'scheduled' | 'completed' | 'cancelled';
-  visitNumber: number;
-}
-
-// Generate nurse visits every 28 days
-const generateNurseVisits = (): NurseVisit[] => {
-  const visits: NurseVisit[] = [];
-  const startDate = new Date('2025-10-02'); // First visit date
-  const today = new Date();
-  const nurses = ['Nurse Priya', 'Nurse Lakshmi', 'Nurse Anitha'];
-  
-  for (let i = 0; i < 12; i++) { // Generate 12 visits (about 1 year)
-    const visitDate = new Date(startDate);
-    visitDate.setDate(startDate.getDate() + (i * 28));
-    
-    const status = visitDate < today ? 'completed' : 'scheduled';
-    
-    visits.push({
-      id: `NV${String(i + 1).padStart(3, '0')}`,
-      date: visitDate.toISOString().split('T')[0],
-      time: '10:00 AM',
-      nurseName: nurses[i % nurses.length],
-      status,
-      visitNumber: i + 1,
-    });
-  }
-  
-  return visits;
-};
-
-const mockNurseVisits: NurseVisit[] = generateNurseVisits();
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -86,6 +33,11 @@ export default function AppointmentsScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
 
+  // User data from AsyncStorage
+  const [coupleId, setCoupleId] = useState<string>('');
+  const [userGender, setUserGender] = useState<'male' | 'female'>('male');
+  const [userName, setUserName] = useState<string>('');
+
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   
@@ -96,16 +48,49 @@ export default function AppointmentsScreen() {
   const [doctorName, setDoctorName] = useState('');
   const [appointmentPurpose, setAppointmentPurpose] = useState('');
   
-  const [appointments, setAppointments] = useState<DoctorAppointment[]>([]);
+  // Dynamic data from Firestore
+  const [doctorVisits, setDoctorVisits] = useState<DoctorVisit[]>([]);
+  const [nursingVisits, setNursingVisits] = useState<NursingDepartmentVisit[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
-  const [supportPhone, setSupportPhone] = useState(user?.phone || '9876543210');
-  const [isEditingPhone, setIsEditingPhone] = useState(false);
-  const [nurseRequests, setNurseRequests] = useState<NurseRequest[]>([]);
-  
-  const [activeSection, setActiveSection] = useState<'appointments' | 'nurseVisit' | 'support'>('appointments');
+  const [activeSection, setActiveSection] = useState<'appointments' | 'nurseVisit'>('appointments');
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
+
+  // Load data on focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadData = async () => {
+        setIsLoading(true);
+        try {
+          const storedCoupleId = await AsyncStorage.getItem('coupleId');
+          const storedGender = await AsyncStorage.getItem('userGender');
+          const storedName = await AsyncStorage.getItem('userName');
+
+          if (storedCoupleId && storedGender) {
+            setCoupleId(storedCoupleId);
+            setUserGender(storedGender as 'male' | 'female');
+            setUserName(storedName || '');
+
+            // Load doctor visits from Firestore
+            const visits = await doctorVisitService.getAll(storedCoupleId, storedGender as 'male' | 'female');
+            setDoctorVisits(visits);
+
+            // Load nursing department visits from Firestore
+            const nursing = await nursingVisitService.getAll(storedCoupleId);
+            setNursingVisits(nursing);
+          }
+        } catch (error) {
+          console.error('Error loading appointments:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      loadData();
+    }, [])
+  );
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -177,7 +162,7 @@ export default function AppointmentsScreen() {
   };
 
   const hasAppointment = (day: number) => {
-    return appointments.some(apt => {
+    return doctorVisits.some(apt => {
       const aptDate = new Date(apt.date);
       return (
         aptDate.getDate() === day &&
@@ -197,52 +182,67 @@ export default function AppointmentsScreen() {
     return selectedHour + ':' + selectedMinute + ' ' + selectedPeriod;
   };
 
-  const handleLogAppointment = () => {
+  const handleLogAppointment = async () => {
     if (!selectedDate) {
       showToast('Please select a date', 'error');
       return;
     }
 
-    const newAppointment: DoctorAppointment = {
-      id: Date.now().toString(),
-      date: selectedDate,
-      time: selectedHour + ':' + selectedMinute,
-      period: selectedPeriod,
-      doctorName: doctorName.trim() || undefined,
-      purpose: appointmentPurpose.trim() || undefined,
-      createdAt: new Date(),
-    };
-
-    setAppointments([newAppointment, ...appointments]);
-    showToast('Appointment logged successfully!', 'success');
-    
-    setDoctorName('');
-    setAppointmentPurpose('');
-  };
-
-  const handleDeleteAppointment = (id: string) => {
-    setAppointments(appointments.filter(apt => apt.id !== id));
-    showToast('Appointment removed', 'success');
-  };
-
-  const handleRequestSupport = (type: 'call' | 'video') => {
-    if (!supportPhone.trim()) {
-      showToast('Please enter your phone number', 'error');
+    if (!coupleId) {
+      showToast('Unable to save. Please try again.', 'error');
       return;
     }
 
-    const newRequest: NurseRequest = {
-      id: Date.now().toString(),
-      type,
-      phone: supportPhone,
-      reason: '',
-      status: 'pending',
-      createdAt: new Date(),
-    };
+    try {
+      const visitData = {
+        date: formatDateString(selectedDate),
+        time: selectedHour + ':' + selectedMinute + ' ' + selectedPeriod,
+        doctorName: doctorName.trim() || undefined,
+        purpose: appointmentPurpose.trim() || undefined,
+        loggedBy: userName || 'User',
+      };
 
-    setNurseRequests([newRequest, ...nurseRequests]);
-    const msg = type === 'call' ? 'Call' : 'Video call';
-    showToast(msg + ' request sent!', 'success');
+      const docId = await doctorVisitService.add(coupleId, userGender, visitData);
+      
+      // Create local object for state (approximate, Firestore timestamps differ)
+      const savedVisit: DoctorVisit = {
+        id: docId,
+        coupleId,
+        gender: userGender,
+        date: visitData.date,
+        time: visitData.time,
+        doctorName: visitData.doctorName,
+        purpose: visitData.purpose,
+        loggedBy: visitData.loggedBy,
+        status: 'upcoming',
+        loggedAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any,
+        createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any,
+        updatedAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any,
+      };
+      
+      setDoctorVisits([savedVisit, ...doctorVisits]);
+      showToast('Appointment logged successfully!', 'success');
+      
+      setDoctorName('');
+      setAppointmentPurpose('');
+      setSelectedDate(null);
+    } catch (error) {
+      console.error('Error saving appointment:', error);
+      showToast('Failed to save appointment', 'error');
+    }
+  };
+
+  const handleDeleteAppointment = async (id: string) => {
+    if (!coupleId) return;
+    
+    try {
+      await doctorVisitService.delete(coupleId, id);
+      setDoctorVisits(doctorVisits.filter(apt => apt.id !== id));
+      showToast('Appointment removed', 'success');
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      showToast('Failed to remove appointment', 'error');
+    }
   };
 
   const renderHeader = () => (
@@ -282,21 +282,7 @@ export default function AppointmentsScreen() {
           color={activeSection === 'nurseVisit' ? '#006dab' : '#64748b'} 
         />
         <Text style={[styles.sectionTabText, activeSection === 'nurseVisit' && styles.sectionTabTextActive]}>
-          Nurse Visit
-        </Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity
-        style={[styles.sectionTab, activeSection === 'support' && styles.sectionTabActive]}
-        onPress={() => setActiveSection('support')}
-      >
-        <Ionicons 
-          name="chatbubbles-outline" 
-          size={18} 
-          color={activeSection === 'support' ? '#006dab' : '#64748b'} 
-        />
-        <Text style={[styles.sectionTabText, activeSection === 'support' && styles.sectionTabTextActive]}>
-          Support
+          Nursing Dept Visit
         </Text>
       </TouchableOpacity>
     </View>
@@ -508,10 +494,10 @@ export default function AppointmentsScreen() {
 
   const renderLoggedAppointments = () => (
     <View style={styles.loggedSection}>
-      {appointments.length > 0 && (
+      {doctorVisits.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Logged</Text>
-          {appointments.map((apt) => (
+          {doctorVisits.map((apt) => (
             <View key={apt.id} style={styles.appointmentCard}>
               <View style={styles.appointmentDateBox}>
                 <Text style={styles.appointmentDayNum}>{new Date(apt.date).getDate()}</Text>
@@ -520,7 +506,7 @@ export default function AppointmentsScreen() {
                 </Text>
               </View>
               <View style={styles.appointmentCardContent}>
-                <Text style={styles.appointmentTime}>{apt.time} {apt.period}</Text>
+                <Text style={styles.appointmentTime}>{apt.time}</Text>
                 {apt.doctorName && (
                   <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
                 )}
@@ -543,10 +529,10 @@ export default function AppointmentsScreen() {
 
   const [nurseVisitMonth, setNurseVisitMonth] = useState(new Date());
 
-  // Get visit dates for the nurse visit calendar
+  // Get visit dates for the nursing department visit calendar
   const getVisitDatesForMonth = (month: Date) => {
-    const visitDates: { [key: string]: NurseVisit } = {};
-    mockNurseVisits.forEach(visit => {
+    const visitDates: { [key: string]: NursingDepartmentVisit } = {};
+    nursingVisits.forEach(visit => {
       const visitDate = new Date(visit.date);
       if (visitDate.getMonth() === month.getMonth() && visitDate.getFullYear() === month.getFullYear()) {
         visitDates[visitDate.getDate()] = visit;
@@ -644,8 +630,8 @@ export default function AppointmentsScreen() {
   };
 
   const renderNurseVisits = () => {
-    const upcomingVisits = mockNurseVisits.filter(v => v.status === 'scheduled');
-    const pastVisits = mockNurseVisits.filter(v => v.status === 'completed').slice(-3); // Show last 3 completed
+    const upcomingVisits = nursingVisits.filter((v: NursingDepartmentVisit) => v.status === 'scheduled' || v.status === 'confirmed');
+    const pastVisits = nursingVisits.filter((v: NursingDepartmentVisit) => v.status === 'completed').slice(-3);
     const nextVisit = upcomingVisits[0];
 
     return (
@@ -655,13 +641,21 @@ export default function AppointmentsScreen() {
             <Ionicons name="medkit" size={24} color="#006dab" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.nurseVisitTitle}>Nurse Visits</Text>
-            <Text style={styles.nurseVisitSubtitle}>Every 28 days checkup</Text>
+            <Text style={styles.nurseVisitTitle}>Nursing Dept Visits</Text>
+            <Text style={styles.nurseVisitSubtitle}>Scheduled by admin</Text>
           </View>
         </View>
 
         {/* Calendar */}
         {renderNurseVisitCalendar()}
+
+        {nursingVisits.length === 0 && (
+          <View style={styles.emptyState}>
+            <Ionicons name="calendar-outline" size={48} color="#cbd5e1" />
+            <Text style={styles.emptyStateText}>No visits scheduled yet</Text>
+            <Text style={styles.emptyStateSubtext}>Visits will appear here once scheduled by admin</Text>
+          </View>
+        )}
 
         {/* Next Visit Highlight */}
         {nextVisit && (
@@ -683,8 +677,12 @@ export default function AppointmentsScreen() {
                   <Ionicons name="time-outline" size={14} color="#ffffff" />
                   <Text style={[styles.visitTime, styles.nextVisitText]}>{nextVisit.time}</Text>
                 </View>
-                <Text style={[styles.visitNurseName, styles.nextVisitText]}>{nextVisit.nurseName}</Text>
-                <Text style={[styles.visitNumberText, styles.nextVisitTextLight]}>Visit #{nextVisit.visitNumber}</Text>
+                {nextVisit.departmentName && (
+                  <Text style={[styles.visitNurseName, styles.nextVisitText]}>{nextVisit.departmentName}</Text>
+                )}
+                {nextVisit.visitNumber && (
+                  <Text style={[styles.visitNumberText, styles.nextVisitTextLight]}>Visit #{nextVisit.visitNumber}</Text>
+                )}
               </View>
             </View>
           </View>
@@ -694,7 +692,7 @@ export default function AppointmentsScreen() {
         {upcomingVisits.length > 1 && (
           <View style={styles.visitCategory}>
             <Text style={styles.visitCategoryTitle}>Upcoming Visits</Text>
-            {upcomingVisits.slice(1, 4).map((visit) => (
+            {upcomingVisits.slice(1, 4).map((visit: NursingDepartmentVisit) => (
               <View key={visit.id} style={styles.nurseVisitCard}>
                 <View style={styles.visitDateBox}>
                   <Text style={styles.visitDayNum}>
@@ -709,11 +707,15 @@ export default function AppointmentsScreen() {
                     <Ionicons name="time-outline" size={14} color="#006dab" />
                     <Text style={styles.visitTime}>{visit.time}</Text>
                   </View>
-                  <Text style={styles.visitNurseName}>{visit.nurseName}</Text>
-                  <Text style={styles.visitNumberText}>Visit #{visit.visitNumber}</Text>
+                  {visit.departmentName && (
+                    <Text style={styles.visitNurseName}>{visit.departmentName}</Text>
+                  )}
+                  {visit.visitNumber && (
+                    <Text style={styles.visitNumberText}>Visit #{visit.visitNumber}</Text>
+                  )}
                 </View>
                 <View style={[styles.visitStatusBadge, styles.visitStatusScheduled]}>
-                  <Text style={styles.visitStatusText}>Scheduled</Text>
+                  <Text style={styles.visitStatusText}>{visit.status === 'confirmed' ? 'Confirmed' : 'Scheduled'}</Text>
                 </View>
               </View>
             ))}
@@ -724,7 +726,7 @@ export default function AppointmentsScreen() {
         {pastVisits.length > 0 && (
           <View style={styles.visitCategory}>
             <Text style={styles.visitCategoryTitle}>Recent Completed</Text>
-            {pastVisits.reverse().map((visit) => (
+            {[...pastVisits].reverse().map((visit: NursingDepartmentVisit) => (
               <View key={visit.id} style={[styles.nurseVisitCard, styles.nurseVisitCardPast]}>
                 <View style={[styles.visitDateBox, styles.visitDateBoxPast]}>
                   <Text style={[styles.visitDayNum, styles.visitDayNumPast]}>
@@ -739,8 +741,12 @@ export default function AppointmentsScreen() {
                     <Ionicons name="time-outline" size={14} color="#94a3b8" />
                     <Text style={[styles.visitTime, styles.visitTimePast]}>{visit.time}</Text>
                   </View>
-                  <Text style={[styles.visitNurseName, styles.visitNurseNamePast]}>{visit.nurseName}</Text>
-                  <Text style={styles.visitNumberText}>Visit #{visit.visitNumber}</Text>
+                  {visit.departmentName && (
+                    <Text style={[styles.visitNurseName, styles.visitNurseNamePast]}>{visit.departmentName}</Text>
+                  )}
+                  {visit.visitNumber && (
+                    <Text style={styles.visitNumberText}>Visit #{visit.visitNumber}</Text>
+                  )}
                 </View>
                 <View style={[styles.visitStatusBadge, styles.visitStatusCompleted]}>
                   <Text style={[styles.visitStatusText, styles.visitStatusTextCompleted]}>Completed</Text>
@@ -752,103 +758,6 @@ export default function AppointmentsScreen() {
       </View>
     );
   };
-
-  const renderNursingSupport = () => (
-    <View style={styles.supportSection}>
-      <View style={styles.supportHeader}>
-        <Text style={styles.supportTitle}>Nursing Department Support</Text>
-        <Text style={styles.supportSubtitle}>Our team is here to help</Text>
-      </View>
-
-      <View style={styles.phoneSection}>
-        <Text style={styles.inputLabel}>Contact Number</Text>
-        <View style={styles.phoneRow}>
-          <View style={styles.phoneDisplay}>
-            <Text style={styles.countryCode}>+91</Text>
-            {isEditingPhone ? (
-              <TextInput
-                style={styles.phoneEditInput}
-                value={supportPhone}
-                onChangeText={setSupportPhone}
-                keyboardType="phone-pad"
-                maxLength={10}
-                autoFocus
-                onBlur={() => setIsEditingPhone(false)}
-              />
-            ) : (
-              <Text style={styles.phoneNumber}>{supportPhone}</Text>
-            )}
-          </View>
-          <TouchableOpacity 
-            style={styles.editButton}
-            onPress={() => setIsEditingPhone(true)}
-          >
-            <Ionicons name="pencil-outline" size={16} color="#64748b" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.supportButtons}>
-        <TouchableOpacity 
-          style={styles.callButton}
-          onPress={() => handleRequestSupport('call')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.callButtonInner}>
-            <Ionicons name="call-outline" size={20} color="#ffffff" />
-            <Text style={styles.callButtonText}>Request Call</Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.videoButton}
-          onPress={() => handleRequestSupport('video')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.videoButtonInner}>
-            <Ionicons name="videocam-outline" size={20} color="#ffffff" />
-            <Text style={styles.videoButtonText}>Request Video Call</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {nurseRequests.length > 0 && (
-        <View style={styles.requestsSection}>
-          <Text style={styles.sectionTitle}>Requests</Text>
-          {nurseRequests.map((req) => (
-            <View key={req.id} style={styles.requestCard}>
-              <View style={[
-                styles.requestIcon,
-                { backgroundColor: req.type === 'call' ? '#dcfce7' : '#e0f2fe' }
-              ]}>
-                <Ionicons 
-                  name={req.type === 'call' ? 'call-outline' : 'videocam-outline'} 
-                  size={16} 
-                  color={req.type === 'call' ? '#22c55e' : '#006dab'} 
-                />
-              </View>
-              <View style={styles.requestContent}>
-                <Text style={styles.requestType}>
-                  {req.type === 'call' ? 'Call Request' : 'Video Call'}
-                </Text>
-                <Text style={styles.requestTime}>
-                  {new Date(req.createdAt).toLocaleString('en-IN', { 
-                    day: 'numeric', 
-                    month: 'short', 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
-                </Text>
-              </View>
-              <View style={styles.requestStatusBadge}>
-                <Text style={styles.requestStatusText}>Pending</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
 
   return (
     <View style={styles.container}>
@@ -881,10 +790,8 @@ export default function AppointmentsScreen() {
               {renderAppointmentForm()}
               {renderLoggedAppointments()}
             </>
-          ) : activeSection === 'nurseVisit' ? (
-            renderNurseVisits()
           ) : (
-            renderNursingSupport()
+            renderNurseVisits()
           )}
         </View>
       </ScrollView>
@@ -1777,5 +1684,27 @@ const styles = StyleSheet.create({
   },
   nextVisitTextLight: {
     color: 'rgba(255, 255, 255, 0.7)',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    marginTop: 16,
+    marginHorizontal: 4,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 16,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#94a3b8',
+    marginTop: 4,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });

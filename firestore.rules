@@ -163,6 +163,19 @@ service cloud.firestore {
         allow read: if true; // Users can read their diet plan
         allow write: if true; // Admins can write diet plans
       }
+      
+      // Doctor visits subcollection (user logs, admin views)
+      match /doctorVisits/{visitId} {
+        allow read: if true; // Users and admins can read
+        allow create: if true; // Users can log their doctor visits
+        allow update, delete: if true; // Allow modifications
+      }
+      
+      // Nursing department visits subcollection (admin schedules, user views)
+      match /nursingVisits/{visitId} {
+        allow read: if true; // Users can view their scheduled visits
+        allow create, update, delete: if true; // Admins can schedule/manage
+      }
     }
   }
 }

@@ -594,6 +594,84 @@ export interface GlobalSettings {
 }
 
 // ============================================
+// DOCTOR VISITS COLLECTION (Logged by Users)
+// Path: /couples/{coupleId}/doctorVisits/{visitId}
+// ============================================
+
+export type DoctorVisitStatus = 'upcoming' | 'completed' | 'cancelled';
+
+export interface DoctorVisit {
+  id: string;
+  
+  // Couple & User Info
+  coupleId: string;
+  gender: 'male' | 'female'; // Who logged this visit
+  loggedBy: string; // User name who logged
+  
+  // Visit Details
+  date: string; // YYYY-MM-DD
+  time: string; // "10:00 AM"
+  doctorName?: string;
+  purpose?: string;
+  location?: string;
+  
+  // Status
+  status: DoctorVisitStatus;
+  
+  // Notes
+  notes?: string;
+  
+  // Timestamps
+  loggedAt: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// ============================================
+// NURSING DEPARTMENT VISITS COLLECTION (Scheduled by Admin)
+// Path: /couples/{coupleId}/nursingVisits/{visitId}
+// ============================================
+
+export type NursingVisitStatus = 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'missed';
+
+export interface NursingDepartmentVisit {
+  id: string;
+  
+  // Couple Info
+  coupleId: string;
+  coupleName: string; // "Male Name & Female Name"
+  
+  // Visit Details
+  date: string; // YYYY-MM-DD
+  time: string; // "10:00 AM"
+  visitNumber?: number; // Visit #1, #2, etc.
+  
+  // Department Assignment
+  departmentName?: string; // e.g., "Nursing Department"
+  assignedNurse?: string;
+  location?: string;
+  
+  // Status
+  status: NursingVisitStatus;
+  
+  // Purpose & Notes
+  purpose?: string;
+  notes?: string;
+  
+  // Admin who scheduled
+  scheduledBy: string; // Admin UID
+  scheduledByName?: string;
+  
+  // Completion details (filled after visit)
+  completedAt?: Timestamp;
+  completionNotes?: string;
+  
+  // Timestamps
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// ============================================
 // FAQ COLLECTION
 // Path: /faqs/{faqId}
 // ============================================
@@ -632,6 +710,10 @@ export const COLLECTIONS = {
   EXERCISE_LOGS: 'exerciseLogs',
   APPOINTMENTS: 'appointments',
   MESSAGES: 'messages',
+  
+  // Subcollections (under couples)
+  DOCTOR_VISITS: 'doctorVisits',
+  NURSING_VISITS: 'nursingVisits',
 } as const;
 
 // ============================================
