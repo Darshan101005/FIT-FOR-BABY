@@ -8,19 +8,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Linking,
-    Platform,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Linking,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -117,15 +118,32 @@ export default function ContactSupportScreen() {
   // Active tab for filtering requests
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'in-progress' | 'completed' | 'cancelled'>('all');
 
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    type: 'cancel' | 'delete';
+    requestId: string | null;
+    isLoading: boolean;
+  }>({
+    visible: false,
+    type: 'cancel',
+    requestId: null,
+    isLoading: false,
+  });
+
   // Load user data and requests
   const loadData = async () => {
     try {
       setLoadingUserData(true);
+      setLoadingRequests(true);
+      
       const [coupleId, userName, userGender] = await Promise.all([
         AsyncStorage.getItem('coupleId'),
         AsyncStorage.getItem('userName'),
         AsyncStorage.getItem('userGender'),
       ]);
+
+      console.log('Loading data for:', { coupleId, userName, userGender });
 
       if (coupleId) {
         const couple = await coupleService.get(coupleId);
@@ -141,10 +159,15 @@ export default function ContactSupportScreen() {
             userPhone: phone,
           });
 
-          // Load requests for this couple
-          setLoadingRequests(true);
-          const requests = await supportRequestService.getByCoupleId(coupleId);
-          setMyRequests(requests);
+          // Load requests for this couple (filtered by this user's gender)
+          const allRequests = await supportRequestService.getByCoupleId(coupleId);
+          console.log('Fetched requests:', allRequests.length);
+          
+          // Filter to only show current user's requests (by userGender)
+          const userRequests = allRequests.filter(req => req.userGender === userGender);
+          console.log('User requests:', userRequests.length);
+          
+          setMyRequests(userRequests);
         }
       }
     } catch (error) {
@@ -226,29 +249,51 @@ export default function ContactSupportScreen() {
     }
   };
 
-  // Cancel request (user)
-  const handleCancelRequest = async (requestId: string) => {
-    Alert.alert(
-      'Cancel Request',
-      'Are you sure you want to cancel this request?',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await supportRequestService.cancelRequest(requestId, 'user');
-              Alert.alert('Success', 'Request cancelled successfully.');
-              await loadData();
-            } catch (error) {
-              console.error('Error cancelling request:', error);
-              Alert.alert('Error', 'Failed to cancel request.');
-            }
-          },
-        },
-      ]
-    );
+  // Cancel request (user) - show confirmation modal
+  const handleCancelRequest = (requestId: string) => {
+    setConfirmModal({
+      visible: true,
+      type: 'cancel',
+      requestId,
+      isLoading: false,
+    });
+  };
+
+  // Delete request - show confirmation modal
+  const handleDeleteRequest = (requestId: string) => {
+    setConfirmModal({
+      visible: true,
+      type: 'delete',
+      requestId,
+      isLoading: false,
+    });
+  };
+
+  // Confirm action (cancel or delete)
+  const handleConfirmAction = async () => {
+    if (!confirmModal.requestId) return;
+
+    setConfirmModal(prev => ({ ...prev, isLoading: true }));
+
+    try {
+      if (confirmModal.type === 'cancel') {
+        await supportRequestService.cancelRequest(confirmModal.requestId, 'user');
+      } else {
+        await supportRequestService.delete(confirmModal.requestId);
+      }
+      await loadData();
+      setConfirmModal({ visible: false, type: 'cancel', requestId: null, isLoading: false });
+    } catch (error) {
+      console.error(`Error ${confirmModal.type}ing request:`, error);
+      setConfirmModal(prev => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  // Close confirmation modal
+  const handleCloseConfirmModal = () => {
+    if (!confirmModal.isLoading) {
+      setConfirmModal({ visible: false, type: 'cancel', requestId: null, isLoading: false });
+    }
   };
 
   // Open video meeting URL
@@ -299,34 +344,29 @@ export default function ContactSupportScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header with gradient */}
-      <LinearGradient colors={['#98be4e', '#7da33e']} style={styles.header}>
-        <View style={styles.headerTop}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#0f172a" />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Contact Support</Text>
-          <View style={{ width: 40 }} />
+          <Text style={styles.headerSubtitle}>Request a callback or video meeting</Text>
         </View>
-        <Text style={styles.headerSubtitle}>Request a callback or video meeting</Text>
-      </LinearGradient>
+      </View>
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, isMobile && styles.scrollContentMobile]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#98be4e']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#006dab']} />
         }
       >
         <View style={[styles.content, !isMobile && styles.contentDesktop]}>
           {/* New Request Card */}
           <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardIconBg}>
-                <Ionicons name="add-circle" size={24} color="#98be4e" />
-              </View>
-              <Text style={styles.cardTitle}>New Request</Text>
-            </View>
+            <Text style={styles.cardTitle}>New Request</Text>
+            <Text style={styles.cardSubtitle}>Submit a support request</Text>
 
             {/* Phone Number */}
             <View style={styles.formGroup}>
@@ -354,7 +394,7 @@ export default function ContactSupportScreen() {
                     <Ionicons
                       name={isEditingPhone ? 'checkmark' : 'pencil'}
                       size={18}
-                      color="#98be4e"
+                      color="#006dab"
                     />
                     <Text style={styles.editButtonText}>{isEditingPhone ? 'Done' : 'Edit'}</Text>
                   </TouchableOpacity>
@@ -373,7 +413,7 @@ export default function ContactSupportScreen() {
                   <Ionicons
                     name="call"
                     size={22}
-                    color={requestType === 'call' ? '#fff' : '#98be4e'}
+                    color={requestType === 'call' ? '#fff' : '#006dab'}
                   />
                   <Text style={[styles.typeText, requestType === 'call' && styles.typeTextActive]}>
                     Call Back
@@ -387,7 +427,7 @@ export default function ContactSupportScreen() {
                   <Ionicons
                     name="videocam"
                     size={22}
-                    color={requestType === 'video' ? '#fff' : '#98be4e'}
+                    color={requestType === 'video' ? '#fff' : '#006dab'}
                   />
                   <Text style={[styles.typeText, requestType === 'video' && styles.typeTextActive]}>
                     Video Call
@@ -417,10 +457,10 @@ export default function ContactSupportScreen() {
               style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
               onPress={handleSubmitRequest}
               disabled={isSubmitting}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
               <LinearGradient
-                colors={isSubmitting ? ['#94a3b8', '#94a3b8'] : ['#98be4e', '#7da33e']}
+                colors={isSubmitting ? ['#94a3b8', '#94a3b8'] : ['#006dab', '#005a8f']}
                 style={styles.submitGradient}
               >
                 {isSubmitting ? (
@@ -558,18 +598,22 @@ export default function ContactSupportScreen() {
                   {request.videoUrl && (
                     <View style={styles.videoSection}>
                       <View style={styles.videoHeader}>
-                        <Ionicons name="videocam" size={18} color="#16a34a" />
-                        <Text style={styles.videoLabel}>Video Meeting Link Ready!</Text>
+                        <Ionicons name="videocam" size={18} color="#006dab" />
+                        <Text style={styles.videoLabel}>
+                          {request.status === 'completed' ? 'Video Meeting Completed' : 'Video Meeting Link Ready!'}
+                        </Text>
                       </View>
-                      <TouchableOpacity
-                        style={styles.joinButton}
-                        onPress={() => handleJoinVideoMeet(request.videoUrl!)}
-                      >
-                        <LinearGradient colors={['#8b5cf6', '#7c3aed']} style={styles.joinGradient}>
-                          <Ionicons name="enter-outline" size={20} color="#fff" />
-                          <Text style={styles.joinText}>Join Video Meeting</Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
+                      {request.status !== 'completed' && (
+                        <TouchableOpacity
+                          style={styles.joinButton}
+                          onPress={() => handleJoinVideoMeet(request.videoUrl!)}
+                        >
+                          <LinearGradient colors={['#006dab', '#005a8f']} style={styles.joinGradient}>
+                            <Ionicons name="enter-outline" size={20} color="#fff" />
+                            <Text style={styles.joinText}>Join Video Meeting</Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      )}
                       <Text style={styles.videoSentAt}>
                         Link sent: {formatDateTime(request.videoUrlSentAt)}
                       </Text>
@@ -607,6 +651,17 @@ export default function ContactSupportScreen() {
                       <Text style={styles.cancelRequestButtonText}>Cancel Request</Text>
                     </TouchableOpacity>
                   )}
+
+                  {/* Delete button for completed/cancelled requests */}
+                  {(request.status === 'completed' || request.status === 'cancelled') && (
+                    <TouchableOpacity
+                      style={styles.deleteRequestButton}
+                      onPress={() => handleDeleteRequest(request.id!)}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#94a3b8" />
+                      <Text style={styles.deleteRequestButtonText}>Delete Request</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })
@@ -615,6 +670,64 @@ export default function ContactSupportScreen() {
           <View style={{ height: 100 }} />
         </View>
       </ScrollView>
+
+      {/* Confirmation Modal */}
+      <Modal
+        visible={confirmModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseConfirmModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <View style={styles.confirmModalHeader}>
+              <View style={[
+                styles.confirmModalIcon,
+                { backgroundColor: confirmModal.type === 'cancel' ? '#fef2f2' : '#f1f5f9' }
+              ]}>
+                <Ionicons
+                  name={confirmModal.type === 'cancel' ? 'close-circle' : 'trash'}
+                  size={32}
+                  color={confirmModal.type === 'cancel' ? '#dc2626' : '#64748b'}
+                />
+              </View>
+              <Text style={styles.confirmModalTitle}>
+                {confirmModal.type === 'cancel' ? 'Cancel Request?' : 'Delete Request?'}
+              </Text>
+              <Text style={styles.confirmModalMessage}>
+                {confirmModal.type === 'cancel'
+                  ? 'Are you sure you want to cancel this request? This action cannot be undone.'
+                  : 'Are you sure you want to delete this request? This will permanently remove it from your history.'}
+              </Text>
+            </View>
+            <View style={styles.confirmModalActions}>
+              <TouchableOpacity
+                style={styles.confirmModalCancelBtn}
+                onPress={handleCloseConfirmModal}
+                disabled={confirmModal.isLoading}
+              >
+                <Text style={styles.confirmModalCancelText}>No, Go Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.confirmModalConfirmBtn,
+                  { backgroundColor: confirmModal.type === 'cancel' ? '#dc2626' : '#64748b' }
+                ]}
+                onPress={handleConfirmAction}
+                disabled={confirmModal.isLoading}
+              >
+                {confirmModal.isLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.confirmModalConfirmText}>
+                    {confirmModal.type === 'cancel' ? 'Yes, Cancel' : 'Yes, Delete'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <BottomNavBar />
     </View>
@@ -627,34 +740,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    paddingTop: isWeb ? 20 : 50,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
-  },
-  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    paddingTop: isWeb ? 16 : 50,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerCenter: {
+    flex: 1,
+    marginLeft: 8,
+  },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
+    fontWeight: '800',
+    color: '#0f172a',
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-    textAlign: 'center',
-    marginTop: 4,
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 2,
   },
   scrollContent: {
     flexGrow: 1,
@@ -683,27 +797,16 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 3,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  cardIconBg: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#f0fdf4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
   cardTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0f172a',
+    marginBottom: 4,
+  },
+  cardSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 20,
   },
   formGroup: {
     marginBottom: 20,
@@ -742,14 +845,14 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: '#f0fdf4',
+    backgroundColor: '#eff6ff',
     borderRadius: 8,
     marginLeft: 10,
   },
   editButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#98be4e',
+    color: '#006dab',
   },
   typeRow: {
     flexDirection: 'row',
@@ -768,13 +871,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   typeButtonActive: {
-    borderColor: '#98be4e',
-    backgroundColor: '#98be4e',
+    borderColor: '#006dab',
+    backgroundColor: '#006dab',
   },
   typeText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#98be4e',
+    color: '#006dab',
   },
   typeTextActive: {
     color: '#fff',
@@ -843,7 +946,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
   },
   filterTabActive: {
-    backgroundColor: '#98be4e',
+    backgroundColor: '#006dab',
   },
   filterTabText: {
     fontSize: 13,
@@ -964,10 +1067,10 @@ const styles = StyleSheet.create({
   videoSection: {
     marginTop: 14,
     padding: 14,
-    backgroundColor: '#f0fdf4',
+    backgroundColor: '#eff6ff',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#bbf7d0',
+    borderColor: '#bfdbfe',
   },
   videoHeader: {
     flexDirection: 'row',
@@ -978,7 +1081,7 @@ const styles = StyleSheet.create({
   videoLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#16a34a',
+    color: '#006dab',
   },
   joinButton: {
     borderRadius: 10,
@@ -1045,5 +1148,116 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#dc2626',
+  },
+  deleteRequestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+  },
+  deleteRequestButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  confirmModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  confirmModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  confirmModalMessage: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  confirmModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  confirmModalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+  },
+  confirmModalCancelBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  confirmModalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#dc2626',
+    alignItems: 'center',
+  },
+  confirmModalConfirmBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  confirmModalHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  confirmModalIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  confirmModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  confirmModalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  confirmModalConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

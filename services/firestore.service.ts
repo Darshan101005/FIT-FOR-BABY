@@ -1724,17 +1724,31 @@ export const supportRequestService = {
   // Get requests for user
   async getByUser(userId: string): Promise<SupportRequest[]> {
     const requestsRef = collection(db, COLLECTIONS.SUPPORT_REQUESTS);
-    const q = query(requestsRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
+    // Only filter by userId, sort in JavaScript to avoid composite index requirement
+    const q = query(requestsRef, where('userId', '==', userId));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportRequest));
+    const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportRequest));
+    // Sort by createdAt descending (newest first)
+    return requests.sort((a, b) => {
+      const dateA = a.createdAt?.toDate?.() || new Date(0);
+      const dateB = b.createdAt?.toDate?.() || new Date(0);
+      return dateB.getTime() - dateA.getTime();
+    });
   },
 
   // Get all pending requests (for admin)
   async getPending(): Promise<SupportRequest[]> {
     const requestsRef = collection(db, COLLECTIONS.SUPPORT_REQUESTS);
-    const q = query(requestsRef, where('status', '==', 'pending'), orderBy('createdAt', 'asc'));
+    // Only filter by status, sort in JavaScript to avoid composite index requirement
+    const q = query(requestsRef, where('status', '==', 'pending'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportRequest));
+    const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportRequest));
+    // Sort by createdAt ascending (oldest first - FIFO)
+    return requests.sort((a, b) => {
+      const dateA = a.createdAt?.toDate?.() || new Date(0);
+      const dateB = b.createdAt?.toDate?.() || new Date(0);
+      return dateA.getTime() - dateB.getTime();
+    });
   },
 
   // Update request status
@@ -1765,9 +1779,34 @@ export const supportRequestService = {
   // Get requests by couple ID (for user to see their requests)
   async getByCoupleId(coupleId: string): Promise<SupportRequest[]> {
     const requestsRef = collection(db, COLLECTIONS.SUPPORT_REQUESTS);
-    const q = query(requestsRef, where('coupleId', '==', coupleId), orderBy('createdAt', 'desc'));
+    // Only filter by coupleId, sort in JavaScript to avoid composite index requirement
+    const q = query(requestsRef, where('coupleId', '==', coupleId));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportRequest));
+    const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportRequest));
+    // Sort by createdAt descending (newest first)
+    return requests.sort((a, b) => {
+      const dateA = a.createdAt?.toDate?.() || new Date(0);
+      const dateB = b.createdAt?.toDate?.() || new Date(0);
+      return dateB.getTime() - dateA.getTime();
+    });
+  },
+
+  // Cancel request (by user or admin)
+  async cancelRequest(requestId: string, cancelledBy: 'user' | 'admin', cancelReason?: string): Promise<void> {
+    const requestRef = doc(db, COLLECTIONS.SUPPORT_REQUESTS, requestId);
+    const updateData: any = {
+      status: 'cancelled',
+      cancelledBy,
+      updatedAt: now(),
+    };
+    if (cancelReason) updateData.cancelReason = cancelReason;
+    await updateDoc(requestRef, updateData);
+  },
+
+  // Delete request permanently (for completed/cancelled requests)
+  async delete(requestId: string): Promise<void> {
+    const requestRef = doc(db, COLLECTIONS.SUPPORT_REQUESTS, requestId);
+    await deleteDoc(requestRef);
   },
 };
 

@@ -466,6 +466,10 @@ export interface SupportRequest {
   // Status
   status: SupportRequestStatus;
   
+  // Cancellation
+  cancelledBy?: 'user' | 'admin';
+  cancelReason?: string;
+  
   // Assignment
   assignedTo?: string; // Admin/Support staff ID
   assignedName?: string;
