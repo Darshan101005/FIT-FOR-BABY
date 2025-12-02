@@ -9,14 +9,14 @@ import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  Animated,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
@@ -66,13 +66,19 @@ export default function UserHomeScreen() {
   
   const [selectedDateIndex, setSelectedDateIndex] = useState(3); // Today is at index 3
   const [notificationSidebarVisible, setNotificationSidebarVisible] = useState(false);
-  const [todayStepsFromStorage, setTodayStepsFromStorage] = useState(0);
   const [userWeight, setUserWeight] = useState(60); // Default 60kg for calorie calculation
-  const [todayExerciseMinutes, setTodayExerciseMinutes] = useState(0);
-  const [todayExerciseCalories, setTodayExerciseCalories] = useState(0);
-  const [todayFoodLogCount, setTodayFoodLogCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true); // Loading state for skeleton
   const sidebarAnim = useRef(new Animated.Value(300)).current;
+  
+  // Preloaded data for all visible dates - keyed by date string
+  const [allDatesData, setAllDatesData] = useState<{
+    [dateString: string]: {
+      steps: number;
+      exerciseMinutes: number;
+      exerciseCalories: number;
+      foodLogCount: number;
+    };
+  }>({});
   
   // User data state - fetched from Firestore
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -96,25 +102,29 @@ export default function UserHomeScreen() {
     return Math.round(0.0004 * weight * steps);
   };
 
-  // Progress data for different dates - no mock data, only real data
-  const getProgressDataForDate = (dateIndex: number) => {
+  // Progress data for the selected date - uses preloaded data
+  const getProgressDataForDate = () => {
     const stepTarget = globalSettings?.dailySteps || 7000;
     const exerciseGoal = globalSettings?.coupleWalkingMinutes || 60;
     const caloriesGoal = globalSettings?.dailyCaloriesBurnt || 200;
-    // Only today (index 3) has real data from storage, past dates will come from Firestore later
-    // For now, show 0 for past dates - this will be replaced with real Firestore data
-    const isToday = dateIndex === 3;
-    const currentSteps = isToday ? todayStepsFromStorage : 0;
+    
+    // Get data for the selected date from preloaded data
+    const selectedDate = dates[selectedDateIndex]?.date;
+    const dateString = selectedDate ? formatDateString(selectedDate) : '';
+    const dateData = allDatesData[dateString] || { steps: 0, exerciseMinutes: 0, exerciseCalories: 0, foodLogCount: 0 };
+    
+    const currentSteps = dateData.steps;
     const stepCalories = calculateCaloriesFromSteps(currentSteps, userWeight);
     const stepMinutes = calculateTimeFromSteps(currentSteps);
-    const totalExerciseMinutes = isToday ? (stepMinutes + todayExerciseMinutes) : 0;
-    const totalCaloriesBurnt = isToday ? (stepCalories + todayExerciseCalories) : 0;
+    const totalExerciseMinutes = stepMinutes + dateData.exerciseMinutes;
+    const totalCaloriesBurnt = stepCalories + dateData.exerciseCalories;
+    
     return {
       steps: { current: currentSteps, target: stepTarget },
       exerciseMinutes: totalExerciseMinutes,
       exerciseGoal: exerciseGoal,
       exerciseGoalMet: totalExerciseMinutes >= exerciseGoal,
-      foodLogged: isToday ? todayFoodLogCount : 0,
+      foodLogged: dateData.foodLogCount,
       caloriesBurnt: totalCaloriesBurnt,
       caloriesGoal: caloriesGoal,
       caloriesGoalMet: totalCaloriesBurnt >= caloriesGoal,
@@ -139,58 +149,18 @@ export default function UserHomeScreen() {
           // Set global settings
           setGlobalSettings(settings);
 
-          // Fetch real step data from Firestore
+          // Get user weight and set user data first
+          let userWeightValue = 60;
           if (coupleId && userGender) {
-            const today = formatDateString(new Date());
-            const totalSteps = await coupleStepsService.getTotalForDate(
-              coupleId, 
-              userGender as 'male' | 'female', 
-              today
-            );
-            setTodayStepsFromStorage(totalSteps);
-            
-            // Fetch exercise data for today
-            const exerciseTotals = await coupleExerciseService.getTotalsForDate(
-              coupleId, 
-              userGender as 'male' | 'female', 
-              today
-            );
-            setTodayExerciseMinutes(exerciseTotals.duration);
-            setTodayExerciseCalories(exerciseTotals.calories);
-            
-            // Fetch food log count for today
-            const foodLogs = await coupleFoodLogService.getByDate(
-              coupleId, 
-              userGender as 'male' | 'female', 
-              today
-            );
-            setTodayFoodLogCount(foodLogs.length);
-            
-            // Get user weight for calorie calculation
             const couple = await coupleService.get(coupleId);
             if (couple) {
               const user = couple[userGender as 'male' | 'female'];
               if (user.weight) {
-                setUserWeight(user.weight);
+                userWeightValue = user.weight;
+                setUserWeight(userWeightValue);
               }
-            }
-
-            // Also update AsyncStorage for quick access
-            await AsyncStorage.setItem(STEPS_STORAGE_KEY, JSON.stringify({
-              date: new Date().toDateString(),
-              totalSteps: totalSteps
-            }));
-            
-            // Fetch upcoming nursing visits
-            const nursingVisits = await nursingVisitService.getUpcoming(coupleId);
-            setUpcomingNursingVisits(nursingVisits);
-          }
-
-          // Set user data
-          if (coupleId && userGender) {
-            const couple = await coupleService.get(coupleId);
-            if (couple) {
-              const user = couple[userGender as 'male' | 'female'];
+              
+              // Set user data
               setUserData({
                 name: user.name || userName || 'User',
                 coupleId: coupleId,
@@ -210,6 +180,43 @@ export default function UserHomeScreen() {
                 unreadNotifications: 0,
               });
             }
+            
+            // Preload data for ALL visible dates at once (only past dates and today)
+            const visibleDates = dates.filter(d => !d.isFuture);
+            const allDataPromises = visibleDates.map(async (dateItem) => {
+              const dateString = formatDateString(dateItem.date);
+              
+              // Fetch all data for this date in parallel
+              const [totalSteps, exerciseTotals, foodLogs] = await Promise.all([
+                coupleStepsService.getTotalForDate(coupleId, userGender as 'male' | 'female', dateString),
+                coupleExerciseService.getTotalsForDate(coupleId, userGender as 'male' | 'female', dateString),
+                coupleFoodLogService.getByDate(coupleId, userGender as 'male' | 'female', dateString),
+              ]);
+              
+              return {
+                dateString,
+                data: {
+                  steps: totalSteps,
+                  exerciseMinutes: exerciseTotals.duration,
+                  exerciseCalories: exerciseTotals.calories,
+                  foodLogCount: foodLogs.length,
+                }
+              };
+            });
+            
+            // Wait for all dates data to be fetched
+            const allDatesResults = await Promise.all(allDataPromises);
+            
+            // Convert to object keyed by date string
+            const datesDataMap: { [key: string]: { steps: number; exerciseMinutes: number; exerciseCalories: number; foodLogCount: number } } = {};
+            allDatesResults.forEach(result => {
+              datesDataMap[result.dateString] = result.data;
+            });
+            setAllDatesData(datesDataMap);
+            
+            // Fetch upcoming nursing visits
+            const nursingVisits = await nursingVisitService.getUpcoming(coupleId);
+            setUpcomingNursingVisits(nursingVisits);
           } else {
             // Fallback to basic data
             setUserData({
@@ -242,7 +249,7 @@ export default function UserHomeScreen() {
   );
 
   // Get progress data based on selected date
-  const todayProgress = getProgressDataForDate(selectedDateIndex);
+  const todayProgress = getProgressDataForDate();
 
   // Notifications data
   const notifications = [
@@ -287,7 +294,7 @@ export default function UserHomeScreen() {
   };
 
   const handleDateSelect = (index: number) => {
-    // Only allow past dates and today
+    // Only allow past dates and today - data is already preloaded
     if (!dates[index].isFuture) {
       setSelectedDateIndex(index);
     }
