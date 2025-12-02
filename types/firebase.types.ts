@@ -712,6 +712,7 @@ export const COLLECTIONS = {
   PARTNER_CONNECTIONS: 'partnerConnections',
   SETTINGS: 'settings',
   FAQS: 'faqs',
+  BROADCASTS: 'broadcasts',
   
   // Subcollections (under users)
   STEPS: 'steps',
@@ -725,6 +726,41 @@ export const COLLECTIONS = {
   DOCTOR_VISITS: 'doctorVisits',
   NURSING_VISITS: 'nursingVisits',
 } as const;
+
+// ============================================
+// BROADCAST MESSAGE
+// Path: /broadcasts/{broadcastId}
+// ============================================
+
+export type BroadcastStatus = 'draft' | 'sent' | 'scheduled';
+export type BroadcastPriority = 'normal' | 'important' | 'urgent';
+
+export interface Broadcast {
+  id: string;
+  
+  // Content (limited to push notification standards)
+  title: string; // Max 50 chars
+  message: string; // Max 178 chars (standard push notification limit)
+  
+  // Metadata
+  priority: BroadcastPriority;
+  status: BroadcastStatus;
+  
+  // Sender info
+  sentBy: string; // Admin ID
+  sentByName: string; // Admin name
+  
+  // Timestamps
+  createdAt: Timestamp;
+  sentAt?: Timestamp;
+  scheduledFor?: Timestamp;
+  expiresAt?: Timestamp; // Optional expiry date - broadcast auto-hides after this
+  updatedAt?: Timestamp; // For edit tracking
+  
+  // Stats
+  totalRecipients?: number;
+  readCount?: number;
+}
 
 // ============================================
 // COUPLES COLLECTION (User Onboarding)
@@ -765,6 +801,9 @@ export interface CoupleUser {
   status: CoupleUserStatus;
   isPasswordReset: boolean; // Has user reset their temp password?
   isPinSet: boolean; // Has user set their 4-digit PIN?
+  
+  // App Settings
+  pushNotificationsEnabled?: boolean; // Default true
   
   // Timestamps
   lastLoginAt?: Timestamp;

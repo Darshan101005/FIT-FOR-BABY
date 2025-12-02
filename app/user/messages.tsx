@@ -1,10 +1,14 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import SkeletonLoader from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
+import { broadcastService } from '@/services/firestore.service';
+import { Broadcast } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     KeyboardAvoidingView,
     Linking,
@@ -19,6 +23,7 @@ import {
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
+const BROADCASTS_READ_KEY = 'broadcasts_last_read_timestamp';
 
 interface Message {
   id: string;
@@ -120,24 +125,57 @@ export default function MessagesScreen() {
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
-  
+  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
+  const [isLoadingBroadcasts, setIsLoadingBroadcasts] = useState(true);
+  const [unreadBroadcastCount, setUnreadBroadcastCount] = useState(0);
 
-
-
-
-  // Handle phone edit
-  const handleSavePhone = async () => {
-    if (tempPhone && userData) {
-      setUserPhone(tempPhone);
-      setEditingPhone(false);
-      // Update phone in couple document
+  // Fetch broadcasts and check which are unread
+  useEffect(() => {
+    const fetchBroadcasts = async () => {
+      setIsLoadingBroadcasts(true);
       try {
-        await coupleService.updateUserProfile(userData.coupleId, userData.userGender, { phone: tempPhone });
+        const activeBroadcasts = await broadcastService.getActive();
+        setBroadcasts(activeBroadcasts);
+
+        // Check last read timestamp to determine unread count
+        const lastReadStr = await AsyncStorage.getItem(BROADCASTS_READ_KEY);
+        const lastReadTime = lastReadStr ? parseInt(lastReadStr) : 0;
+        
+        // Count broadcasts created after last read time
+        const unreadCount = activeBroadcasts.filter(b => {
+          const createdAt = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt as any);
+          return createdAt.getTime() > lastReadTime;
+        }).length;
+        
+        setUnreadBroadcastCount(unreadCount);
       } catch (error) {
-        console.error('Error updating phone:', error);
+        console.error('Error fetching broadcasts:', error);
+      } finally {
+        setIsLoadingBroadcasts(false);
       }
+    };
+
+    fetchBroadcasts();
+  }, []);
+
+  // Mark broadcasts as read when user views the announcements section
+  const markBroadcastsAsRead = async () => {
+    if (unreadBroadcastCount > 0) {
+      await AsyncStorage.setItem(BROADCASTS_READ_KEY, Date.now().toString());
+      setUnreadBroadcastCount(0);
     }
   };
+
+  // Mark as read when scrolling to broadcasts section (on mount after loading)
+  useEffect(() => {
+    if (!isLoadingBroadcasts && broadcasts.length > 0 && view === 'threads') {
+      // Slight delay to ensure user has seen the content
+      const timer = setTimeout(() => {
+        markBroadcastsAsRead();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoadingBroadcasts, broadcasts.length, view]);
 
   const handleCallSupport = () => {
     Linking.openURL('tel:9884671395');
@@ -158,6 +196,28 @@ export default function MessagesScreen() {
       return 'Yesterday';
     } else if (days < 7) {
       return date.toLocaleDateString('en-US', { weekday: 'short' });
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  };
+
+  const formatBroadcastTime = (timestamp: any) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+    const hours = Math.floor(diff / (60 * 60 * 1000));
+    const minutes = Math.floor(diff / (60 * 1000));
+    
+    if (minutes < 60) {
+      return `${minutes}m ago`;
+    } else if (hours < 24) {
+      return `${hours}h ago`;
+    } else if (days === 1) {
+      return 'Yesterday';
+    } else if (days < 7) {
+      return `${days} days ago`;
     } else {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
@@ -346,6 +406,80 @@ export default function MessagesScreen() {
           </View>
         </TouchableOpacity>
       ))}
+
+      {/* Broadcasts / Announcements Section */}
+      <View style={styles.broadcastsSection}>
+        <View style={styles.broadcastsHeader}>
+          <Text style={styles.sectionTitle}>Announcements</Text>
+          {unreadBroadcastCount > 0 && (
+            <View style={styles.broadcastBadge}>
+              <Text style={styles.broadcastBadgeText}>{unreadBroadcastCount}</Text>
+            </View>
+          )}
+        </View>
+        
+        {isLoadingBroadcasts ? (
+          <View style={styles.broadcastLoadingContainer}>
+            <SkeletonLoader width="100%" height={80} style={{ marginBottom: 12, borderRadius: 14 }} />
+            <SkeletonLoader width="100%" height={80} style={{ borderRadius: 14 }} />
+          </View>
+        ) : broadcasts.length === 0 ? (
+          <View style={styles.noBroadcastsCard}>
+            <Ionicons name="notifications-off-outline" size={32} color="#94a3b8" />
+            <Text style={styles.noBroadcastsText}>No announcements yet</Text>
+            <Text style={styles.noBroadcastsSubtext}>Important updates will appear here</Text>
+          </View>
+        ) : (
+          broadcasts.map((broadcast) => (
+            <View key={broadcast.id} style={styles.broadcastCard}>
+              <View style={styles.broadcastIconContainer}>
+                <LinearGradient 
+                  colors={
+                    broadcast.priority === 'urgent' ? ['#ef4444', '#dc2626'] :
+                    broadcast.priority === 'important' ? ['#f59e0b', '#d97706'] :
+                    ['#006dab', '#005a8f']
+                  } 
+                  style={styles.broadcastIcon}
+                >
+                  <Ionicons 
+                    name={
+                      broadcast.priority === 'urgent' ? 'warning' :
+                      broadcast.priority === 'important' ? 'alert-circle' :
+                      'megaphone'
+                    } 
+                    size={18} 
+                    color="#fff" 
+                  />
+                </LinearGradient>
+              </View>
+              <View style={styles.broadcastContent}>
+                <View style={styles.broadcastHeader}>
+                  <Text style={styles.broadcastTitle}>{broadcast.title}</Text>
+                  <Text style={styles.broadcastTime}>{formatBroadcastTime(broadcast.sentAt || broadcast.createdAt)}</Text>
+                </View>
+                <Text style={styles.broadcastMessage} numberOfLines={3}>
+                  {broadcast.message}
+                </Text>
+                {broadcast.priority && broadcast.priority !== 'normal' && (
+                  <View style={[
+                    styles.priorityTag,
+                    broadcast.priority === 'urgent' && styles.priorityUrgent,
+                    broadcast.priority === 'important' && styles.priorityImportant,
+                  ]}>
+                    <Text style={[
+                      styles.priorityTagText,
+                      broadcast.priority === 'urgent' && styles.priorityUrgentText,
+                      broadcast.priority === 'important' && styles.priorityImportantText,
+                    ]}>
+                      {broadcast.priority === 'urgent' ? 'Urgent' : 'Important'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          ))
+        )}
+      </View>
 
       {/* Support Options */}
       <Text style={styles.sectionTitle}>Get Help</Text>
@@ -983,5 +1117,131 @@ const styles = StyleSheet.create({
   contactSupportSubtitle: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.85)',
+  },
+  
+  // Broadcasts Section
+  broadcastsSection: {
+    marginTop: 24,
+    marginBottom: 24,
+  },
+  broadcastsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  broadcastsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  broadcastBadge: {
+    backgroundColor: '#ef4444',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  broadcastBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  broadcastLoadingContainer: {
+    marginTop: 8,
+  },
+  noBroadcastsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  noBroadcastsText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 12,
+  },
+  noBroadcastsSubtext: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginTop: 4,
+  },
+  broadcastCard: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  broadcastIconContainer: {
+    marginRight: 12,
+  },
+  broadcastIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  broadcastContent: {
+    flex: 1,
+  },
+  broadcastHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+  },
+  broadcastTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+    flex: 1,
+    marginRight: 8,
+  },
+  broadcastTime: {
+    fontSize: 11,
+    color: '#94a3b8',
+  },
+  broadcastMessage: {
+    fontSize: 14,
+    color: '#64748b',
+    lineHeight: 20,
+  },
+  priorityTag: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+  },
+  priorityUrgent: {
+    backgroundColor: '#fef2f2',
+  },
+  priorityImportant: {
+    backgroundColor: '#fef3c7',
+  },
+  priorityTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+    textTransform: 'uppercase' as const,
+  },
+  priorityUrgentText: {
+    color: '#ef4444',
+  },
+  priorityImportantText: {
+    color: '#d97706',
   },
 });

@@ -166,6 +166,9 @@ export default function ProfileScreen() {
                 partnerGender: userGender === 'male' ? 'female' : 'male',
               });
               
+              // Load push notification setting (default to true)
+              setNotifications(user.pushNotificationsEnabled !== false);
+              
               // Calculate days active (from enrollment date)
               if (couple.enrollmentDate) {
                 const enrollDate = new Date(couple.enrollmentDate);
@@ -261,6 +264,32 @@ export default function ProfileScreen() {
   const handleDarkModeToggle = () => {
     toggleDarkMode();
     showToast(isDarkMode ? 'Light mode enabled' : 'Dark mode enabled', 'success');
+  };
+
+  // Handle push notifications toggle
+  const handleNotificationsToggle = async () => {
+    if (!profileData) return;
+    
+    const newValue = !notifications;
+    setNotifications(newValue);
+    
+    try {
+      // Save to Firestore using updateUserField
+      await coupleService.updateUserField(
+        profileData.coupleId, 
+        profileData.userGender, 
+        { [`${profileData.userGender}.pushNotificationsEnabled`]: newValue }
+      );
+      showToast(
+        newValue ? 'Push notifications enabled' : 'Push notifications disabled', 
+        'success'
+      );
+    } catch (error) {
+      console.error('Error updating notification setting:', error);
+      // Revert on error
+      setNotifications(!newValue);
+      showToast('Failed to update setting', 'error');
+    }
   };
 
   // Mobile Header with gradient
@@ -541,7 +570,7 @@ export default function ProfileScreen() {
               label: 'Push Notifications',
               type: 'toggle',
               value: notifications,
-              onPress: () => setNotifications(!notifications),
+              onPress: handleNotificationsToggle,
               color: '#f59e0b',
             },
             {

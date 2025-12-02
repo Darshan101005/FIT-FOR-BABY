@@ -1,7 +1,12 @@
+import { broadcastService, coupleService } from '@/services/firestore.service';
+import { Broadcast as BroadcastType } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Timestamp } from 'firebase/firestore';
+import React, { useCallback, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Modal,
   Platform,
@@ -11,10 +16,14 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
+
+// Character limits for push notifications
+const TITLE_MAX_LENGTH = 50;
+const MESSAGE_MAX_LENGTH = 178;
 
 // Fit for Baby Color Palette
 const COLORS = {
@@ -163,38 +172,6 @@ const mockChatThreads: ChatThread[] = [
   },
 ];
 
-interface Broadcast {
-  id: string;
-  title: string;
-  message: string;
-  targetAudience: 'all' | 'study' | 'control';
-  sentAt: Date;
-  readCount: number;
-  totalRecipients: number;
-}
-
-// Mock broadcast history
-const mockBroadcasts: Broadcast[] = [
-  {
-    id: 'b1',
-    title: 'Weekly Check-in Reminder',
-    message: 'Please remember to log your daily activities and complete your weekly feedback form.',
-    targetAudience: 'all',
-    sentAt: new Date('2024-11-27T09:00:00'),
-    readCount: 45,
-    totalRecipients: 50,
-  },
-  {
-    id: 'b2',
-    title: 'New Exercise Video Available',
-    message: 'A new prenatal yoga video has been uploaded. Check it out in your exercise library!',
-    targetAudience: 'study',
-    sentAt: new Date('2024-11-25T14:00:00'),
-    readCount: 22,
-    totalRecipients: 25,
-  },
-];
-
 interface CallRequest {
   id: string;
   coupleId: string;
@@ -277,12 +254,56 @@ export default function AdminCommunicationScreen() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'resolved'>('all');
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
 
+  // Broadcast state
+  const [broadcasts, setBroadcasts] = useState<BroadcastType[]>([]);
+  const [isLoadingBroadcasts, setIsLoadingBroadcasts] = useState(false);
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+  const [adminData, setAdminData] = useState<{ id: string; name: string } | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showClearAllModal, setShowClearAllModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingBroadcastId, setDeletingBroadcastId] = useState<string | null>(null);
+  const [editingBroadcast, setEditingBroadcast] = useState<BroadcastType | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+
   // Broadcast form state
   const [broadcastForm, setBroadcastForm] = useState({
     title: '',
     message: '',
-    targetAudience: 'all' as 'all' | 'study' | 'control',
+    expiryValue: 0, // 0 = never expires
+    expiryUnit: 'days' as 'minutes' | 'hours' | 'days',
   });
+
+  // Load admin data and broadcasts on focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadData = async () => {
+        try {
+          // Get admin info (adminUid is stored during login)
+          const [adminUid, adminName] = await Promise.all([
+            AsyncStorage.getItem('adminUid'),
+            AsyncStorage.getItem('adminName'),
+          ]);
+          if (adminUid && adminName) {
+            setAdminData({ id: adminUid, name: adminName });
+          }
+
+          // Load broadcasts
+          setIsLoadingBroadcasts(true);
+          const broadcastList = await broadcastService.getAll(20);
+          setBroadcasts(broadcastList);
+        } catch (error) {
+          console.error('Error loading data:', error);
+        } finally {
+          setIsLoadingBroadcasts(false);
+        }
+      };
+
+      loadData();
+    }, [])
+  );
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -332,15 +353,176 @@ export default function AdminCommunicationScreen() {
     setNewMessage('');
   };
 
-  // Handle send broadcast
-  const handleSendBroadcast = () => {
-    if (!broadcastForm.title || !broadcastForm.message) {
-      showToast('Please fill in all fields', 'error');
+  // Show confirmation before sending broadcast
+  const handleShowConfirmation = () => {
+    if (!broadcastForm.title.trim()) {
+      showToast('Please enter a title', 'error');
       return;
     }
-    showToast('Broadcast sent successfully!', 'success');
-    setShowBroadcastModal(false);
-    setBroadcastForm({ title: '', message: '', targetAudience: 'all' });
+    if (!broadcastForm.message.trim()) {
+      showToast('Please enter a message', 'error');
+      return;
+    }
+    if (!adminData) {
+      showToast('Admin data not loaded', 'error');
+      return;
+    }
+    setShowConfirmModal(true);
+  };
+
+  // Handle send broadcast after confirmation
+  const handleSendBroadcast = async () => {
+    setShowConfirmModal(false);
+    setIsSendingBroadcast(true);
+    try {
+      // Get total number of active couples for recipient count
+      const couples = await coupleService.getAll();
+      const activeCouples = couples.filter(c => c.status === 'active');
+      const totalRecipients = activeCouples.length * 2; // Both male and female
+
+      // Calculate expiry date if set
+      let expiresAt = undefined;
+      if (broadcastForm.expiryValue > 0) {
+        const expiryDate = new Date();
+        switch (broadcastForm.expiryUnit) {
+          case 'minutes':
+            expiryDate.setMinutes(expiryDate.getMinutes() + broadcastForm.expiryValue);
+            break;
+          case 'hours':
+            expiryDate.setHours(expiryDate.getHours() + broadcastForm.expiryValue);
+            break;
+          case 'days':
+            expiryDate.setDate(expiryDate.getDate() + broadcastForm.expiryValue);
+            break;
+        }
+        expiresAt = Timestamp.fromDate(expiryDate);
+      }
+
+      // Create broadcast
+      await broadcastService.create({
+        title: broadcastForm.title.trim(),
+        message: broadcastForm.message.trim(),
+        priority: 'normal',
+        status: 'sent',
+        sentBy: adminData!.id,
+        sentByName: adminData!.name,
+        totalRecipients,
+        readCount: 0,
+        ...(expiresAt && { expiresAt }),
+      });
+
+      // Refresh broadcasts list
+      const updatedBroadcasts = await broadcastService.getAll(20);
+      setBroadcasts(updatedBroadcasts);
+
+      showToast('Broadcast sent to all users!', 'success');
+      setShowBroadcastModal(false);
+      setBroadcastForm({ title: '', message: '', expiryValue: 0, expiryUnit: 'days' });
+
+    } catch (error) {
+      console.error('Error sending broadcast:', error);
+      showToast('Failed to send broadcast', 'error');
+    } finally {
+      setIsSendingBroadcast(false);
+    }
+  };
+
+  // Handle delete broadcast - show confirmation modal
+  const handleDeleteBroadcast = (broadcastId: string) => {
+    setDeletingBroadcastId(broadcastId);
+    setShowDeleteModal(true);
+  };
+
+  // Confirm and perform delete
+  const confirmDeleteBroadcast = async () => {
+    if (!deletingBroadcastId) return;
+    
+    setIsDeleting(true);
+    try {
+      await broadcastService.delete(deletingBroadcastId);
+      setBroadcasts(prev => prev.filter(b => b.id !== deletingBroadcastId));
+      showToast('Broadcast deleted successfully', 'success');
+    } catch (error) {
+      console.error('Error deleting broadcast:', error);
+      showToast('Failed to delete broadcast', 'error');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setDeletingBroadcastId(null);
+    }
+  };
+
+  // Handle edit broadcast
+  const handleEditBroadcast = (broadcast: BroadcastType) => {
+    setEditingBroadcast(broadcast);
+    setBroadcastForm({
+      title: broadcast.title,
+      message: broadcast.message,
+      expiryValue: 0,
+      expiryUnit: 'days',
+    });
+    setShowEditModal(true);
+  };
+
+  // Save edited broadcast
+  const handleSaveEdit = async () => {
+    if (!editingBroadcast) return;
+    
+    setIsSendingBroadcast(true);
+    try {
+      let expiresAt: Timestamp | null = null;
+      if (broadcastForm.expiryValue > 0) {
+        const expiryDate = new Date();
+        switch (broadcastForm.expiryUnit) {
+          case 'minutes':
+            expiryDate.setMinutes(expiryDate.getMinutes() + broadcastForm.expiryValue);
+            break;
+          case 'hours':
+            expiryDate.setHours(expiryDate.getHours() + broadcastForm.expiryValue);
+            break;
+          case 'days':
+            expiryDate.setDate(expiryDate.getDate() + broadcastForm.expiryValue);
+            break;
+        }
+        expiresAt = Timestamp.fromDate(expiryDate);
+      }
+
+      await broadcastService.update(editingBroadcast.id, {
+        title: broadcastForm.title.trim(),
+        message: broadcastForm.message.trim(),
+        ...(expiresAt && { expiresAt }),
+      });
+
+      // Refresh broadcasts list
+      const updatedBroadcasts = await broadcastService.getAll(20);
+      setBroadcasts(updatedBroadcasts);
+
+      showToast('Broadcast updated successfully', 'success');
+      setShowEditModal(false);
+      setEditingBroadcast(null);
+      setBroadcastForm({ title: '', message: '', expiryValue: 0, expiryUnit: 'days' });
+    } catch (error) {
+      console.error('Error updating broadcast:', error);
+      showToast('Failed to update broadcast', 'error');
+    } finally {
+      setIsSendingBroadcast(false);
+    }
+  };
+
+  // Handle clear all broadcasts
+  const handleClearAllBroadcasts = async () => {
+    setIsClearing(true);
+    try {
+      await broadcastService.clearAll();
+      setBroadcasts([]);
+      showToast('All broadcasts cleared', 'success');
+      setShowClearAllModal(false);
+    } catch (error) {
+      console.error('Error clearing broadcasts:', error);
+      showToast('Failed to clear broadcasts', 'error');
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   // Header
@@ -622,53 +804,126 @@ export default function AdminCommunicationScreen() {
   };
 
   // Broadcast Section
-  const renderBroadcastSection = () => (
-    <View style={styles.broadcastSection}>
-      <View style={styles.broadcastHeader}>
-        <Text style={styles.sectionTitle}>Broadcast History</Text>
-        <Text style={styles.sectionSubtitle}>View past announcements</Text>
-      </View>
+  const renderBroadcastSection = () => {
+    // Format timestamp to readable date
+    const formatBroadcastDate = (timestamp: any) => {
+      if (!timestamp) return 'Unknown';
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    };
 
-      <View style={styles.broadcastList}>
-        {mockBroadcasts.map(broadcast => (
-          <View key={broadcast.id} style={styles.broadcastCard}>
-            <View style={styles.broadcastCardHeader}>
-              <View style={styles.broadcastTitleRow}>
-                <Ionicons name="megaphone" size={20} color={COLORS.primary} />
-                <Text style={styles.broadcastTitle}>{broadcast.title}</Text>
-              </View>
-              <View style={[
-                styles.audienceBadge, 
-                broadcast.targetAudience === 'all' ? styles.audienceall :
-                broadcast.targetAudience === 'study' ? styles.audiencestudy :
-                styles.audiencecontrol
-              ]}>
-                <Text style={styles.audienceBadgeText}>
-                  {broadcast.targetAudience === 'all' ? 'All Users' :
-                   broadcast.targetAudience === 'study' ? 'Study Group' : 'Control Group'}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.broadcastMessage}>{broadcast.message}</Text>
-            <View style={styles.broadcastFooter}>
-              <View style={styles.broadcastStat}>
-                <Ionicons name="time" size={14} color={COLORS.textMuted} />
-                <Text style={styles.broadcastStatText}>
-                  {broadcast.sentAt.toLocaleDateString()}
-                </Text>
-              </View>
-              <View style={styles.broadcastStat}>
-                <Ionicons name="eye" size={14} color={COLORS.textMuted} />
-                <Text style={styles.broadcastStatText}>
-                  {broadcast.readCount}/{broadcast.totalRecipients} read
-                </Text>
-              </View>
-            </View>
+    const formatExpiryDate = (timestamp: any) => {
+      if (!timestamp) return null;
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      const now = new Date();
+      const diff = date.getTime() - now.getTime();
+      const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+      
+      if (days < 0) return 'Expired';
+      if (days === 0) return 'Expires today';
+      if (days === 1) return 'Expires tomorrow';
+      return `Expires in ${days} days`;
+    };
+
+    const getPriorityColor = (priority: string) => {
+      switch (priority) {
+        case 'urgent': return '#ef4444';
+        case 'important': return '#f59e0b';
+        default: return COLORS.primary;
+      }
+    };
+
+    return (
+      <View style={styles.broadcastSection}>
+        <View style={styles.broadcastHeader}>
+          <View style={styles.broadcastHeaderLeft}>
+            <Text style={styles.sectionTitle}>Broadcast History</Text>
+            <Text style={styles.sectionSubtitle}>Past announcements sent to all users</Text>
           </View>
-        ))}
+          {broadcasts.length > 0 && (
+            <TouchableOpacity 
+              style={styles.clearAllButton}
+              onPress={() => setShowClearAllModal(true)}
+            >
+              <Ionicons name="trash-outline" size={16} color={COLORS.error} />
+              <Text style={styles.clearAllButtonText}>Clear All</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {isLoadingBroadcasts ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading broadcasts...</Text>
+          </View>
+        ) : broadcasts.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="megaphone-outline" size={48} color={COLORS.textMuted} />
+            <Text style={styles.emptyStateText}>No broadcasts sent yet</Text>
+            <Text style={styles.emptyStateSubtext}>Click "New Broadcast" to send your first announcement</Text>
+          </View>
+        ) : (
+          <View style={styles.broadcastList}>
+            {broadcasts.map((broadcast) => (
+              <View key={broadcast.id} style={styles.broadcastCard}>
+                <View style={styles.broadcastCardHeader}>
+                  <View style={styles.broadcastTitleRow}>
+                    <Ionicons name="megaphone" size={20} color={getPriorityColor(broadcast.priority)} />
+                    <Text style={styles.broadcastTitle} numberOfLines={1}>{broadcast.title}</Text>
+                  </View>
+                  <View style={styles.broadcastActions}>
+                    <TouchableOpacity 
+                      style={styles.broadcastActionBtn}
+                      onPress={() => handleEditBroadcast(broadcast)}
+                    >
+                      <Ionicons name="create-outline" size={18} color={COLORS.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.broadcastActionBtn}
+                      onPress={() => handleDeleteBroadcast(broadcast.id)}
+                      disabled={isDeleting}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={COLORS.error} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <Text style={styles.broadcastMessage} numberOfLines={3}>{broadcast.message}</Text>
+                <View style={styles.broadcastFooter}>
+                  <View style={styles.broadcastStat}>
+                    <Ionicons name="time" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.broadcastStatText}>
+                      {formatBroadcastDate(broadcast.sentAt)}
+                    </Text>
+                  </View>
+                  <View style={styles.broadcastStat}>
+                    <Ionicons name="person" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.broadcastStatText}>
+                      by {broadcast.sentByName || 'Admin'}
+                    </Text>
+                  </View>
+                  {broadcast.expiresAt && (
+                    <View style={styles.broadcastStat}>
+                      <Ionicons name="hourglass-outline" size={14} color={COLORS.warning} />
+                      <Text style={[styles.broadcastStatText, { color: COLORS.warning }]}>
+                        {formatExpiryDate(broadcast.expiresAt)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
-    </View>
-  );
+    );
+  };
 
   // Requested Calls Section
   const renderCallsSection = () => {
@@ -808,47 +1063,438 @@ export default function AdminCommunicationScreen() {
               <Ionicons name="megaphone" size={24} color={COLORS.primary} />
               <Text style={styles.modalTitle}>New Broadcast</Text>
             </View>
-            <TouchableOpacity onPress={() => setShowBroadcastModal(false)}>
+            <TouchableOpacity onPress={() => setShowBroadcastModal(false)} disabled={isSendingBroadcast}>
+              <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalBody}>
+            {/* Info Banner */}
+            <View style={styles.infoBanner}>
+              <Ionicons name="information-circle" size={20} color={COLORS.info} />
+              <Text style={styles.infoBannerText}>
+                This message will be visible to all users in their Messages section.
+              </Text>
+            </View>
+
+            <View style={styles.formSection}>
+              <View style={styles.formLabelRow}>
+                <Text style={styles.formLabel}>Title</Text>
+                <Text style={[
+                  styles.charCount,
+                  broadcastForm.title.length > TITLE_MAX_LENGTH && styles.charCountError
+                ]}>
+                  {broadcastForm.title.length}/{TITLE_MAX_LENGTH}
+                </Text>
+              </View>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  broadcastForm.title.length > TITLE_MAX_LENGTH && styles.textInputError
+                ]}
+                placeholder="Enter broadcast title..."
+                placeholderTextColor={COLORS.textMuted}
+                value={broadcastForm.title}
+                onChangeText={(text) => setBroadcastForm({ ...broadcastForm, title: text.slice(0, TITLE_MAX_LENGTH) })}
+                maxLength={TITLE_MAX_LENGTH}
+                editable={!isSendingBroadcast}
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <View style={styles.formLabelRow}>
+                <Text style={styles.formLabel}>Message</Text>
+                <Text style={[
+                  styles.charCount,
+                  broadcastForm.message.length > MESSAGE_MAX_LENGTH && styles.charCountError
+                ]}>
+                  {broadcastForm.message.length}/{MESSAGE_MAX_LENGTH}
+                </Text>
+              </View>
+              <TextInput
+                style={[
+                  styles.textInput, 
+                  styles.textArea,
+                  broadcastForm.message.length > MESSAGE_MAX_LENGTH && styles.textInputError
+                ]}
+                placeholder="Enter your broadcast message..."
+                placeholderTextColor={COLORS.textMuted}
+                multiline
+                numberOfLines={4}
+                value={broadcastForm.message}
+                onChangeText={(text) => setBroadcastForm({ ...broadcastForm, message: text.slice(0, MESSAGE_MAX_LENGTH) })}
+                maxLength={MESSAGE_MAX_LENGTH}
+                editable={!isSendingBroadcast}
+              />
+            </View>
+
+            {/* Expiry Options */}
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Auto-expire after (optional)</Text>
+              
+              {/* Quick preset buttons */}
+              <View style={styles.expiryPresets}>
+                {[
+                  { label: 'Never', value: 0, unit: 'days' },
+                  { label: '30 min', value: 30, unit: 'minutes' },
+                  { label: '1 hour', value: 1, unit: 'hours' },
+                  { label: '1 day', value: 1, unit: 'days' },
+                  { label: '7 days', value: 7, unit: 'days' },
+                ].map((option) => (
+                  <TouchableOpacity
+                    key={`${option.value}-${option.unit}`}
+                    style={[
+                      styles.expiryPreset,
+                      broadcastForm.expiryValue === option.value && broadcastForm.expiryUnit === option.unit && styles.expiryPresetActive
+                    ]}
+                    onPress={() => setBroadcastForm({ ...broadcastForm, expiryValue: option.value, expiryUnit: option.unit as 'minutes' | 'hours' | 'days' })}
+                  >
+                    <Text style={[
+                      styles.expiryPresetText,
+                      broadcastForm.expiryValue === option.value && broadcastForm.expiryUnit === option.unit && styles.expiryPresetTextActive
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Custom expiry input */}
+              <View style={styles.customExpiryRow}>
+                <Text style={styles.customExpiryLabel}>Or set custom:</Text>
+                <TextInput
+                  style={styles.expiryInput}
+                  placeholder="0"
+                  placeholderTextColor={COLORS.textMuted}
+                  keyboardType="numeric"
+                  value={broadcastForm.expiryValue > 0 ? String(broadcastForm.expiryValue) : ''}
+                  onChangeText={(text) => {
+                    const val = parseInt(text) || 0;
+                    setBroadcastForm({ ...broadcastForm, expiryValue: val });
+                  }}
+                />
+                <View style={styles.expiryUnitSelector}>
+                  {(['minutes', 'hours', 'days'] as const).map((unit) => (
+                    <TouchableOpacity
+                      key={unit}
+                      style={[
+                        styles.expiryUnitBtn,
+                        broadcastForm.expiryUnit === unit && styles.expiryUnitBtnActive
+                      ]}
+                      onPress={() => setBroadcastForm({ ...broadcastForm, expiryUnit: unit })}
+                    >
+                      <Text style={[
+                        styles.expiryUnitText,
+                        broadcastForm.expiryUnit === unit && styles.expiryUnitTextActive
+                      ]}>
+                        {unit.charAt(0).toUpperCase() + unit.slice(1, 3)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <Text style={styles.formHint}>
+                {broadcastForm.expiryValue === 0 
+                  ? 'Broadcast will remain visible until manually deleted' 
+                  : `Broadcast will auto-hide after ${broadcastForm.expiryValue} ${broadcastForm.expiryUnit}`
+                }
+              </Text>
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={[styles.cancelButton, isSendingBroadcast && styles.buttonDisabled]}
+              onPress={() => setShowBroadcastModal(false)}
+              disabled={isSendingBroadcast}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.submitButton, isSendingBroadcast && styles.buttonDisabled]} 
+              onPress={handleShowConfirmation}
+              disabled={isSendingBroadcast}
+            >
+              <Text style={styles.submitButtonText}>Send Broadcast</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Confirmation Modal
+  const renderConfirmModal = () => (
+    <Modal
+      visible={showConfirmModal}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setShowConfirmModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.confirmModalContent]}>
+          <View style={styles.confirmIcon}>
+            <Ionicons name="warning" size={32} color={COLORS.warning} />
+          </View>
+          <Text style={styles.confirmTitle}>Confirm Broadcast</Text>
+          <Text style={styles.confirmMessage}>
+            This message will be sent to all registered users. Please ensure the content is accurate before proceeding.
+          </Text>
+          <View style={styles.confirmPreview}>
+            <Text style={styles.confirmPreviewLabel}>Preview:</Text>
+            <Text style={styles.confirmPreviewTitle}>{broadcastForm.title}</Text>
+            <Text style={styles.confirmPreviewMessage}>{broadcastForm.message}</Text>
+          </View>
+          <View style={styles.confirmActions}>
+            <TouchableOpacity
+              style={styles.confirmCancelButton}
+              onPress={() => setShowConfirmModal(false)}
+            >
+              <Text style={styles.confirmCancelText}>Go Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.confirmSendButton}
+              onPress={handleSendBroadcast}
+            >
+              {isSendingBroadcast ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                  <Text style={styles.confirmSendText}>Send Now</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Clear All Confirmation Modal
+  const renderClearAllModal = () => (
+    <Modal
+      visible={showClearAllModal}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setShowClearAllModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.confirmModalContent]}>
+          <View style={[styles.confirmIcon, { backgroundColor: COLORS.error + '15' }]}>
+            <Ionicons name="trash" size={32} color={COLORS.error} />
+          </View>
+          <Text style={styles.confirmTitle}>Clear All Broadcasts</Text>
+          <Text style={styles.confirmMessage}>
+            Are you sure you want to delete all broadcast history? This action cannot be undone and will remove all broadcasts from user messages.
+          </Text>
+          <View style={styles.confirmActions}>
+            <TouchableOpacity
+              style={styles.confirmCancelButton}
+              onPress={() => setShowClearAllModal(false)}
+              disabled={isClearing}
+            >
+              <Text style={styles.confirmCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.confirmSendButton, { backgroundColor: COLORS.error }]}
+              onPress={handleClearAllBroadcasts}
+              disabled={isClearing}
+            >
+              {isClearing ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="trash" size={18} color="#fff" />
+                  <Text style={styles.confirmSendText}>Clear All</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Delete Single Broadcast Confirmation Modal
+  const renderDeleteModal = () => (
+    <Modal
+      visible={showDeleteModal}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => {
+        setShowDeleteModal(false);
+        setDeletingBroadcastId(null);
+      }}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.confirmModalContent]}>
+          <View style={[styles.confirmIcon, { backgroundColor: COLORS.error + '15' }]}>
+            <Ionicons name="trash-outline" size={32} color={COLORS.error} />
+          </View>
+          <Text style={styles.confirmTitle}>Delete Broadcast</Text>
+          <Text style={styles.confirmMessage}>
+            Are you sure you want to delete this broadcast? This action cannot be undone.
+          </Text>
+          <View style={styles.confirmActions}>
+            <TouchableOpacity
+              style={styles.confirmCancelButton}
+              onPress={() => {
+                setShowDeleteModal(false);
+                setDeletingBroadcastId(null);
+              }}
+              disabled={isDeleting}
+            >
+              <Text style={styles.confirmCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.confirmSendButton, { backgroundColor: COLORS.error }]}
+              onPress={confirmDeleteBroadcast}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="trash" size={18} color="#fff" />
+                  <Text style={styles.confirmSendText}>Delete</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Edit Broadcast Modal
+  const renderEditModal = () => (
+    <Modal
+      visible={showEditModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => {
+        setShowEditModal(false);
+        setEditingBroadcast(null);
+        setBroadcastForm({ title: '', message: '', expiryValue: 0, expiryUnit: 'days' });
+      }}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, isMobile && styles.modalContentMobile]}>
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHeaderLeft}>
+              <Ionicons name="create" size={24} color={COLORS.primary} />
+              <Text style={styles.modalTitle}>Edit Broadcast</Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => {
+                setShowEditModal(false);
+                setEditingBroadcast(null);
+                setBroadcastForm({ title: '', message: '', expiryValue: 0, expiryUnit: 'days' });
+              }} 
+              disabled={isSendingBroadcast}
+            >
               <Ionicons name="close" size={24} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalBody}>
             <View style={styles.formSection}>
-              <Text style={styles.formLabel}>Title</Text>
+              <View style={styles.formLabelRow}>
+                <Text style={styles.formLabel}>Title</Text>
+                <Text style={styles.charCount}>
+                  {broadcastForm.title.length}/{TITLE_MAX_LENGTH}
+                </Text>
+              </View>
               <TextInput
                 style={styles.textInput}
                 placeholder="Enter broadcast title..."
                 placeholderTextColor={COLORS.textMuted}
                 value={broadcastForm.title}
-                onChangeText={(text) => setBroadcastForm({ ...broadcastForm, title: text })}
+                onChangeText={(text) => setBroadcastForm({ ...broadcastForm, title: text.slice(0, TITLE_MAX_LENGTH) })}
+                maxLength={TITLE_MAX_LENGTH}
+                editable={!isSendingBroadcast}
               />
             </View>
 
             <View style={styles.formSection}>
-              <Text style={styles.formLabel}>Message</Text>
+              <View style={styles.formLabelRow}>
+                <Text style={styles.formLabel}>Message</Text>
+                <Text style={styles.charCount}>
+                  {broadcastForm.message.length}/{MESSAGE_MAX_LENGTH}
+                </Text>
+              </View>
               <TextInput
                 style={[styles.textInput, styles.textArea]}
-                placeholder="Enter your message..."
+                placeholder="Enter your broadcast message..."
                 placeholderTextColor={COLORS.textMuted}
                 multiline
                 numberOfLines={4}
                 value={broadcastForm.message}
-                onChangeText={(text) => setBroadcastForm({ ...broadcastForm, message: text })}
+                onChangeText={(text) => setBroadcastForm({ ...broadcastForm, message: text.slice(0, MESSAGE_MAX_LENGTH) })}
+                maxLength={MESSAGE_MAX_LENGTH}
+                editable={!isSendingBroadcast}
               />
+            </View>
+
+            {/* Set New Expiry */}
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Set new expiry (optional)</Text>
+              <View style={styles.expiryPresets}>
+                {[
+                  { label: 'No change', value: 0, unit: 'days' },
+                  { label: '30 min', value: 30, unit: 'minutes' },
+                  { label: '1 hour', value: 1, unit: 'hours' },
+                  { label: '1 day', value: 1, unit: 'days' },
+                  { label: '7 days', value: 7, unit: 'days' },
+                ].map((option) => (
+                  <TouchableOpacity
+                    key={`${option.value}-${option.unit}`}
+                    style={[
+                      styles.expiryPreset,
+                      broadcastForm.expiryValue === option.value && broadcastForm.expiryUnit === option.unit && styles.expiryPresetActive
+                    ]}
+                    onPress={() => setBroadcastForm({ ...broadcastForm, expiryValue: option.value, expiryUnit: option.unit as 'minutes' | 'hours' | 'days' })}
+                  >
+                    <Text style={[
+                      styles.expiryPresetText,
+                      broadcastForm.expiryValue === option.value && broadcastForm.expiryUnit === option.unit && styles.expiryPresetTextActive
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </ScrollView>
 
           <View style={styles.modalFooter}>
             <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => setShowBroadcastModal(false)}
+              style={[styles.cancelButton, isSendingBroadcast && styles.buttonDisabled]}
+              onPress={() => {
+                setShowEditModal(false);
+                setEditingBroadcast(null);
+                setBroadcastForm({ title: '', message: '', expiryValue: 0, expiryUnit: 'days' });
+              }}
+              disabled={isSendingBroadcast}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.submitButton} onPress={handleSendBroadcast}>
-              <Ionicons name="send" size={18} color="#fff" />
-              <Text style={styles.submitButtonText}>Send Broadcast</Text>
+            <TouchableOpacity 
+              style={[styles.submitButton, isSendingBroadcast && styles.buttonDisabled]} 
+              onPress={handleSaveEdit}
+              disabled={isSendingBroadcast}
+            >
+              {isSendingBroadcast ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="checkmark" size={18} color="#fff" />
+              )}
+              <Text style={styles.submitButtonText}>
+                {isSendingBroadcast ? 'Saving...' : 'Save Changes'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -998,6 +1644,10 @@ export default function AdminCommunicationScreen() {
       )}
 
       {renderBroadcastModal()}
+      {renderConfirmModal()}
+      {renderClearAllModal()}
+      {renderDeleteModal()}
+      {renderEditModal()}
       {renderChatModal()}
       {toast.visible && renderToast()}
     </View>
@@ -1451,7 +2101,27 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   broadcastHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 20,
+  },
+  broadcastHeaderLeft: {
+    flex: 1,
+  },
+  clearAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.error + '15',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  clearAllButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.error,
   },
   sectionTitle: {
     fontSize: 18,
@@ -1481,11 +2151,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
   },
   broadcastTitle: {
     fontSize: 15,
     fontWeight: '600',
     color: COLORS.textPrimary,
+    flex: 1,
+  },
+  broadcastActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  broadcastActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   audienceBadge: {
     paddingHorizontal: 10,
@@ -1891,5 +2578,251 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textMuted,
     marginTop: 12,
+  },
+  emptyStateSubtext: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 4,
+    textAlign: 'center' as const,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    marginTop: 12,
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#eff6ff',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1e40af',
+    lineHeight: 18,
+  },
+  formLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  charCount: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  charCountError: {
+    color: COLORS.error,
+  },
+  textInputError: {
+    borderColor: COLORS.error,
+  },
+  formHint: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 6,
+    fontStyle: 'italic' as const,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+
+  // Expiry Options
+  expiryOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  expiryOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: COLORS.borderLight,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  expiryOptionActive: {
+    backgroundColor: COLORS.primary + '15',
+    borderColor: COLORS.primary,
+  },
+  expiryOptionText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  expiryOptionTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+
+  // Dynamic Expiry Presets
+  expiryPresets: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  expiryPreset: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.borderLight,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  expiryPresetActive: {
+    backgroundColor: COLORS.primary + '15',
+    borderColor: COLORS.primary,
+  },
+  expiryPresetText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  expiryPresetTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  customExpiryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 10,
+  },
+  customExpiryLabel: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  expiryInput: {
+    width: 60,
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    textAlign: 'center' as const,
+  },
+  expiryUnitSelector: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  expiryUnitBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  expiryUnitBtnActive: {
+    backgroundColor: COLORS.primary,
+  },
+  expiryUnitText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  expiryUnitTextActive: {
+    color: '#fff',
+  },
+
+  // Confirmation Modal
+  confirmModalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    padding: 24,
+    alignItems: 'center',
+  },
+  confirmIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.warning + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  confirmTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 12,
+  },
+  confirmMessage: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center' as const,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  confirmPreview: {
+    width: '100%',
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+  },
+  confirmPreviewLabel: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    marginBottom: 6,
+    textTransform: 'uppercase' as const,
+  },
+  confirmPreviewTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  confirmPreviewMessage: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  confirmCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+  },
+  confirmCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  confirmSendButton: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  confirmSendText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

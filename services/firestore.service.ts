@@ -2,7 +2,7 @@
 // FIRESTORE SERVICE - CRUD OPERATIONS
 // ============================================
 
-import { Admin, Appointment, AppointmentStatus, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
+import { Admin, Appointment, AppointmentStatus, Broadcast, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
 import {
     addDoc,
     collection,
@@ -2300,6 +2300,195 @@ export const nursingVisitService = {
 };
 
 // ============================================
+// BROADCAST SERVICE
+// ============================================
+
+export const broadcastService = {
+  // Create a new broadcast
+  async create(data: Omit<Broadcast, 'id' | 'createdAt' | 'sentAt'>): Promise<string> {
+    try {
+      const broadcastRef = collection(db, COLLECTIONS.BROADCASTS);
+      const docRef = await addDoc(broadcastRef, {
+        ...data,
+        createdAt: now(),
+        status: 'sent',
+        sentAt: now(),
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating broadcast:', error);
+      throw error;
+    }
+  },
+
+  // Get all broadcasts (newest first)
+  async getAll(limitCount: number = 50): Promise<Broadcast[]> {
+    try {
+      const broadcastRef = collection(db, COLLECTIONS.BROADCASTS);
+      const q = query(broadcastRef, orderBy('createdAt', 'desc'), limit(limitCount));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Broadcast[];
+    } catch (error) {
+      console.error('Error getting broadcasts:', error);
+      return [];
+    }
+  },
+
+  // Get recent broadcasts (for user notifications - last 7 days)
+  // Uses simple query and filters client-side to avoid composite index requirement
+  async getRecent(days: number = 7): Promise<Broadcast[]> {
+    try {
+      const broadcastRef = collection(db, COLLECTIONS.BROADCASTS);
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      
+      // Simple query - filter by status only, then filter by date client-side
+      const q = query(
+        broadcastRef,
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      );
+      const snapshot = await getDocs(q);
+      const broadcasts = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Broadcast[];
+      
+      // Filter client-side for sent status and recent date
+      return broadcasts.filter(b => {
+        if (b.status !== 'sent') return false;
+        const sentAt = b.sentAt?.toDate ? b.sentAt.toDate() : new Date(b.sentAt);
+        return sentAt >= cutoffDate;
+      }).slice(0, 20);
+    } catch (error) {
+      console.error('Error getting recent broadcasts:', error);
+      return [];
+    }
+  },
+
+  // Get a single broadcast by ID
+  async get(broadcastId: string): Promise<Broadcast | null> {
+    try {
+      const broadcastRef = doc(db, COLLECTIONS.BROADCASTS, broadcastId);
+      const snapshot = await getDoc(broadcastRef);
+      return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } as Broadcast : null;
+    } catch (error) {
+      console.error('Error getting broadcast:', error);
+      return null;
+    }
+  },
+
+  // Delete a broadcast
+  async delete(broadcastId: string): Promise<void> {
+    try {
+      const broadcastRef = doc(db, COLLECTIONS.BROADCASTS, broadcastId);
+      await deleteDoc(broadcastRef);
+    } catch (error) {
+      console.error('Error deleting broadcast:', error);
+      throw error;
+    }
+  },
+
+  // Update a broadcast (edit title, message, expiry)
+  async update(broadcastId: string, data: { title?: string; message?: string; expiresAt?: Timestamp | null; priority?: 'normal' | 'important' | 'urgent' }): Promise<void> {
+    try {
+      const broadcastRef = doc(db, COLLECTIONS.BROADCASTS, broadcastId);
+      await updateDoc(broadcastRef, {
+        ...data,
+        updatedAt: now(),
+      });
+    } catch (error) {
+      console.error('Error updating broadcast:', error);
+      throw error;
+    }
+  },
+
+  // Clear all broadcasts (delete all)
+  async clearAll(): Promise<void> {
+    try {
+      const broadcastRef = collection(db, COLLECTIONS.BROADCASTS);
+      const snapshot = await getDocs(broadcastRef);
+      
+      const batch = writeBatch(db);
+      snapshot.docs.forEach(docSnapshot => {
+        batch.delete(docSnapshot.ref);
+      });
+      
+      await batch.commit();
+    } catch (error) {
+      console.error('Error clearing all broadcasts:', error);
+      throw error;
+    }
+  },
+
+  // Get active broadcasts (not expired, for user view)
+  async getActive(): Promise<Broadcast[]> {
+    try {
+      const broadcastRef = collection(db, COLLECTIONS.BROADCASTS);
+      const q = query(
+        broadcastRef,
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      );
+      const snapshot = await getDocs(q);
+      const broadcasts = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Broadcast[];
+      
+      // Filter out expired broadcasts client-side
+      const now = new Date();
+      return broadcasts.filter(b => {
+        if (b.status !== 'sent') return false;
+        // Check if expired
+        if (b.expiresAt) {
+          const expiryDate = b.expiresAt.toDate ? b.expiresAt.toDate() : new Date(b.expiresAt as any);
+          if (expiryDate < now) return false;
+        }
+        return true;
+      });
+    } catch (error) {
+      console.error('Error getting active broadcasts:', error);
+      return [];
+    }
+  },
+
+  // Subscribe to broadcasts in real-time
+  // Uses simple query to avoid composite index requirement
+  subscribeToRecent(days: number = 7, callback: (broadcasts: Broadcast[]) => void): Unsubscribe {
+    const broadcastRef = collection(db, COLLECTIONS.BROADCASTS);
+    
+    const q = query(
+      broadcastRef,
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      
+      const broadcasts = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Broadcast[];
+      
+      // Filter client-side
+      const filtered = broadcasts.filter(b => {
+        if (b.status !== 'sent') return false;
+        const sentAt = b.sentAt?.toDate ? b.sentAt.toDate() : new Date(b.sentAt);
+        return sentAt >= cutoffDate;
+      }).slice(0, 20);
+      
+      callback(filtered);
+    });
+  },
+};
+
+// ============================================
 // EXPORT ALL SERVICES
 // ============================================
 
@@ -2321,6 +2510,7 @@ export const firestoreServices = {
   notification: notificationService,
   doctorVisit: doctorVisitService,
   nursingVisit: nursingVisitService,
+  broadcast: broadcastService,
 };
 
 export default firestoreServices;

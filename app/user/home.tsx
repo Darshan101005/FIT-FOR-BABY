@@ -1,8 +1,8 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { HomePageSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
-import { coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, formatDateString, globalSettingsService, nursingVisitService } from '@/services/firestore.service';
-import { GlobalSettings, NursingDepartmentVisit } from '@/types/firebase.types';
+import { broadcastService, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, formatDateString, globalSettingsService, nursingVisitService } from '@/services/firestore.service';
+import { Broadcast, GlobalSettings, NursingDepartmentVisit } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -88,6 +88,9 @@ export default function UserHomeScreen() {
   
   // Upcoming nursing visits
   const [upcomingNursingVisits, setUpcomingNursingVisits] = useState<NursingDepartmentVisit[]>([]);
+  
+  // Broadcasts/Reminders from admin
+  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   
   const dates = generateDates(isMobile);
   const todayIndex = isMobile ? 3 : 3; // Today is always at index 3
@@ -217,6 +220,10 @@ export default function UserHomeScreen() {
             // Fetch upcoming nursing visits
             const nursingVisits = await nursingVisitService.getUpcoming(coupleId);
             setUpcomingNursingVisits(nursingVisits);
+            
+            // Fetch recent broadcasts (last 7 days)
+            const recentBroadcasts = await broadcastService.getRecent(7);
+            setBroadcasts(recentBroadcasts);
           } else {
             // Fallback to basic data
             setUserData({
@@ -251,12 +258,29 @@ export default function UserHomeScreen() {
   // Get progress data based on selected date
   const todayProgress = getProgressDataForDate();
 
-  // Notifications data
-  const notifications = [
-    { id: 1, title: 'Great job!', message: 'You reached 5000 steps today', time: '2h ago', type: 'success' },
-    { id: 2, title: 'Reminder', message: 'Don\'t forget to log your lunch', time: '4h ago', type: 'reminder' },
-    { id: 3, title: 'Weekly Report', message: 'Your weekly summary is ready', time: '1d ago', type: 'info' },
-  ];
+  // Helper function to format time ago
+  const formatTimeAgo = (timestamp: any) => {
+    if (!timestamp) return 'Recently';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    return 'Just now';
+  };
+
+  // Convert broadcasts to notification format
+  const notifications = broadcasts.map(broadcast => ({
+    id: broadcast.id,
+    title: broadcast.title,
+    message: broadcast.message,
+    time: formatTimeAgo(broadcast.sentAt),
+    type: broadcast.priority === 'urgent' ? 'urgent' : 
+          broadcast.priority === 'important' ? 'important' : 'broadcast',
+  }));
 
   // Today's Tips data
   const todaysTips = [
@@ -691,39 +715,58 @@ export default function UserHomeScreen() {
         ]}
       >
         <View style={styles.sidebarHeader}>
-          <Text style={[styles.sidebarTitle, { color: colors.text }]}>Notifications</Text>
+          <View style={styles.sidebarHeaderLeft}>
+            <Ionicons name="notifications" size={22} color="#006dab" />
+            <Text style={[styles.sidebarTitle, { color: colors.text }]}>Reminders</Text>
+          </View>
           <TouchableOpacity onPress={closeNotificationSidebar}>
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.notificationsList}>
-          {notifications.map((notification) => (
-            <View key={notification.id} style={[styles.notificationItem, { borderBottomColor: colors.border }]}>
-              <View style={[
-                styles.notificationDot,
-                { backgroundColor: notification.type === 'success' ? '#98be4e' : 
-                  notification.type === 'reminder' ? '#f59e0b' : '#006dab' }
-              ]} />
-              <View style={styles.notificationContent}>
-                <Text style={[styles.notificationTitle, { color: colors.text }]}>{notification.title}</Text>
-                <Text style={[styles.notificationMessage, { color: colors.textSecondary }]}>{notification.message}</Text>
-                <Text style={[styles.notificationTime, { color: colors.textSecondary }]}>{notification.time}</Text>
-              </View>
-              <TouchableOpacity style={styles.notificationAction}>
-                <Ionicons name="close-circle-outline" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
+          {notifications.length === 0 ? (
+            <View style={styles.emptyNotifications}>
+              <Ionicons name="notifications-off-outline" size={48} color={colors.textSecondary} />
+              <Text style={[styles.emptyNotificationsText, { color: colors.textSecondary }]}>
+                No new reminders
+              </Text>
+              <Text style={[styles.emptyNotificationsSubtext, { color: colors.textSecondary }]}>
+                Announcements from admins will appear here
+              </Text>
             </View>
-          ))}
-
-          {/* Clear All Button - Below notifications */}
-          <TouchableOpacity 
-            style={styles.clearAllButton}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="trash-outline" size={18} color="#ef4444" />
-            <Text style={styles.clearAllText}>Clear All</Text>
-          </TouchableOpacity>
+          ) : (
+            <>
+              {notifications.map((notification) => (
+                <View key={notification.id} style={[styles.notificationItem, { borderBottomColor: colors.border }]}>
+                  <View style={[
+                    styles.notificationDot,
+                    { backgroundColor: notification.type === 'urgent' ? '#ef4444' : 
+                      notification.type === 'important' ? '#f59e0b' : '#006dab' }
+                  ]} />
+                  <View style={styles.notificationContent}>
+                    <View style={styles.notificationHeader}>
+                      <Ionicons 
+                        name="megaphone" 
+                        size={14} 
+                        color={notification.type === 'urgent' ? '#ef4444' : 
+                              notification.type === 'important' ? '#f59e0b' : '#006dab'} 
+                      />
+                      <Text style={[styles.notificationTitle, { color: colors.text }]} numberOfLines={1}>
+                        {notification.title}
+                      </Text>
+                    </View>
+                    <Text style={[styles.notificationMessage, { color: colors.textSecondary }]} numberOfLines={3}>
+                      {notification.message}
+                    </Text>
+                    <Text style={[styles.notificationTime, { color: colors.textSecondary }]}>
+                      {notification.time}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </>
+          )}
         </ScrollView>
       </Animated.View>
       
@@ -1059,6 +1102,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
   },
+  sidebarHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   sidebarTitle: {
     fontSize: 20,
     fontWeight: '800',
@@ -1066,6 +1114,22 @@ const styles = StyleSheet.create({
   notificationsList: {
     flex: 1,
     padding: 16,
+  },
+  emptyNotifications: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyNotificationsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  emptyNotificationsSubtext: {
+    fontSize: 13,
+    marginTop: 6,
+    textAlign: 'center' as const,
+    paddingHorizontal: 20,
   },
   notificationItem: {
     flexDirection: 'row',
@@ -1083,10 +1147,16 @@ const styles = StyleSheet.create({
   notificationContent: {
     flex: 1,
   },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
   notificationTitle: {
     fontSize: 15,
     fontWeight: '700',
-    marginBottom: 4,
+    flex: 1,
   },
   notificationMessage: {
     fontSize: 13,

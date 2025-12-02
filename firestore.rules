@@ -129,6 +129,14 @@ service cloud.firestore {
                               (resource.data.userId == request.auth.uid || isAdmin());
     }
     
+    // Broadcasts (admin announcements to all users)
+    match /broadcasts/{broadcastId} {
+      allow read: if true; // All users can read broadcasts
+      allow create: if true; // Admins can create broadcasts (use true for Firestore-only auth)
+      allow update: if true; // Admins can update broadcasts
+      allow delete: if true; // Admins can delete broadcasts
+    }
+    
     // Couples collection (user onboarding)
     match /couples/{coupleId} {
       // Admins can read, create, update couples
