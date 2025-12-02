@@ -448,10 +448,20 @@ export interface SupportRequest {
   userPhone: string;
   userEmail: string;
   
+  // Couple Info (for admin context)
+  coupleId?: string;
+  coupleName?: string;
+  userGender?: 'male' | 'female';
+  
   // Request Details
   type: SupportRequestType;
   reason?: string;
   preferredTime?: string;
+  editedPhone?: string; // User-edited phone number if different from profile
+  
+  // Video Call
+  videoUrl?: string; // Jitsi meet URL sent by admin
+  videoUrlSentAt?: Timestamp;
   
   // Status
   status: SupportRequestStatus;

@@ -6,16 +6,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Linking,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    KeyboardAvoidingView,
+    Linking,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -120,6 +120,24 @@ export default function MessagesScreen() {
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
+  
+
+
+
+
+  // Handle phone edit
+  const handleSavePhone = async () => {
+    if (tempPhone && userData) {
+      setUserPhone(tempPhone);
+      setEditingPhone(false);
+      // Update phone in couple document
+      try {
+        await coupleService.updateUserProfile(userData.coupleId, userData.userGender, { phone: tempPhone });
+      } catch (error) {
+        console.error('Error updating phone:', error);
+      }
+    }
+  };
 
   const handleCallSupport = () => {
     Linking.openURL('tel:9884671395');
@@ -242,6 +260,26 @@ export default function MessagesScreen() {
 
   const renderThreadsList = () => (
     <View style={styles.content}>
+      {/* Contact Support - Request Callback (Top Section) */}
+      <TouchableOpacity 
+        style={styles.contactSupportCard}
+        onPress={() => router.push('/user/contact-support')}
+        activeOpacity={0.85}
+      >
+        <LinearGradient colors={['#98be4e', '#7da33e']} style={styles.contactSupportGradient}>
+          <View style={styles.contactSupportContent}>
+            <View style={styles.contactSupportIcon}>
+              <Ionicons name="person" size={28} color="#fff" />
+            </View>
+            <View style={styles.contactSupportText}>
+              <Text style={styles.contactSupportTitle}>Contact Support</Text>
+              <Text style={styles.contactSupportSubtitle}>Request a call or video meeting</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#fff" />
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+
       {/* FAQ Section */}
       <View style={styles.faqSection}>
         <LinearGradient colors={['#006dab', '#005a8f']} style={styles.faqCard}>
@@ -904,5 +942,46 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Contact Support Card styles
+  contactSupportCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 20,
+    elevation: 4,
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  contactSupportGradient: {
+    padding: 16,
+    borderRadius: 16,
+  },
+  contactSupportContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  contactSupportIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  contactSupportText: {
+    flex: 1,
+  },
+  contactSupportTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  contactSupportSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
   },
 });

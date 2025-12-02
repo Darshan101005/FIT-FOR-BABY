@@ -4,22 +4,22 @@
 
 import { Admin, Appointment, AppointmentStatus, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  setDoc,
-  Timestamp,
-  Unsubscribe,
-  updateDoc,
-  where,
-  writeBatch
+    addDoc,
+    collection,
+    deleteDoc,
+    doc,
+    getDoc,
+    getDocs,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    setDoc,
+    Timestamp,
+    Unsubscribe,
+    updateDoc,
+    where,
+    writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -1713,6 +1713,14 @@ export const supportRequestService = {
     return docRef.id;
   },
 
+  // Get all requests (for admin)
+  async getAll(): Promise<SupportRequest[]> {
+    const requestsRef = collection(db, COLLECTIONS.SUPPORT_REQUESTS);
+    const q = query(requestsRef, orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportRequest));
+  },
+
   // Get requests for user
   async getByUser(userId: string): Promise<SupportRequest[]> {
     const requestsRef = collection(db, COLLECTIONS.SUPPORT_REQUESTS);
@@ -1732,13 +1740,34 @@ export const supportRequestService = {
   // Update request status
   async updateStatus(requestId: string, status: SupportRequestStatus, assignedTo?: string, assignedName?: string): Promise<void> {
     const requestRef = doc(db, COLLECTIONS.SUPPORT_REQUESTS, requestId);
-    await updateDoc(requestRef, {
+    const updateData: any = {
       status,
-      assignedTo,
-      assignedName,
       updatedAt: now(),
-      ...(status === 'completed' ? { resolvedAt: now() } : {}),
+    };
+    if (assignedTo) updateData.assignedTo = assignedTo;
+    if (assignedName) updateData.assignedName = assignedName;
+    if (status === 'completed') updateData.resolvedAt = now();
+    
+    await updateDoc(requestRef, updateData);
+  },
+
+  // Send video URL to user
+  async sendVideoUrl(requestId: string, videoUrl: string): Promise<void> {
+    const requestRef = doc(db, COLLECTIONS.SUPPORT_REQUESTS, requestId);
+    await updateDoc(requestRef, {
+      videoUrl,
+      videoUrlSentAt: now(),
+      status: 'in-progress',
+      updatedAt: now(),
     });
+  },
+
+  // Get requests by couple ID (for user to see their requests)
+  async getByCoupleId(coupleId: string): Promise<SupportRequest[]> {
+    const requestsRef = collection(db, COLLECTIONS.SUPPORT_REQUESTS);
+    const q = query(requestsRef, where('coupleId', '==', coupleId), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportRequest));
   },
 };
 
