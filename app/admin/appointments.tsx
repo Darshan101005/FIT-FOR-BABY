@@ -5,16 +5,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
-    ActivityIndicator,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -72,10 +72,15 @@ export default function AdminAppointmentsScreen() {
 
   // Schedule modal states
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [scheduleMode, setScheduleMode] = useState<'manual' | 'automatic'>('manual');
+  const [scheduleMode, setScheduleMode] = useState<'manual' | 'automatic' | 'doctorVisit'>('manual');
   const [selectedCouple, setSelectedCouple] = useState<Couple | null>(null);
   const [showCoupleDropdown, setShowCoupleDropdown] = useState(false);
   const [coupleSearchQuery, setCoupleSearchQuery] = useState('');
+  
+  // Doctor visit mode states
+  const [coupleDoctorVisits, setCoupleDoctorVisits] = useState<DoctorVisit[]>([]);
+  const [selectedDoctorVisit, setSelectedDoctorVisit] = useState<DoctorVisit | null>(null);
+  const [loadingDoctorVisits, setLoadingDoctorVisits] = useState(false);
   
   // Manual scheduling
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -93,6 +98,22 @@ export default function AdminAppointmentsScreen() {
   const [showDayDropdown, setShowDayDropdown] = useState(false);
   
   const [isSaving, setIsSaving] = useState(false);
+
+  // Message modal states
+  const [messageModal, setMessageModal] = useState<{
+    visible: boolean;
+    type: 'success' | 'error' | 'warning';
+    title: string;
+    message: string;
+  }>({ visible: false, type: 'success', title: '', message: '' });
+
+  const showMessage = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
+    setMessageModal({ visible: true, type, title, message });
+  };
+
+  const closeMessageModal = () => {
+    setMessageModal(prev => ({ ...prev, visible: false }));
+  };
 
   // Load data
   useFocusEffect(
@@ -236,10 +257,37 @@ export default function AdminAppointmentsScreen() {
     return dates;
   };
 
+  // Load upcoming doctor visits for selected couple
+  const loadCouplesDoctorVisits = async (coupleId: string) => {
+    setLoadingDoctorVisits(true);
+    setCoupleDoctorVisits([]);
+    setSelectedDoctorVisit(null);
+    
+    try {
+      const visits = await doctorVisitService.getAllForCouple(coupleId);
+      
+      // Filter to only show upcoming visits (today or future)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const upcomingVisits = visits.filter(visit => {
+        const visitDate = new Date(visit.date);
+        visitDate.setHours(0, 0, 0, 0);
+        return visitDate >= today && visit.status === 'upcoming';
+      }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      setCoupleDoctorVisits(upcomingVisits);
+    } catch (error) {
+      console.error('Error loading doctor visits:', error);
+    } finally {
+      setLoadingDoctorVisits(false);
+    }
+  };
+
   // Handle schedule appointment
   const handleScheduleAppointment = async () => {
     if (!selectedCouple) {
-      alert('Please select a couple');
+      showMessage('warning', 'Select Couple', 'Please select a couple first');
       return;
     }
 
@@ -250,7 +298,7 @@ export default function AdminAppointmentsScreen() {
 
       if (scheduleMode === 'manual') {
         if (!selectedDate) {
-          alert('Please select a date');
+          showMessage('warning', 'Select Date', 'Please select a date for the appointment');
           setIsSaving(false);
           return;
         }
@@ -265,7 +313,28 @@ export default function AdminAppointmentsScreen() {
           scheduledByName: adminName,
         });
 
-        alert('Appointment scheduled successfully!');
+        showMessage('success', 'Success', 'Appointment scheduled successfully!');
+      } else if (scheduleMode === 'doctorVisit') {
+        // Doctor visit mode
+        if (!selectedDoctorVisit) {
+          showMessage('warning', 'Select Doctor Visit', 'Please select a doctor visit to schedule on');
+          setIsSaving(false);
+          return;
+        }
+
+        await nursingVisitService.schedule(selectedCouple.coupleId, {
+          coupleName: `${selectedCouple.male?.name || 'Male'} & ${selectedCouple.female?.name || 'Female'}`,
+          date: selectedDoctorVisit.date,
+          time: timeStr,
+          purpose: visitPurpose || `Nursing Visit (Same day as Doctor Visit - ${selectedDoctorVisit.doctorName || 'Doctor'})`,
+          notes: visitNotes,
+          scheduledBy: user?.id || 'admin',
+          scheduledByName: adminName,
+          linkedDoctorVisitId: selectedDoctorVisit.id,
+          linkedDoctorVisitDate: selectedDoctorVisit.date,
+        });
+
+        showMessage('success', 'Success', 'Appointment scheduled on the day of doctor visit!');
       } else {
         // Automatic scheduling
         const scheduleDates = generateAutoScheduleDates(new Date(), autoScheduleDay);
@@ -285,7 +354,7 @@ export default function AdminAppointmentsScreen() {
           visitNum++;
         }
 
-        alert(`${scheduleDates.length} appointments scheduled successfully!`);
+        showMessage('success', 'Success', `${scheduleDates.length} appointments scheduled successfully!`);
       }
 
       // Reset form and reload
@@ -294,7 +363,7 @@ export default function AdminAppointmentsScreen() {
       loadData();
     } catch (error) {
       console.error('Error scheduling appointment:', error);
-      alert('Failed to schedule appointment');
+      showMessage('error', 'Error', 'Failed to schedule appointment. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -311,6 +380,8 @@ export default function AdminAppointmentsScreen() {
     setSelectedHour('10');
     setSelectedMinute('00');
     setSelectedPeriod('AM');
+    setCoupleDoctorVisits([]);
+    setSelectedDoctorVisit(null);
   };
 
   // Status color helper
@@ -618,6 +689,10 @@ export default function AdminAppointmentsScreen() {
                             setSelectedCouple(couple);
                             setShowCoupleDropdown(false);
                             setCoupleSearchQuery('');
+                            // Load doctor visits if in doctor visit mode
+                            if (scheduleMode === 'doctorVisit') {
+                              loadCouplesDoctorVisits(couple.coupleId);
+                            }
                           }}
                         >
                           <View style={styles.dropdownItemIcon}>
@@ -693,6 +768,29 @@ export default function AdminAppointmentsScreen() {
                     4 visits
                   </Text>
                 </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.modeButton, scheduleMode === 'doctorVisit' && styles.modeButtonActive]}
+                  onPress={() => {
+                    closeAllDropdowns();
+                    setScheduleMode('doctorVisit');
+                    if (selectedCouple) {
+                      loadCouplesDoctorVisits(selectedCouple.coupleId);
+                    }
+                  }}
+                >
+                  <Ionicons 
+                    name="medkit-outline" 
+                    size={20} 
+                    color={scheduleMode === 'doctorVisit' ? '#fff' : COLORS.textSecondary} 
+                  />
+                  <Text style={[styles.modeButtonText, scheduleMode === 'doctorVisit' && styles.modeButtonTextActive]}>
+                    Doctor Visit
+                  </Text>
+                  <Text style={[styles.modeButtonHint, scheduleMode === 'doctorVisit' && styles.modeButtonHintActive]}>
+                    Same day
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -703,11 +801,74 @@ export default function AdminAppointmentsScreen() {
                   <Text style={styles.stepBadgeText}>3</Text>
                 </View>
                 <Text style={styles.formSectionTitle}>
-                  {scheduleMode === 'manual' ? 'Select Date' : 'Select Day of Week'}
+                  {scheduleMode === 'manual' ? 'Select Date' : scheduleMode === 'automatic' ? 'Select Day of Week' : 'Select Doctor Visit'}
                 </Text>
               </View>
 
-              {scheduleMode === 'manual' ? (
+              {scheduleMode === 'doctorVisit' ? (
+                // Doctor Visit Mode - Show upcoming doctor visits
+                <View style={styles.doctorVisitsList}>
+                  {!selectedCouple ? (
+                    <View style={styles.doctorVisitsEmpty}>
+                      <Ionicons name="alert-circle-outline" size={24} color={COLORS.warning} />
+                      <Text style={styles.doctorVisitsEmptyText}>Please select a couple first</Text>
+                    </View>
+                  ) : loadingDoctorVisits ? (
+                    <View style={styles.doctorVisitsLoading}>
+                      <ActivityIndicator size="small" color={COLORS.primary} />
+                      <Text style={styles.doctorVisitsLoadingText}>Loading doctor visits...</Text>
+                    </View>
+                  ) : coupleDoctorVisits.length === 0 ? (
+                    <View style={styles.doctorVisitsEmpty}>
+                      <Ionicons name="calendar-outline" size={24} color={COLORS.textMuted} />
+                      <Text style={styles.doctorVisitsEmptyText}>No upcoming doctor visits found</Text>
+                      <Text style={styles.doctorVisitsEmptyHint}>The couple has no scheduled doctor appointments</Text>
+                    </View>
+                  ) : (
+                    <ScrollView style={styles.doctorVisitsScroll} nestedScrollEnabled>
+                      {coupleDoctorVisits.map((visit) => {
+                        const visitDate = new Date(visit.date);
+                        const isSelected = selectedDoctorVisit?.id === visit.id;
+                        return (
+                          <TouchableOpacity
+                            key={visit.id}
+                            style={[
+                              styles.doctorVisitItem,
+                              isSelected && styles.doctorVisitItemSelected
+                            ]}
+                            onPress={() => setSelectedDoctorVisit(visit)}
+                          >
+                            <View style={[styles.doctorVisitRadio, isSelected && styles.doctorVisitRadioSelected]}>
+                              {isSelected && <View style={styles.doctorVisitRadioInner} />}
+                            </View>
+                            <View style={styles.doctorVisitContent}>
+                              <View style={styles.doctorVisitDateRow}>
+                                <Ionicons name="calendar" size={14} color={isSelected ? COLORS.primary : COLORS.textSecondary} />
+                                <Text style={[styles.doctorVisitDate, isSelected && styles.doctorVisitDateSelected]}>
+                                  {visitDate.getDate()} {MONTHS_SHORT[visitDate.getMonth()]} {visitDate.getFullYear()}
+                                </Text>
+                                <Text style={styles.doctorVisitTime}>{visit.time}</Text>
+                              </View>
+                              {visit.doctorName && (
+                                <View style={styles.doctorVisitDoctorRow}>
+                                  <Ionicons name="person" size={12} color={COLORS.textMuted} />
+                                  <Text style={styles.doctorVisitDoctor}>{visit.doctorName}</Text>
+                                </View>
+                              )}
+                              {visit.purpose && (
+                                <Text style={styles.doctorVisitPurpose} numberOfLines={1}>{visit.purpose}</Text>
+                              )}
+                            </View>
+                            {isSelected && (
+                              <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  )}
+                </View>
+              ) : scheduleMode === 'manual' ? (
                 <>
                   <TouchableOpacity 
                     style={[
@@ -993,10 +1154,12 @@ export default function AdminAppointmentsScreen() {
               style={[
                 styles.submitButton, 
                 isSaving && styles.submitButtonDisabled,
-                !selectedCouple && styles.submitButtonDisabled
+                !selectedCouple && styles.submitButtonDisabled,
+                (scheduleMode === 'doctorVisit' && !selectedDoctorVisit) && styles.submitButtonDisabled,
+                (scheduleMode === 'manual' && !selectedDate) && styles.submitButtonDisabled
               ]}
               onPress={handleScheduleAppointment}
-              disabled={isSaving || !selectedCouple}
+              disabled={isSaving || !selectedCouple || (scheduleMode === 'doctorVisit' && !selectedDoctorVisit) || (scheduleMode === 'manual' && !selectedDate)}
             >
               {isSaving ? (
                 <ActivityIndicator size="small" color="#fff" />
@@ -1006,7 +1169,9 @@ export default function AdminAppointmentsScreen() {
                   <Text style={styles.submitButtonText}>
                     {scheduleMode === 'automatic' 
                       ? 'Schedule 4 Visits'
-                      : 'Schedule Visit'}
+                      : scheduleMode === 'doctorVisit'
+                        ? 'Schedule on Doctor Visit Day'
+                        : 'Schedule Visit'}
                   </Text>
                 </>
               )}
@@ -1055,11 +1220,59 @@ export default function AdminAppointmentsScreen() {
     );
   };
 
+  // Message Modal Component
+  const renderMessageModal = () => (
+    <Modal
+      visible={messageModal.visible}
+      transparent
+      animationType="fade"
+      onRequestClose={closeMessageModal}
+    >
+      <TouchableOpacity 
+        style={styles.messageModalOverlay}
+        activeOpacity={1}
+        onPress={closeMessageModal}
+      >
+        <TouchableOpacity activeOpacity={1} style={styles.messageModalContent}>
+          <View style={[
+            styles.messageModalIcon,
+            messageModal.type === 'success' && styles.messageModalIconSuccess,
+            messageModal.type === 'error' && styles.messageModalIconError,
+            messageModal.type === 'warning' && styles.messageModalIconWarning,
+          ]}>
+            <Ionicons 
+              name={
+                messageModal.type === 'success' ? 'checkmark-circle' :
+                messageModal.type === 'error' ? 'close-circle' : 'alert-circle'
+              } 
+              size={32} 
+              color="#fff" 
+            />
+          </View>
+          <Text style={styles.messageModalTitle}>{messageModal.title}</Text>
+          <Text style={styles.messageModalMessage}>{messageModal.message}</Text>
+          <TouchableOpacity 
+            style={[
+              styles.messageModalButton,
+              messageModal.type === 'success' && styles.messageModalButtonSuccess,
+              messageModal.type === 'error' && styles.messageModalButtonError,
+              messageModal.type === 'warning' && styles.messageModalButtonWarning,
+            ]}
+            onPress={closeMessageModal}
+          >
+            <Text style={styles.messageModalButtonText}>OK</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       {renderHeader()}
       {renderContent()}
       {renderScheduleModal()}
+      {renderMessageModal()}
     </View>
   );
 }
@@ -1793,5 +2006,186 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  // Doctor Visit Selection Styles
+  doctorVisitsList: {
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  doctorVisitsScroll: {
+    maxHeight: 220,
+  },
+  doctorVisitsEmpty: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  doctorVisitsEmptyText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  doctorVisitsEmptyHint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+  },
+  doctorVisitsLoading: {
+    padding: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  doctorVisitsLoadingText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  doctorVisitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  doctorVisitItemSelected: {
+    backgroundColor: COLORS.primary + '10',
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  doctorVisitRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doctorVisitRadioSelected: {
+    borderColor: COLORS.primary,
+  },
+  doctorVisitRadioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
+  },
+  doctorVisitContent: {
+    flex: 1,
+    gap: 4,
+  },
+  doctorVisitDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  doctorVisitDate: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  doctorVisitDateSelected: {
+    color: COLORS.primary,
+  },
+  doctorVisitTime: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 4,
+  },
+  doctorVisitDoctorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  doctorVisitDoctor: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  doctorVisitPurpose: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+  },
+  // Message Modal Styles
+  messageModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  messageModalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 340,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  messageModalIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  messageModalIconSuccess: {
+    backgroundColor: COLORS.accent,
+  },
+  messageModalIconError: {
+    backgroundColor: COLORS.error,
+  },
+  messageModalIconWarning: {
+    backgroundColor: COLORS.warning,
+  },
+  messageModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  messageModalMessage: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  messageModalButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  messageModalButtonSuccess: {
+    backgroundColor: COLORS.accent,
+  },
+  messageModalButtonError: {
+    backgroundColor: COLORS.error,
+  },
+  messageModalButtonWarning: {
+    backgroundColor: COLORS.warning,
+  },
+  messageModalButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

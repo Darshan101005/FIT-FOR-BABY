@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Modal,
   Platform,
@@ -55,6 +56,7 @@ export default function AppointmentsScreen() {
   
   const [activeSection, setActiveSection] = useState<'appointments' | 'nurseVisit'>('appointments');
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
 
@@ -193,6 +195,7 @@ export default function AppointmentsScreen() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const visitData = {
         date: formatDateString(selectedDate),
@@ -229,6 +232,8 @@ export default function AppointmentsScreen() {
     } catch (error) {
       console.error('Error saving appointment:', error);
       showToast('Failed to save appointment', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -480,13 +485,23 @@ export default function AppointmentsScreen() {
       </View>
 
       <TouchableOpacity 
-        style={styles.logButton}
+        style={[styles.logButton, isSubmitting && styles.logButtonDisabled]}
         onPress={handleLogAppointment}
         activeOpacity={0.85}
+        disabled={isSubmitting}
       >
         <View style={styles.logButtonInner}>
-          <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
-          <Text style={styles.logButtonText}>Log Appointment</Text>
+          {isSubmitting ? (
+            <>
+              <ActivityIndicator size="small" color="#ffffff" />
+              <Text style={styles.logButtonText}>Saving...</Text>
+            </>
+          ) : (
+            <>
+              <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
+              <Text style={styles.logButtonText}>Log Appointment</Text>
+            </>
+          )}
         </View>
       </TouchableOpacity>
     </View>
@@ -683,6 +698,12 @@ export default function AppointmentsScreen() {
                 {nextVisit.visitNumber && (
                   <Text style={[styles.visitNumberText, styles.nextVisitTextLight]}>Visit #{nextVisit.visitNumber}</Text>
                 )}
+                {nextVisit.linkedDoctorVisitId && (
+                  <View style={styles.linkedDoctorVisitBadge}>
+                    <Ionicons name="medical" size={12} color="#98be4e" />
+                    <Text style={styles.linkedDoctorVisitText}>Same day as doctor visit</Text>
+                  </View>
+                )}
               </View>
             </View>
           </View>
@@ -712,6 +733,12 @@ export default function AppointmentsScreen() {
                   )}
                   {visit.visitNumber && (
                     <Text style={styles.visitNumberText}>Visit #{visit.visitNumber}</Text>
+                  )}
+                  {visit.linkedDoctorVisitId && (
+                    <View style={styles.linkedDoctorVisitBadgeSmall}>
+                      <Ionicons name="medical" size={10} color="#98be4e" />
+                      <Text style={styles.linkedDoctorVisitTextSmall}>Doctor visit day</Text>
+                    </View>
                   )}
                 </View>
                 <View style={[styles.visitStatusBadge, styles.visitStatusScheduled]}>
@@ -1058,6 +1085,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
     borderRadius: 10,
     overflow: 'hidden',
+  },
+  logButtonDisabled: {
+    opacity: 0.7,
   },
   logButtonInner: {
     flexDirection: 'row',
@@ -1706,5 +1736,32 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+  linkedDoctorVisitBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(152, 190, 78, 0.2)',
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  linkedDoctorVisitText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#98be4e',
+  },
+  linkedDoctorVisitBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 4,
+  },
+  linkedDoctorVisitTextSmall: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#98be4e',
   },
 });

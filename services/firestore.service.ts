@@ -2163,6 +2163,8 @@ export const nursingVisitService = {
     notes?: string;
     scheduledBy: string;
     scheduledByName?: string;
+    linkedDoctorVisitId?: string;
+    linkedDoctorVisitDate?: string;
   }): Promise<string> {
     try {
       const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.NURSING_VISITS);
@@ -2180,6 +2182,8 @@ export const nursingVisitService = {
         status: 'scheduled' as NursingVisitStatus,
         scheduledBy: data.scheduledBy,
         scheduledByName: data.scheduledByName || null,
+        linkedDoctorVisitId: data.linkedDoctorVisitId || null,
+        linkedDoctorVisitDate: data.linkedDoctorVisitDate || null,
         createdAt: now(),
         updatedAt: now(),
       });

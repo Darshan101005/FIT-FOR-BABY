@@ -676,6 +676,10 @@ export interface NursingDepartmentVisit {
   scheduledBy: string; // Admin UID
   scheduledByName?: string;
   
+  // Linked Doctor Visit (if scheduled on day of doctor visit)
+  linkedDoctorVisitId?: string;
+  linkedDoctorVisitDate?: string;
+  
   // Completion details (filled after visit)
   completedAt?: Timestamp;
   completionNotes?: string;
