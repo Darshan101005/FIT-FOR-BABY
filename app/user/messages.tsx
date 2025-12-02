@@ -10,16 +10,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Linking,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -293,7 +293,7 @@ export default function MessagesScreen() {
                 />
               ) : selectedThread?.type === 'support' ? (
                 <Image 
-                  source={require('../../assets/images/supporter.png')} 
+                  source={require('../../assets/images/customer-service.png')} 
                   style={styles.headerNurseImage}
                   contentFit="cover"
                 />
@@ -320,42 +320,28 @@ export default function MessagesScreen() {
 
   const renderThreadsList = () => (
     <View style={styles.content}>
-      {/* Contact Support - Request Callback (Top Section) */}
+      {/* Contact Support - Request Callback */}
       <TouchableOpacity 
         style={styles.contactSupportCard}
         onPress={() => router.push('/user/contact-support')}
         activeOpacity={0.85}
       >
-        <LinearGradient colors={['#98be4e', '#7da33e']} style={styles.contactSupportGradient}>
-          <View style={styles.contactSupportContent}>
-            <View style={styles.contactSupportIcon}>
-              <Ionicons name="person" size={28} color="#fff" />
-            </View>
-            <View style={styles.contactSupportText}>
-              <Text style={styles.contactSupportTitle}>Contact Support</Text>
-              <Text style={styles.contactSupportSubtitle}>Request a call or video meeting</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color="#fff" />
+        <View style={styles.contactSupportContent}>
+          <View style={styles.contactSupportIconWrap}>
+            <Image 
+              source={require('../../assets/images/customer-service.png')} 
+              style={styles.supporterImage}
+            />
           </View>
-        </LinearGradient>
+          <View style={styles.contactSupportText}>
+            <Text style={styles.contactSupportTitle}>Contact Support</Text>
+            <Text style={styles.contactSupportSubtitle}>Request a call or video meeting</Text>
+          </View>
+          <View style={styles.contactSupportArrow}>
+            <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+          </View>
+        </View>
       </TouchableOpacity>
-
-      {/* FAQ Section */}
-      <View style={styles.faqSection}>
-        <LinearGradient colors={['#006dab', '#005a8f']} style={styles.faqCard}>
-          <View style={styles.faqContent}>
-            <MaterialCommunityIcons name="frequently-asked-questions" size={32} color="#fff" />
-            <View style={styles.faqText}>
-              <Text style={styles.faqTitle}>Have a question?</Text>
-              <Text style={styles.faqSubtitle}>Check our FAQ for quick answers</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.faqButton} onPress={() => setView('faq')}>
-            <Text style={styles.faqButtonText}>View FAQ</Text>
-            <Ionicons name="arrow-forward" size={16} color="#006dab" />
-          </TouchableOpacity>
-        </LinearGradient>
-      </View>
 
       {/* Conversations */}
       <Text style={styles.sectionTitle}>Conversations</Text>
@@ -500,6 +486,23 @@ export default function MessagesScreen() {
           <Text style={styles.helpLabel}>Email Us</Text>
           <Text style={styles.helpDetail}>e0323040@sriher.edu.in</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* FAQ Section - At Bottom */}
+      <View style={styles.faqSection}>
+        <LinearGradient colors={['#006dab', '#005a8f']} style={styles.faqCard}>
+          <View style={styles.faqContent}>
+            <MaterialCommunityIcons name="frequently-asked-questions" size={32} color="#fff" />
+            <View style={styles.faqText}>
+              <Text style={styles.faqTitle}>Have a question?</Text>
+              <Text style={styles.faqSubtitle}>Check our FAQ for quick answers</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.faqButton} onPress={() => setView('faq')}>
+            <Text style={styles.faqButtonText}>View FAQ</Text>
+            <Ionicons name="arrow-forward" size={16} color="#006dab" />
+          </TouchableOpacity>
+        </LinearGradient>
       </View>
     </View>
   );
@@ -763,7 +766,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingBottom: isWeb ? 40 : 60,
   },
-  faqSection: { marginBottom: 24 },
+  faqSection: { marginTop: 24, marginBottom: 24 },
   faqCard: {
     borderRadius: 16,
     padding: 20,
@@ -1079,31 +1082,35 @@ const styles = StyleSheet.create({
   },
   // Contact Support Card styles
   contactSupportCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 20,
-    elevation: 4,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-  },
-  contactSupportGradient: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
     padding: 16,
-    borderRadius: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   contactSupportContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  contactSupportIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  contactSupportIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
+  },
+  supporterImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
   },
   contactSupportText: {
     flex: 1,
@@ -1111,12 +1118,20 @@ const styles = StyleSheet.create({
   contactSupportTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
-    marginBottom: 2,
+    color: '#0f172a',
+    marginBottom: 3,
   },
   contactSupportSubtitle: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.85)',
+    color: '#64748b',
+  },
+  contactSupportArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   
   // Broadcasts Section
