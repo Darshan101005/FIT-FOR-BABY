@@ -9,7 +9,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Linking,
   Modal,
@@ -116,7 +115,7 @@ export default function ContactSupportScreen() {
   const [loadingUserData, setLoadingUserData] = useState(true);
 
   // Active tab for filtering requests
-  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'in-progress' | 'completed' | 'cancelled'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'completed' | 'cancelled'>('all');
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -129,6 +128,22 @@ export default function ContactSupportScreen() {
     type: 'cancel',
     requestId: null,
     isLoading: false,
+  });
+
+  // Pending request warning modal state
+  const [pendingWarningModal, setPendingWarningModal] = useState(false);
+
+  // Generic message modal state
+  const [messageModal, setMessageModal] = useState<{
+    visible: boolean;
+    type: 'success' | 'error' | 'warning';
+    title: string;
+    message: string;
+  }>({
+    visible: false,
+    type: 'success',
+    title: '',
+    message: '',
   });
 
   // Load user data and requests
@@ -193,12 +208,29 @@ export default function ContactSupportScreen() {
   // Submit request
   const handleSubmitRequest = async () => {
     if (!userData) {
-      Alert.alert('Error', 'User data not loaded. Please try again.');
+      setMessageModal({
+        visible: true,
+        type: 'error',
+        title: 'Error',
+        message: 'User data not loaded. Please try again.',
+      });
+      return;
+    }
+
+    // Check if user already has a pending request
+    const hasPendingRequest = myRequests.some(r => r.status === 'pending');
+    if (hasPendingRequest) {
+      setPendingWarningModal(true);
       return;
     }
 
     if (!phoneNumber.trim()) {
-      Alert.alert('Error', 'Please enter a phone number.');
+      setMessageModal({
+        visible: true,
+        type: 'error',
+        title: 'Error',
+        message: 'Please enter a phone number.',
+      });
       return;
     }
 
@@ -228,11 +260,12 @@ export default function ContactSupportScreen() {
 
       await supportRequestService.create(requestData);
 
-      Alert.alert(
-        '✅ Request Sent!',
-        `Your ${requestType === 'call' ? 'callback' : 'video meeting'} request has been submitted successfully. Our team will contact you soon.`,
-        [{ text: 'OK' }]
-      );
+      setMessageModal({
+        visible: true,
+        type: 'success',
+        title: 'Request Sent!',
+        message: `Your ${requestType === 'call' ? 'callback' : 'video meeting'} request has been submitted successfully. Our team will contact you soon.`,
+      });
 
       // Reset form
       setReason('');
@@ -243,7 +276,12 @@ export default function ContactSupportScreen() {
       await loadData();
     } catch (error) {
       console.error('Error submitting request:', error);
-      Alert.alert('❌ Error', 'Failed to submit request. Please try again.');
+      setMessageModal({
+        visible: true,
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to submit request. Please try again.',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -319,10 +357,8 @@ export default function ContactSupportScreen() {
     switch (status) {
       case 'pending':
         return { bg: '#fef3c7', color: '#d97706', label: 'Pending', icon: 'time-outline' };
-      case 'in-progress':
-        return { bg: '#dbeafe', color: '#2563eb', label: 'In Progress', icon: 'sync-outline' };
       case 'completed':
-        return { bg: '#dcfce7', color: '#16a34a', label: 'Completed', icon: 'checkmark-circle-outline' };
+        return { bg: '#f0f7e6', color: '#98be4e', label: 'Completed', icon: 'checkmark-circle-outline' };
       case 'cancelled':
         return { bg: '#fee2e2', color: '#dc2626', label: 'Cancelled', icon: 'close-circle-outline' };
       default:
@@ -338,7 +374,6 @@ export default function ContactSupportScreen() {
 
   // Count by status
   const pendingCount = myRequests.filter(r => r.status === 'pending').length;
-  const inProgressCount = myRequests.filter(r => r.status === 'in-progress').length;
   const completedCount = myRequests.filter(r => r.status === 'completed').length;
   const cancelledCount = myRequests.filter(r => r.status === 'cancelled').length;
 
@@ -470,8 +505,8 @@ export default function ContactSupportScreen() {
                   </>
                 ) : (
                   <>
-                    <Ionicons name="send" size={20} color="#fff" />
                     <Text style={styles.submitText}>Send Request</Text>
+                    <Ionicons name="send" size={20} color="#fff" />
                   </>
                 )}
               </LinearGradient>
@@ -505,14 +540,6 @@ export default function ContactSupportScreen() {
             >
               <Text style={[styles.filterTabText, activeTab === 'pending' && styles.filterTabTextActive]}>
                 Pending ({pendingCount})
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterTab, activeTab === 'in-progress' && styles.filterTabActive]}
-              onPress={() => setActiveTab('in-progress')}
-            >
-              <Text style={[styles.filterTabText, activeTab === 'in-progress' && styles.filterTabTextActive]}>
-                In Progress ({inProgressCount})
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -623,7 +650,7 @@ export default function ContactSupportScreen() {
                   {/* Completed info */}
                   {request.status === 'completed' && request.resolvedAt && (
                     <View style={styles.completedInfo}>
-                      <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+                      <Ionicons name="checkmark-circle" size={16} color="#98be4e" />
                       <Text style={styles.completedText}>
                         Completed on {formatDateTime(request.resolvedAt)}
                       </Text>
@@ -659,7 +686,7 @@ export default function ContactSupportScreen() {
                       onPress={() => handleDeleteRequest(request.id!)}
                     >
                       <Ionicons name="trash-outline" size={18} color="#94a3b8" />
-                      <Text style={styles.deleteRequestButtonText}>Delete Request</Text>
+                      <Text style={styles.deleteRequestButtonText}>Delete</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -725,6 +752,78 @@ export default function ContactSupportScreen() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Pending Request Warning Modal */}
+      <Modal
+        visible={pendingWarningModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingWarningModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <View style={styles.confirmModalHeader}>
+              <View style={[styles.confirmModalIcon, { backgroundColor: '#fef3c7' }]}>
+                <Ionicons name="time" size={32} color="#d97706" />
+              </View>
+              <Text style={styles.confirmModalTitle}>Request Already Pending</Text>
+              <Text style={styles.confirmModalMessage}>
+                You already have a pending request. Please wait for it to be completed or cancel it before submitting a new one.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.confirmModalConfirmBtn, { backgroundColor: '#d97706' }]}
+              onPress={() => setPendingWarningModal(false)}
+            >
+              <Text style={styles.confirmModalConfirmText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Generic Message Modal */}
+      <Modal
+        visible={messageModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMessageModal({ ...messageModal, visible: false })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <View style={styles.confirmModalHeader}>
+              <View style={[
+                styles.confirmModalIcon,
+                { 
+                  backgroundColor: messageModal.type === 'success' ? '#f0f7e6' : 
+                                   messageModal.type === 'error' ? '#fef2f2' : '#fef3c7' 
+                }
+              ]}>
+                <Ionicons
+                  name={messageModal.type === 'success' ? 'checkmark-circle' : 
+                        messageModal.type === 'error' ? 'close-circle' : 'warning'}
+                  size={32}
+                  color={messageModal.type === 'success' ? '#98be4e' : 
+                         messageModal.type === 'error' ? '#dc2626' : '#d97706'}
+                />
+              </View>
+              <Text style={styles.confirmModalTitle}>{messageModal.title}</Text>
+              <Text style={styles.confirmModalMessage}>{messageModal.message}</Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.confirmModalConfirmBtn,
+                { 
+                  backgroundColor: messageModal.type === 'success' ? '#98be4e' : 
+                                   messageModal.type === 'error' ? '#dc2626' : '#d97706' 
+                }
+              ]}
+              onPress={() => setMessageModal({ ...messageModal, visible: false })}
+            >
+              <Text style={styles.confirmModalConfirmText}>OK</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1116,7 +1215,7 @@ const styles = StyleSheet.create({
   },
   completedText: {
     fontSize: 13,
-    color: '#16a34a',
+    color: '#98be4e',
   },
   cancelledInfo: {
     flexDirection: 'row',

@@ -6,8 +6,8 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
@@ -28,7 +28,7 @@ const COLORS = {
   primaryLight: '#0088d4',
   accent: '#98be4e',
   accentDark: '#7da33e',
-  success: '#22c55e',
+  success: '#98be4e',
   warning: '#f59e0b',
   error: '#ef4444',
   info: '#3b82f6',
@@ -62,6 +62,39 @@ export default function RequestedCallsScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [showVideoLinkSection, setShowVideoLinkSection] = useState(false);
   const [sendingVideoLink, setSendingVideoLink] = useState(false);
+
+  // Success modal state
+  const [successModal, setSuccessModal] = useState<{
+    visible: boolean;
+    type: 'video-sent' | 'completed' | 'deleted';
+    message: string;
+  }>({
+    visible: false,
+    type: 'video-sent',
+    message: '',
+  });
+
+  // Delete confirmation modal state
+  const [deleteModal, setDeleteModal] = useState<{
+    visible: boolean;
+    requestId: string | null;
+    userName: string;
+    isDeleting: boolean;
+  }>({
+    visible: false,
+    requestId: null,
+    userName: '',
+    isDeleting: false,
+  });
+
+  // Error modal state
+  const [errorModal, setErrorModal] = useState<{
+    visible: boolean;
+    message: string;
+  }>({
+    visible: false,
+    message: '',
+  });
 
   // Load data
   useFocusEffect(
@@ -165,7 +198,7 @@ export default function RequestedCallsScreen() {
       setExpandedVideoCardId(null);
     } catch (error) {
       console.error('Error sending video link:', error);
-      alert('Failed to send video link');
+      setErrorModal({ visible: true, message: 'Failed to send video link. Please try again.' });
     } finally {
       setSendingVideoLinkId(null);
     }
@@ -204,19 +237,15 @@ export default function RequestedCallsScreen() {
       await loadData();
       if (newStatus === 'completed') {
         setExpandedCardId(null);
-        if (Platform.OS === 'web') {
-          alert('Request marked as completed!');
-        } else {
-          Alert.alert('Success', 'Request marked as completed!');
-        }
+        setSuccessModal({
+          visible: true,
+          type: 'completed',
+          message: 'Request has been marked as completed!',
+        });
       }
     } catch (error) {
       console.error('Error updating status:', error);
-      if (Platform.OS === 'web') {
-        alert('Failed to update status');
-      } else {
-        Alert.alert('Error', 'Failed to update status');
-      }
+      setErrorModal({ visible: true, message: 'Failed to update status. Please try again.' });
     } finally {
       setIsSaving(false);
     }
@@ -231,20 +260,39 @@ export default function RequestedCallsScreen() {
       await supportRequestService.sendVideoUrl(request.id, generatedLink);
       await loadData();
       setShowVideoLinkSection(false);
-      if (Platform.OS === 'web') {
-        alert('Video link sent successfully!');
-      } else {
-        Alert.alert('Success', 'Video link sent successfully!');
-      }
+      setSuccessModal({
+        visible: true,
+        type: 'video-sent',
+        message: 'Video link has been sent to the user successfully!',
+      });
     } catch (error) {
       console.error('Error sending video link:', error);
-      if (Platform.OS === 'web') {
-        alert('Failed to send video link');
-      } else {
-        Alert.alert('Error', 'Failed to send video link');
-      }
+      setErrorModal({ visible: true, message: 'Failed to send video link. Please try again.' });
     } finally {
       setSendingVideoLink(false);
+    }
+  };
+
+  // Handle delete request
+  const handleDeleteRequest = async () => {
+    if (!deleteModal.requestId) return;
+    
+    setDeleteModal(prev => ({ ...prev, isDeleting: true }));
+    try {
+      await supportRequestService.delete(deleteModal.requestId);
+      await loadData();
+      setDeleteModal({ visible: false, requestId: null, userName: '', isDeleting: false });
+      setExpandedCardId(null);
+      setSuccessModal({
+        visible: true,
+        type: 'deleted',
+        message: 'Request has been deleted successfully.',
+      });
+    } catch (error) {
+      console.error('Error deleting request:', error);
+      setErrorModal({ visible: true, message: 'Failed to delete request. Please try again.' });
+    } finally {
+      setDeleteModal(prev => ({ ...prev, isDeleting: false }));
     }
   };
 
@@ -555,6 +603,22 @@ export default function RequestedCallsScreen() {
                 </Text>
               </View>
             )}
+
+            {/* Delete Button for completed/cancelled requests */}
+            {(request.status === 'completed' || request.status === 'cancelled') && (
+              <TouchableOpacity
+                style={styles.deleteRequestBtn}
+                onPress={() => setDeleteModal({
+                  visible: true,
+                  requestId: request.id,
+                  userName: request.userName,
+                  isDeleting: false,
+                })}
+              >
+                <Ionicons name="trash-outline" size={16} color={COLORS.error} />
+                <Text style={styles.deleteRequestBtnText}>Delete</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -604,6 +668,114 @@ export default function RequestedCallsScreen() {
     <View style={styles.container}>
       {renderHeader()}
       {renderContent()}
+
+      {/* Success Modal */}
+      <Modal
+        visible={successModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSuccessModal({ ...successModal, visible: false })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.successModalContent}>
+            <View style={styles.successModalHeader}>
+              <View style={[
+                styles.successModalIcon,
+                { backgroundColor: successModal.type === 'deleted' ? COLORS.textMuted + '20' : successModal.type === 'video-sent' ? COLORS.accent + '20' : COLORS.success + '20' }
+              ]}>
+                <Ionicons
+                  name={successModal.type === 'deleted' ? 'trash' : successModal.type === 'video-sent' ? 'videocam' : 'checkmark-circle'}
+                  size={32}
+                  color={successModal.type === 'deleted' ? COLORS.textMuted : successModal.type === 'video-sent' ? COLORS.accent : COLORS.success}
+                />
+              </View>
+              <Text style={styles.successModalTitle}>
+                {successModal.type === 'deleted' ? 'Deleted!' : successModal.type === 'video-sent' ? 'Link Sent!' : 'Completed!'}
+              </Text>
+              <Text style={styles.successModalMessage}>
+                {successModal.message}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.successModalBtn,
+                { backgroundColor: successModal.type === 'deleted' ? COLORS.textMuted : successModal.type === 'video-sent' ? COLORS.accent : COLORS.success }
+              ]}
+              onPress={() => setSuccessModal({ ...successModal, visible: false })}
+            >
+              <Text style={styles.successModalBtnText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteModal({ ...deleteModal, visible: false })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteModalHeader}>
+              <View style={styles.deleteModalIcon}>
+                <Ionicons name="trash" size={32} color={COLORS.error} />
+              </View>
+              <Text style={styles.deleteModalTitle}>Delete Request?</Text>
+              <Text style={styles.deleteModalMessage}>
+                Are you sure you want to delete the request from {deleteModal.userName}? This action cannot be undone.
+              </Text>
+            </View>
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity
+                style={styles.deleteModalCancelBtn}
+                onPress={() => setDeleteModal({ visible: false, requestId: null, userName: '', isDeleting: false })}
+                disabled={deleteModal.isDeleting}
+              >
+                <Text style={styles.deleteModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteModalConfirmBtn}
+                onPress={handleDeleteRequest}
+                disabled={deleteModal.isDeleting}
+              >
+                {deleteModal.isDeleting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.deleteModalConfirmText}>Yes, Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Error Modal */}
+      <Modal
+        visible={errorModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setErrorModal({ visible: false, message: '' })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.successModalContent}>
+            <View style={styles.successModalHeader}>
+              <View style={[styles.successModalIcon, { backgroundColor: COLORS.error + '20' }]}>
+                <Ionicons name="close-circle" size={32} color={COLORS.error} />
+              </View>
+              <Text style={styles.successModalTitle}>Error</Text>
+              <Text style={styles.successModalMessage}>{errorModal.message}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.successModalBtn, { backgroundColor: COLORS.error }]}
+              onPress={() => setErrorModal({ visible: false, message: '' })}
+            >
+              <Text style={styles.successModalBtnText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1087,5 +1259,142 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     paddingHorizontal: 40,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  successModalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  successModalHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  successModalIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  successModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  successModalMessage: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  successModalBtn: {
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  successModalBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  deleteRequestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.error + '40',
+    backgroundColor: COLORS.error + '10',
+  },
+  deleteRequestBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.error,
+  },
+  deleteModalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  deleteModalHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  deleteModalIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.error + '15',
+    marginBottom: 16,
+  },
+  deleteModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  deleteModalMessage: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  deleteModalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+  },
+  deleteModalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  deleteModalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.error,
+    alignItems: 'center',
+  },
+  deleteModalConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
