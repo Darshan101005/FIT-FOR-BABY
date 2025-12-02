@@ -1,10 +1,10 @@
-import { broadcastService, coupleService } from '@/services/firestore.service';
-import { Broadcast as BroadcastType } from '@/types/firebase.types';
+import { broadcastService, chatService, coupleService } from '@/services/firestore.service';
+import { Broadcast as BroadcastType, Chat, ChatMessage } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -254,6 +254,17 @@ export default function AdminCommunicationScreen() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'resolved'>('all');
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
 
+  // Real-time chat state
+  const [supportChats, setSupportChats] = useState<Chat[]>([]);
+  const [isLoadingChats, setIsLoadingChats] = useState(false);
+  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [adminTyping, setAdminTyping] = useState(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const messagesScrollRef = useRef<ScrollView>(null);
+
   // Broadcast state
   const [broadcasts, setBroadcasts] = useState<BroadcastType[]>([]);
   const [isLoadingBroadcasts, setIsLoadingBroadcasts] = useState(false);
@@ -276,9 +287,11 @@ export default function AdminCommunicationScreen() {
     expiryUnit: 'days' as 'minutes' | 'hours' | 'days',
   });
 
-  // Load admin data and broadcasts on focus
+  // Load admin data, broadcasts, and subscribe to chats on focus
   useFocusEffect(
     useCallback(() => {
+      let unsubscribeChats: (() => void) | undefined;
+
       const loadData = async () => {
         try {
           // Get admin info (adminUid is stored during login)
@@ -294,6 +307,13 @@ export default function AdminCommunicationScreen() {
           setIsLoadingBroadcasts(true);
           const broadcastList = await broadcastService.getAll(20);
           setBroadcasts(broadcastList);
+
+          // Subscribe to support chats (real-time)
+          setIsLoadingChats(true);
+          unsubscribeChats = chatService.subscribeToAll((chats) => {
+            setSupportChats(chats);
+            setIsLoadingChats(false);
+          });
         } catch (error) {
           console.error('Error loading data:', error);
         } finally {
@@ -302,8 +322,42 @@ export default function AdminCommunicationScreen() {
       };
 
       loadData();
+
+      // Cleanup subscription on unfocus
+      return () => {
+        if (unsubscribeChats) {
+          unsubscribeChats();
+        }
+      };
     }, [])
   );
+
+  // Subscribe to messages when a chat is selected
+  useEffect(() => {
+    if (!selectedChat) {
+      setChatMessages([]);
+      return;
+    }
+
+    setIsLoadingMessages(true);
+    
+    // Mark as read when opening chat
+    chatService.markAsRead(selectedChat.id, 'admin');
+
+    const unsubscribe = chatService.subscribeToMessages(selectedChat.id, (messages) => {
+      // Filter out messages deleted by admin
+      const visibleMessages = messages.filter((msg) => !msg.deletedByAdmin);
+      setChatMessages(visibleMessages);
+      setIsLoadingMessages(false);
+      
+      // Auto scroll to bottom
+      setTimeout(() => {
+        messagesScrollRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+
+    return () => unsubscribe();
+  }, [selectedChat]);
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -336,6 +390,115 @@ export default function AdminCommunicationScreen() {
     if (days > 0) return `${days}d ago`;
     if (hours > 0) return `${hours}h ago`;
     return 'Just now';
+  };
+
+  // Format time for chat messages
+  const formatMessageTime = (timestamp: any) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Filter support chats
+  const filteredSupportChats = supportChats.filter(chat => {
+    const matchesSearch =
+      chat.coupleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      chat.odAaByuserName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || chat.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Get total unread count for support chats
+  const totalSupportUnread = supportChats.reduce((sum, chat) => sum + (chat.unreadByAdmin || 0), 0);
+
+  // Handle support chat click
+  const handleSupportChatClick = (chat: Chat) => {
+    setSelectedChat(chat);
+    // Mark as read
+    chatService.markAsRead(chat.id, 'admin');
+    if (isMobile) {
+      setShowChatModal(true);
+    }
+  };
+
+  // Handle typing indicator
+  const handleAdminTyping = (text: string) => {
+    setNewMessage(text);
+
+    if (!selectedChat) return;
+
+    // Set typing to true
+    if (!adminTyping && text.length > 0) {
+      setAdminTyping(true);
+      chatService.setTyping(selectedChat.id, true, 'admin');
+    }
+
+    // Clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set typing to false after 2 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      setAdminTyping(false);
+      if (selectedChat) {
+        chatService.setTyping(selectedChat.id, false, 'admin');
+      }
+    }, 2000);
+  };
+
+  // Handle send support message
+  const handleSendSupportMessage = async () => {
+    if (!newMessage.trim() || !selectedChat || !adminData) return;
+
+    const textToSend = newMessage.trim();
+    setNewMessage('');
+    setIsSendingMessage(true);
+
+    // Clear typing indicator
+    setAdminTyping(false);
+    chatService.setTyping(selectedChat.id, false, 'admin');
+
+    try {
+      await chatService.sendMessage(selectedChat.id, {
+        senderId: adminData.id,
+        senderName: adminData.name,
+        senderType: 'admin',
+        message: textToSend,
+        messageType: 'text',
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setNewMessage(textToSend);
+      showToast('Failed to send message', 'error');
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
+  // Handle resolve/reopen chat
+  const handleToggleChatStatus = async (chat: Chat) => {
+    try {
+      const newStatus = chat.status === 'resolved' ? 'active' : 'resolved';
+      await chatService.updateStatus(chat.id, newStatus);
+      showToast(`Chat marked as ${newStatus}`, 'success');
+    } catch (error) {
+      console.error('Error updating chat status:', error);
+      showToast('Failed to update chat status', 'error');
+    }
+  };
+
+  // Handle delete message
+  const handleDeleteSupportMessage = (messageId: string) => {
+    if (!selectedChat) return;
+    if (Platform.OS === 'web') {
+      if (confirm('Delete this message?')) {
+        chatService.deleteMessage(selectedChat.id, messageId, 'admin');
+      }
+    } else {
+      // For native, we would use Alert.alert
+      chatService.deleteMessage(selectedChat.id, messageId, 'admin');
+    }
   };
 
   // Handle thread click
@@ -532,7 +695,7 @@ export default function AdminCommunicationScreen() {
         <View>
           <Text style={styles.headerTitle}>Communication</Text>
           <Text style={styles.headerSubtitle}>
-            {totalUnread > 0 ? `${totalUnread} unread messages` : 'All caught up!'}
+            {totalSupportUnread > 0 ? `${totalSupportUnread} unread messages` : 'All caught up!'}
           </Text>
         </View>
         {activeTab === 'broadcast' && (
@@ -560,9 +723,9 @@ export default function AdminCommunicationScreen() {
           <Text style={[styles.tabText, activeTab === 'inbox' && styles.tabTextActive]}>
             Support Inbox
           </Text>
-          {totalUnread > 0 && (
+          {totalSupportUnread > 0 && (
             <View style={styles.tabBadge}>
-              <Text style={styles.tabBadgeText}>{totalUnread}</Text>
+              <Text style={styles.tabBadgeText}>{totalSupportUnread}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -601,9 +764,9 @@ export default function AdminCommunicationScreen() {
     </View>
   );
 
-  // Thread List
+  // Thread List - Shows real support chats
   const renderThreadList = () => (
-    <View style={[styles.threadListContainer, isDesktop && selectedThread && styles.threadListContainerSplit]}>
+    <View style={[styles.threadListContainer, isDesktop && selectedChat && styles.threadListContainerSplit]}>
       {/* Search and Filters */}
       <View style={styles.threadFilters}>
         <View style={styles.searchContainer}>
@@ -617,7 +780,7 @@ export default function AdminCommunicationScreen() {
           />
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statusFilters}>
-          {['all', 'active', 'pending', 'resolved'].map(status => (
+          {['all', 'active', 'resolved'].map(status => (
             <TouchableOpacity
               key={status}
               style={[styles.statusChip, statusFilter === status && styles.statusChipActive]}
@@ -633,55 +796,250 @@ export default function AdminCommunicationScreen() {
 
       {/* Thread List */}
       <ScrollView style={styles.threadList}>
-        {filteredThreads.map(thread => (
-          <TouchableOpacity
-            key={thread.coupleId}
-            style={[
-              styles.threadItem,
-              selectedThread?.coupleId === thread.coupleId && styles.threadItemActive,
-            ]}
-            onPress={() => handleThreadClick(thread)}
-          >
-            <View style={styles.threadAvatar}>
-              <Text style={styles.threadAvatarText}>
-                {thread.coupleId.split('_')[1]}
-              </Text>
-              {thread.unreadCount > 0 && (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>{thread.unreadCount}</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.threadContent}>
-              <View style={styles.threadHeader}>
-                <Text style={styles.threadName}>{thread.coupleName}</Text>
-                <Text style={styles.threadTime}>{formatTime(thread.lastMessageTime)}</Text>
+        {isLoadingChats ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading chats...</Text>
+          </View>
+        ) : filteredSupportChats.length === 0 ? (
+          <View style={styles.emptyThreads}>
+            <Ionicons name="chatbubbles-outline" size={48} color={COLORS.textMuted} />
+            <Text style={styles.emptyThreadsTitle}>No conversations yet</Text>
+            <Text style={styles.emptyThreadsText}>
+              User chats will appear here when they send messages
+            </Text>
+          </View>
+        ) : (
+          filteredSupportChats.map(chat => (
+            <TouchableOpacity
+              key={chat.id}
+              style={[
+                styles.threadItem,
+                selectedChat?.id === chat.id && styles.threadItemActive,
+              ]}
+              onPress={() => handleSupportChatClick(chat)}
+            >
+              <View style={styles.threadAvatar}>
+                <Text style={styles.threadAvatarText}>
+                  {chat.coupleId.split('_')[1] || '?'}
+                </Text>
+                {(chat.unreadByAdmin || 0) > 0 && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>{chat.unreadByAdmin}</Text>
+                  </View>
+                )}
               </View>
-              <View style={styles.threadPreview}>
-                <Text style={styles.threadCoupleId}>{thread.coupleId}</Text>
-                <View style={[
-                  styles.threadStatus, 
-                  thread.status === 'active' ? styles.statusactive : 
-                  thread.status === 'pending' ? styles.statuspending : 
-                  styles.statusresolved
-                ]}>
-                  <Text style={styles.threadStatusText}>
-                    {thread.status.charAt(0).toUpperCase() + thread.status.slice(1)}
+              <View style={styles.threadContent}>
+                <View style={styles.threadHeader}>
+                  <Text style={styles.threadName}>{chat.odAaByuserName}</Text>
+                  <Text style={styles.threadTime}>
+                    {chat.lastMessageAt ? formatTime(chat.lastMessageAt.toDate ? chat.lastMessageAt.toDate() : new Date(chat.lastMessageAt as any)) : ''}
                   </Text>
                 </View>
+                <View style={styles.threadPreview}>
+                  <Text style={styles.threadCoupleId}>
+                    {chat.coupleId} ({chat.gender === 'male' ? 'M' : 'F'})
+                  </Text>
+                  <View style={[
+                    styles.threadStatus, 
+                    chat.status === 'active' ? styles.statusactive : styles.statusresolved
+                  ]}>
+                    <Text style={styles.threadStatusText}>
+                      {chat.status.charAt(0).toUpperCase() + chat.status.slice(1)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.threadLastMessageRow}>
+                  {chat.typing?.user && (
+                    <Text style={styles.typingIndicator}>typing...</Text>
+                  )}
+                  {!chat.typing?.user && (
+                    <Text style={styles.threadLastMessage} numberOfLines={1}>
+                      {chat.lastMessageBy === 'admin' ? 'You: ' : ''}{chat.lastMessage || 'No messages yet'}
+                    </Text>
+                  )}
+                </View>
               </View>
-              <Text style={styles.threadLastMessage} numberOfLines={1}>
-                {thread.lastMessage}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
     </View>
   );
 
-  // Chat Panel (Desktop)
+  // Chat Panel (Desktop) - Shows real messages
   const renderChatPanel = () => {
+    if (!selectedChat) {
+      return (
+        <View style={styles.chatPanelEmpty}>
+          <Ionicons name="chatbubbles-outline" size={64} color={COLORS.textMuted} />
+          <Text style={styles.chatPanelEmptyTitle}>Select a conversation</Text>
+          <Text style={styles.chatPanelEmptyText}>
+            Choose a thread from the list to view messages
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.chatPanel}>
+        {/* Chat Header */}
+        <View style={styles.chatHeader}>
+          <View style={styles.chatHeaderLeft}>
+            <View style={styles.chatAvatar}>
+              <Text style={styles.chatAvatarText}>
+                {selectedChat.coupleId.split('_')[1] || '?'}
+              </Text>
+            </View>
+            <View>
+              <Text style={styles.chatHeaderName}>{selectedChat.odAaByuserName}</Text>
+              <Text style={styles.chatHeaderId}>
+                {selectedChat.coupleId} ({selectedChat.gender === 'male' ? 'Male' : 'Female'})
+              </Text>
+            </View>
+          </View>
+          <View style={styles.chatHeaderActions}>
+            <TouchableOpacity 
+              style={[
+                styles.chatAction, 
+                selectedChat.status === 'resolved' ? styles.reopenButton : styles.resolveButton
+              ]}
+              onPress={() => handleToggleChatStatus(selectedChat)}
+            >
+              <Ionicons 
+                name={selectedChat.status === 'resolved' ? 'refresh' : 'checkmark-circle'} 
+                size={18} 
+                color={selectedChat.status === 'resolved' ? COLORS.info : COLORS.success} 
+              />
+              <Text style={[
+                styles.chatActionText,
+                { color: selectedChat.status === 'resolved' ? COLORS.info : COLORS.success }
+              ]}>
+                {selectedChat.status === 'resolved' ? 'Reopen' : 'Resolve'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Messages */}
+        <ScrollView 
+          ref={messagesScrollRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+          onContentSizeChange={() => messagesScrollRef.current?.scrollToEnd({ animated: false })}
+        >
+          {isLoadingMessages ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+            </View>
+          ) : chatMessages.length === 0 ? (
+            <View style={styles.emptyMessages}>
+              <Ionicons name="chatbubble-outline" size={40} color={COLORS.textMuted} />
+              <Text style={styles.emptyMessagesText}>No messages yet</Text>
+            </View>
+          ) : (
+            chatMessages.map(message => (
+              <TouchableOpacity
+                key={message.id}
+                style={[
+                  styles.messageItem,
+                  message.senderType === 'admin' ? styles.messageItemAdmin : styles.messageItemUser,
+                ]}
+                onLongPress={() => message.senderType === 'admin' && handleDeleteSupportMessage(message.id)}
+                activeOpacity={0.8}
+              >
+                <View
+                  style={[
+                    styles.messageBubble,
+                    message.senderType === 'admin' ? styles.messageBubbleAdmin : styles.messageBubbleUser,
+                  ]}
+                >
+                  {message.senderType !== 'admin' && (
+                    <Text style={styles.messageSender}>
+                      {message.senderName}
+                    </Text>
+                  )}
+                  <Text
+                    style={[
+                      styles.messageText,
+                      message.senderType === 'admin' && styles.messageTextAdmin,
+                    ]}
+                  >
+                    {message.message}
+                  </Text>
+                  <View style={styles.messageFooter}>
+                    <Text style={[
+                      styles.messageTime,
+                      message.senderType === 'admin' && styles.messageTimeAdmin
+                    ]}>
+                      {formatMessageTime(message.createdAt)}
+                    </Text>
+                    {message.senderType === 'admin' && (
+                      <View style={styles.ticksContainer}>
+                        <Ionicons 
+                          name="checkmark" 
+                          size={12} 
+                          color={message.readAt ? '#34b7f1' : '#8696a0'} 
+                        />
+                        <Ionicons 
+                          name="checkmark" 
+                          size={12} 
+                          color={message.readAt ? '#34b7f1' : '#8696a0'} 
+                          style={{ marginLeft: -6 }}
+                        />
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+          
+          {/* Typing indicator */}
+          {selectedChat.typing?.user && (
+            <View style={[styles.messageItem, styles.messageItemUser]}>
+              <View style={[styles.messageBubble, styles.messageBubbleUser, styles.typingBubble]}>
+                <View style={styles.typingDots}>
+                  <View style={[styles.typingDot, styles.typingDot1]} />
+                  <View style={[styles.typingDot, styles.typingDot2]} />
+                  <View style={[styles.typingDot, styles.typingDot3]} />
+                </View>
+              </View>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Input Area */}
+        <View style={styles.chatInputArea}>
+          <View style={styles.chatInputWrapper}>
+            <TextInput
+              style={styles.chatInput}
+              value={newMessage}
+              onChangeText={handleAdminTyping}
+              placeholder="Type a message..."
+              placeholderTextColor={COLORS.textMuted}
+              multiline
+              maxLength={1000}
+            />
+          </View>
+          <TouchableOpacity
+            style={[styles.sendButton, (!newMessage.trim() || isSendingMessage) && styles.sendButtonDisabled]}
+            onPress={handleSendSupportMessage}
+            disabled={!newMessage.trim() || isSendingMessage}
+          >
+            {isSendingMessage ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="send" size={20} color="#fff" />
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  // Legacy Chat Panel (keeping for reference)
+  const renderLegacyChatPanel = () => {
     if (!selectedThread) {
       return (
         <View style={styles.chatPanelEmpty}>
@@ -2824,5 +3182,118 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+
+  // Additional chat styles
+  emptyThreads: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  emptyThreadsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginTop: 16,
+  },
+  emptyThreadsText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  threadLastMessageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typingIndicator: {
+    fontSize: 13,
+    color: COLORS.success,
+    fontStyle: 'italic',
+  },
+  resolveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.success + '15',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  reopenButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.info + '15',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  chatActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  messagesContent: {
+    paddingBottom: 20,
+  },
+  emptyMessages: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyMessagesText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    marginTop: 12,
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 4,
+    gap: 4,
+  },
+  ticksContainer: {
+    flexDirection: 'row',
+  },
+  typingBubble: {
+    paddingVertical: 14,
+  },
+  typingDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  typingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.textMuted,
+  },
+  typingDot1: {
+    opacity: 0.4,
+  },
+  typingDot2: {
+    opacity: 0.6,
+  },
+  typingDot3: {
+    opacity: 0.8,
+  },
+  chatInputArea: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    gap: 10,
+  },
+  chatInputWrapper: {
+    flex: 1,
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    maxHeight: 120,
   },
 });

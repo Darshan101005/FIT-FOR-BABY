@@ -137,6 +137,22 @@ service cloud.firestore {
       allow delete: if true; // Admins can delete broadcasts
     }
     
+    // Support Chats (real-time chat between users and admins)
+    match /chats/{chatId} {
+      allow read: if true; // Users can read their chat, admins can read all
+      allow create: if true; // Users can create their chat
+      allow update: if true; // Both users and admins can update (typing, status)
+      allow delete: if true; // Admins can delete if needed
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read: if true; // Users and admins can read messages
+        allow create: if true; // Both can send messages
+        allow update: if true; // For marking as read, soft delete
+        allow delete: if true; // For message cleanup
+      }
+    }
+    
     // Couples collection (user onboarding)
     match /couples/{coupleId} {
       // Admins can read, create, update couples

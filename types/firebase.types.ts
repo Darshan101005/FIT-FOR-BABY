@@ -717,6 +717,7 @@ export const COLLECTIONS = {
   SETTINGS: 'settings',
   FAQS: 'faqs',
   BROADCASTS: 'broadcasts',
+  CHATS: 'chats',
   
   // Subcollections (under users)
   STEPS: 'steps',
@@ -729,6 +730,9 @@ export const COLLECTIONS = {
   // Subcollections (under couples)
   DOCTOR_VISITS: 'doctorVisits',
   NURSING_VISITS: 'nursingVisits',
+  
+  // Subcollections (under chats)
+  CHAT_MESSAGES: 'messages',
 } as const;
 
 // ============================================
@@ -846,4 +850,73 @@ export const STORAGE_PATHS = {
   EXERCISE_PROOFS: 'exerciseProofs',   // /exerciseProofs/{userId}/{filename}
   MESSAGE_ATTACHMENTS: 'messageAttachments', // /messageAttachments/{conversationId}/{filename}
   ADMIN_UPLOADS: 'adminUploads',       // /adminUploads/{filename}
+  CHAT_ATTACHMENTS: 'chatAttachments', // /chatAttachments/{chatId}/{filename}
 } as const;
+
+// ============================================
+// SUPPORT CHAT SYSTEM
+// Path: /chats/{odAaByuserId}
+// ============================================
+
+export type ChatStatus = 'active' | 'resolved';
+export type MessageSenderType = 'user' | 'admin';
+export type ChatMessageType = 'text' | 'image' | 'file';
+
+export interface Chat {
+  id: string; // Same as odAaByuserId (odAaBycouple ID + gender, e.g., C_001_M)
+  
+  // User info
+  odAaByuserId: string; // e.g., C_001_M
+  odAaByuserName: string;
+  coupleId: string;
+  gender: 'male' | 'female';
+  
+  // Chat status
+  status: ChatStatus;
+  
+  // Last message preview
+  lastMessage: string;
+  lastMessageAt: Timestamp;
+  lastMessageBy: MessageSenderType;
+  
+  // Unread counts
+  unreadByUser: number;
+  unreadByAdmin: number;
+  
+  // Typing indicators
+  typing: {
+    user: boolean;
+    admin: boolean;
+  };
+  
+  // Timestamps
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface ChatMessage {
+  id: string;
+  chatId: string;
+  
+  // Sender info
+  senderId: string;
+  senderName: string;
+  senderType: MessageSenderType;
+  
+  // Content
+  message: string;
+  messageType: ChatMessageType;
+  mediaUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  
+  // Read status (for WhatsApp-style ticks)
+  readAt?: Timestamp; // null = sent, has value = read (blue ticks)
+  
+  // Timestamps
+  createdAt: Timestamp;
+  
+  // Soft delete (either party can delete)
+  deletedByUser?: boolean;
+  deletedByAdmin?: boolean;
+}

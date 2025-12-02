@@ -2,7 +2,7 @@
 // FIRESTORE SERVICE - CRUD OPERATIONS
 // ============================================
 
-import { Admin, Appointment, AppointmentStatus, Broadcast, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
+import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
 import {
     addDoc,
     collection,
@@ -2528,6 +2528,352 @@ export const broadcastService = {
 };
 
 // ============================================
+// SUPPORT CHAT SERVICE
+// Real-time chat between users and admins
+// ============================================
+
+export const chatService = {
+  // Create or get existing chat for a user
+  async getOrCreate(userId: string, userName: string, coupleId: string, gender: 'male' | 'female'): Promise<Chat> {
+    try {
+      const chatRef = doc(db, COLLECTIONS.CHATS, userId);
+      const chatSnapshot = await getDoc(chatRef);
+      
+      if (chatSnapshot.exists()) {
+        return { id: chatSnapshot.id, ...chatSnapshot.data() } as Chat;
+      }
+      
+      // Create new chat
+      const newChat: Omit<Chat, 'id'> = {
+        odAaByuserId: userId,
+        odAaByuserName: userName,
+        coupleId,
+        gender,
+        status: 'active',
+        lastMessage: '',
+        lastMessageAt: now(),
+        lastMessageBy: 'user',
+        unreadByUser: 0,
+        unreadByAdmin: 0,
+        typing: {
+          user: false,
+          admin: false,
+        },
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      
+      await setDoc(chatRef, newChat);
+      return { id: userId, ...newChat };
+    } catch (error) {
+      console.error('Error getting or creating chat:', error);
+      throw error;
+    }
+  },
+
+  // Get a chat by user ID
+  async get(userId: string): Promise<Chat | null> {
+    try {
+      const chatRef = doc(db, COLLECTIONS.CHATS, userId);
+      const snapshot = await getDoc(chatRef);
+      return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } as Chat : null;
+    } catch (error) {
+      console.error('Error getting chat:', error);
+      return null;
+    }
+  },
+
+  // Get all chats (for admin support inbox)
+  async getAll(): Promise<Chat[]> {
+    try {
+      const chatsRef = collection(db, COLLECTIONS.CHATS);
+      const q = query(chatsRef, orderBy('lastMessageAt', 'desc'));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chat));
+    } catch (error) {
+      console.error('Error getting all chats:', error);
+      return [];
+    }
+  },
+
+  // Subscribe to all chats (for admin - real-time)
+  subscribeToAll(callback: (chats: Chat[]) => void): Unsubscribe {
+    const chatsRef = collection(db, COLLECTIONS.CHATS);
+    const q = query(chatsRef, orderBy('lastMessageAt', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chat)));
+    }, (error) => {
+      console.error('Chat subscription error:', error);
+      callback([]);
+    });
+  },
+
+  // Subscribe to a single chat (for real-time updates)
+  subscribe(userId: string, callback: (chat: Chat | null) => void): Unsubscribe {
+    const chatRef = doc(db, COLLECTIONS.CHATS, userId);
+    return onSnapshot(chatRef, (snapshot) => {
+      callback(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } as Chat : null);
+    }, (error) => {
+      console.error('Chat subscription error:', error);
+      callback(null);
+    });
+  },
+
+  // Update chat status (active/resolved)
+  async updateStatus(userId: string, status: 'active' | 'resolved'): Promise<void> {
+    try {
+      const chatRef = doc(db, COLLECTIONS.CHATS, userId);
+      await updateDoc(chatRef, {
+        status,
+        updatedAt: now(),
+      });
+    } catch (error) {
+      console.error('Error updating chat status:', error);
+      throw error;
+    }
+  },
+
+  // Set typing indicator
+  async setTyping(userId: string, isTyping: boolean, senderType: 'user' | 'admin'): Promise<void> {
+    try {
+      const chatRef = doc(db, COLLECTIONS.CHATS, userId);
+      await updateDoc(chatRef, {
+        [`typing.${senderType}`]: isTyping,
+      });
+    } catch (error) {
+      console.error('Error setting typing indicator:', error);
+    }
+  },
+
+  // Mark messages as read (by user or admin)
+  async markAsRead(userId: string, readerType: 'user' | 'admin'): Promise<void> {
+    try {
+      const chatRef = doc(db, COLLECTIONS.CHATS, userId);
+      const field = readerType === 'user' ? 'unreadByUser' : 'unreadByAdmin';
+      await updateDoc(chatRef, {
+        [field]: 0,
+        updatedAt: now(),
+      });
+      
+      // Also mark individual messages as read
+      const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
+      const otherType = readerType === 'user' ? 'admin' : 'user';
+      const q = query(messagesRef, where('senderType', '==', otherType), where('readAt', '==', null));
+      const snapshot = await getDocs(q);
+      
+      const batch = writeBatch(db);
+      snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { readAt: now() });
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  },
+
+  // Delete chat (and all messages) - cleanup after 7 days
+  async delete(userId: string): Promise<void> {
+    try {
+      // First delete all messages in the subcollection
+      const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
+      const snapshot = await getDocs(messagesRef);
+      
+      const batch = writeBatch(db);
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      
+      // Then delete the chat document
+      const chatRef = doc(db, COLLECTIONS.CHATS, userId);
+      await deleteDoc(chatRef);
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      throw error;
+    }
+  },
+
+  // ============================================
+  // MESSAGE OPERATIONS
+  // ============================================
+
+  // Send a message
+  async sendMessage(
+    userId: string,
+    data: {
+      senderId: string;
+      senderName: string;
+      senderType: 'user' | 'admin';
+      message: string;
+      messageType?: 'text' | 'image' | 'file';
+      mediaUrl?: string;
+      fileName?: string;
+      fileSize?: number;
+    }
+  ): Promise<string> {
+    try {
+      const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
+      const docRef = await addDoc(messagesRef, {
+        chatId: userId,
+        senderId: data.senderId,
+        senderName: data.senderName,
+        senderType: data.senderType,
+        message: data.message,
+        messageType: data.messageType || 'text',
+        mediaUrl: data.mediaUrl || null,
+        fileName: data.fileName || null,
+        fileSize: data.fileSize || null,
+        readAt: null,
+        createdAt: now(),
+        deletedByUser: false,
+        deletedByAdmin: false,
+      });
+      
+      // Update chat document with last message info
+      const chatRef = doc(db, COLLECTIONS.CHATS, userId);
+      const unreadField = data.senderType === 'user' ? 'unreadByAdmin' : 'unreadByUser';
+      
+      // Get current unread count and increment
+      const chatSnapshot = await getDoc(chatRef);
+      const currentUnread = chatSnapshot.exists() ? (chatSnapshot.data()[unreadField] || 0) : 0;
+      
+      await updateDoc(chatRef, {
+        lastMessage: data.message.substring(0, 100),
+        lastMessageAt: now(),
+        lastMessageBy: data.senderType,
+        [unreadField]: currentUnread + 1,
+        updatedAt: now(),
+      });
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error sending message:', error);
+      throw error;
+    }
+  },
+
+  // Get messages for a chat (with 7-day filter)
+  async getMessages(userId: string, limitCount: number = 100): Promise<ChatMessage[]> {
+    try {
+      const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const q = query(
+        messagesRef,
+        orderBy('createdAt', 'asc'),
+        limit(limitCount)
+      );
+      const snapshot = await getDocs(q);
+      
+      // Filter for messages within last 7 days
+      const messages = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage))
+        .filter(msg => {
+          const createdAt = msg.createdAt?.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt as any);
+          return createdAt >= sevenDaysAgo;
+        });
+      
+      return messages;
+    } catch (error) {
+      console.error('Error getting messages:', error);
+      return [];
+    }
+  },
+
+  // Subscribe to messages (real-time)
+  subscribeToMessages(userId: string, callback: (messages: ChatMessage[]) => void): Unsubscribe {
+    const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
+    const q = query(messagesRef, orderBy('createdAt', 'asc'), limit(200));
+    
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    return onSnapshot(q, (snapshot) => {
+      const messages = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage))
+        .filter(msg => {
+          const createdAt = msg.createdAt?.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt as any);
+          return createdAt >= sevenDaysAgo;
+        });
+      callback(messages);
+    }, (error) => {
+      console.error('Messages subscription error:', error);
+      callback([]);
+    });
+  },
+
+  // Delete a message (soft delete for the specific user)
+  async deleteMessage(userId: string, messageId: string, deletedBy: 'user' | 'admin'): Promise<void> {
+    try {
+      const messageRef = doc(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES, messageId);
+      const field = deletedBy === 'user' ? 'deletedByUser' : 'deletedByAdmin';
+      await updateDoc(messageRef, {
+        [field]: true,
+      });
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      throw error;
+    }
+  },
+
+  // Hard delete a message (permanently remove)
+  async hardDeleteMessage(userId: string, messageId: string): Promise<void> {
+    try {
+      const messageRef = doc(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES, messageId);
+      await deleteDoc(messageRef);
+    } catch (error) {
+      console.error('Error hard deleting message:', error);
+      throw error;
+    }
+  },
+
+  // Cleanup old messages (delete messages older than 7 days)
+  // This should be called periodically or on app open
+  async cleanupOldMessages(userId: string): Promise<number> {
+    try {
+      const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const snapshot = await getDocs(messagesRef);
+      
+      let deletedCount = 0;
+      const batch = writeBatch(db);
+      
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+        if (createdAt < sevenDaysAgo) {
+          batch.delete(doc.ref);
+          deletedCount++;
+        }
+      });
+      
+      if (deletedCount > 0) {
+        await batch.commit();
+      }
+      
+      return deletedCount;
+    } catch (error) {
+      console.error('Error cleaning up old messages:', error);
+      return 0;
+    }
+  },
+
+  // Get total unread count for admin (across all chats)
+  async getTotalUnreadForAdmin(): Promise<number> {
+    try {
+      const chats = await this.getAll();
+      return chats.reduce((total, chat) => total + (chat.unreadByAdmin || 0), 0);
+    } catch (error) {
+      console.error('Error getting total unread count:', error);
+      return 0;
+    }
+  },
+};
+
+// ============================================
 // EXPORT ALL SERVICES
 // ============================================
 
@@ -2550,6 +2896,7 @@ export const firestoreServices = {
   doctorVisit: doctorVisitService,
   nursingVisit: nursingVisitService,
   broadcast: broadcastService,
+  chat: chatService,
 };
 
 export default firestoreServices;

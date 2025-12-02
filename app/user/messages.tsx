@@ -311,8 +311,11 @@ export default function MessagesScreen() {
         )}
       </View>
       {view === 'threads' && (
-        <TouchableOpacity style={styles.newChatButton}>
-          <Ionicons name="create-outline" size={24} color="#006dab" />
+        <TouchableOpacity 
+          style={styles.chatBotButton}
+          onPress={() => router.push('/user/chat')}
+        >
+          <Ionicons name="chatbubble-ellipses" size={22} color="#fff" />
         </TouchableOpacity>
       )}
     </View>
@@ -753,6 +756,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  chatBotButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#006dab',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#006dab',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   scrollContent: { 
     flexGrow: 1, 

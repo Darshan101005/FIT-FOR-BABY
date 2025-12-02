@@ -12,6 +12,7 @@ export default function UserLayout() {
       <Stack.Screen name="appointments" />
       <Stack.Screen name="progress" />
       <Stack.Screen name="messages" />
+      <Stack.Screen name="chat" />
       <Stack.Screen name="profile" />
       <Stack.Screen name="personal-info" />
       <Stack.Screen name="device-management" />
