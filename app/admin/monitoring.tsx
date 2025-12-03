@@ -1,6 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -98,6 +99,8 @@ export default function AdminMonitoringScreen() {
   const isTablet = screenWidth >= 768 && screenWidth < 1024;
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'complete' | 'partial' | 'missed'>('all');
   const [selectedGroup, setSelectedGroup] = useState<'all' | 'study' | 'control'>('all');
@@ -392,13 +395,15 @@ export default function AdminMonitoringScreen() {
       <View style={[styles.filtersContainer, isMobile && styles.filtersContainerMobile]}>
         <View style={styles.datePickerContainer}>
           <Ionicons name="calendar" size={18} color={COLORS.primary} />
-          <TextInput
-            style={styles.dateInput}
-            value={selectedDate}
-            onChangeText={setSelectedDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={COLORS.textMuted}
-          />
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => {
+              setTempDate(selectedDate);
+              setShowDatePicker(true);
+            }}
+          >
+            <Text style={styles.dateInput}>{selectedDate}</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.searchContainer}>
@@ -428,6 +433,68 @@ export default function AdminMonitoringScreen() {
       </View>
     </View>
   );
+
+  // Date picker modal / component
+  const renderDatePicker = () => {
+    if (!showDatePicker) return null;
+
+    if (isWeb) {
+      return (
+        <Modal
+          visible={showDatePicker}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { padding: 16 }]}>
+              <Text style={styles.modalTitle}>Select Date</Text>
+              <View style={{ marginTop: 12 }}>
+                <TextInput
+                  style={[styles.dateInput, { borderWidth: 1, borderColor: COLORS.borderLight, padding: 8, borderRadius: 8 }]}
+                  value={tempDate || ''}
+                  onChangeText={setTempDate}
+                  placeholder="YYYY-MM-DD"
+                />
+              </View>
+              <View style={styles.modalFooter}>
+                <TouchableOpacity style={styles.modalSecondaryButton} onPress={() => setShowDatePicker(false)}>
+                  <Text style={styles.modalSecondaryButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalPrimaryButton}
+                  onPress={() => {
+                    if (tempDate && /^\d{4}-\d{2}-\d{2}$/.test(tempDate)) {
+                      setSelectedDate(tempDate);
+                    }
+                    setShowDatePicker(false);
+                  }}
+                >
+                  <Text style={styles.modalPrimaryButtonText}>Apply</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      );
+    }
+
+    // Native platforms - show DateTimePicker inline (it will open native dialog on Android/iOS)
+    return (
+      <DateTimePicker
+        value={new Date(selectedDate)}
+        mode="date"
+        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+        maximumDate={new Date()}
+        onChange={(event: any, date?: Date | undefined) => {
+          if (date) {
+            setSelectedDate(date.toISOString().split('T')[0]);
+          }
+          setShowDatePicker(false);
+        }}
+      />
+    );
+  };
 
   // Summary Stats Cards
   const renderSummaryStats = () => (
@@ -1055,7 +1122,8 @@ export default function AdminMonitoringScreen() {
 
   return (
     <View style={styles.container}>
-      {renderHeader()}
+          {renderHeader()}
+          {renderDatePicker()}
 
       {isLoading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>

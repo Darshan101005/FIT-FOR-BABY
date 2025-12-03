@@ -1,5 +1,5 @@
-import { coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService } from '@/services/firestore.service';
-import { Couple } from '@/types/firebase.types';
+import { adminService, chatService, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService } from '@/services/firestore.service';
+import { Admin, Chat, Couple } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,10 +7,12 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions
@@ -172,6 +174,20 @@ export default function AdminHomeScreen() {
     weightCompliance: 0,
   });
   const [logsNotCompletedCouples, setLogsNotCompletedCouples] = useState<CoupleWithMissingLogs[]>([]);
+
+  // Search state
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ couples: Couple[]; admins: Admin[] }>({ couples: [], admins: [] });
+  const [isSearching, setIsSearching] = useState(false);
+  const [allCouples, setAllCouples] = useState<Couple[]>([]);
+  const [allAdmins, setAllAdmins] = useState<Admin[]>([]);
+
+  // Notification state
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [recentChats, setRecentChats] = useState<Chat[]>([]);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
+  const [totalUnreadCount, setTotalUnreadCount] = useState(0);
 
   // Format date as YYYY-MM-DD
   const formatDate = (date: Date): string => {
@@ -340,6 +356,155 @@ export default function AdminHomeScreen() {
     router.push(route as any);
   };
 
+  // Load search data (couples and admins)
+  const loadSearchData = async () => {
+    try {
+      const [couples, admins] = await Promise.all([
+        coupleService.getAll() as Promise<Couple[]>,
+        adminService.getAll() as Promise<Admin[]>,
+      ]);
+      setAllCouples(couples);
+      setAllAdmins(admins);
+    } catch (error) {
+      console.error('Error loading search data:', error);
+    }
+  };
+
+  // Handle search
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (!query.trim()) {
+      setSearchResults({ couples: [], admins: [] });
+      return;
+    }
+
+    const lowerQuery = query.toLowerCase().trim();
+
+    // Search couples
+    const matchedCouples = allCouples.filter((couple) => {
+      const maleName = couple.male?.name?.toLowerCase() || '';
+      const femaleName = couple.female?.name?.toLowerCase() || '';
+      const coupleId = couple.coupleId?.toLowerCase() || '';
+      const malePhone = couple.male?.phone?.toLowerCase() || '';
+      const femalePhone = couple.female?.phone?.toLowerCase() || '';
+      return (
+        maleName.includes(lowerQuery) ||
+        femaleName.includes(lowerQuery) ||
+        coupleId.includes(lowerQuery) ||
+        malePhone.includes(lowerQuery) ||
+        femalePhone.includes(lowerQuery)
+      );
+    });
+
+    // Search admins
+    const matchedAdmins = allAdmins.filter((admin) => {
+      const displayName = admin.displayName?.toLowerCase() || '';
+      const firstName = admin.firstName?.toLowerCase() || '';
+      const lastName = admin.lastName?.toLowerCase() || '';
+      const email = admin.email?.toLowerCase() || '';
+      const phone = admin.phone?.toLowerCase() || '';
+      return (
+        displayName.includes(lowerQuery) ||
+        firstName.includes(lowerQuery) ||
+        lastName.includes(lowerQuery) ||
+        email.includes(lowerQuery) ||
+        phone.includes(lowerQuery)
+      );
+    });
+
+    setSearchResults({ couples: matchedCouples.slice(0, 10), admins: matchedAdmins.slice(0, 10) });
+  };
+
+  // Handle search result click
+  const handleSearchResultClick = (type: 'couple' | 'admin', id: string) => {
+    setShowSearchModal(false);
+    setSearchQuery('');
+    setSearchResults({ couples: [], admins: [] });
+    if (type === 'couple') {
+      router.push(`/admin/user-dashboard?odlcouple=${id}` as any);
+    } else {
+      router.push('/admin/manage-admins' as any);
+    }
+  };
+
+  // Open search modal
+  const openSearchModal = async () => {
+    setShowSearchModal(true);
+    if (allCouples.length === 0 || allAdmins.length === 0) {
+      setIsSearching(true);
+      await loadSearchData();
+      setIsSearching(false);
+    }
+  };
+
+  // Load notifications (recent chats with unread messages)
+  const loadNotifications = async () => {
+    setIsLoadingNotifications(true);
+    try {
+      const chats = await chatService.getAll();
+      // Sort by last message time and filter to show recent ones with activity
+      const recentWithMessages = chats
+        .filter(chat => chat.lastMessage && chat.lastMessage.trim() !== '')
+        .slice(0, 10); // Show top 10 recent
+      setRecentChats(recentWithMessages);
+      
+      // Calculate total unread count
+      const unread = chats.reduce((sum, chat) => sum + (chat.unreadByAdmin || 0), 0);
+      setTotalUnreadCount(unread);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    } finally {
+      setIsLoadingNotifications(false);
+    }
+  };
+
+  // Open notification modal
+  const openNotificationModal = async () => {
+    setShowNotificationModal(true);
+    await loadNotifications();
+  };
+
+  // Handle notification click - mark as read and navigate to communication page
+  const handleNotificationClick = async (chat: Chat) => {
+    // Mark messages as read by admin
+    if (chat.unreadByAdmin > 0) {
+      try {
+        await chatService.markAsRead(chat.id, 'admin');
+        // Update local state to remove unread count
+        setRecentChats(prev => 
+          prev.map(c => c.id === chat.id ? { ...c, unreadByAdmin: 0 } : c)
+        );
+        setTotalUnreadCount(prev => Math.max(0, prev - chat.unreadByAdmin));
+      } catch (error) {
+        console.error('Error marking messages as read:', error);
+      }
+    }
+    setShowNotificationModal(false);
+    router.push(`/admin/communication?chatId=${chat.id}` as any);
+  };
+
+  // Format time ago
+  const formatTimeAgo = (timestamp: any): string => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+  };
+
+  // Load notifications on mount
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
   // Header Section
   const renderHeader = () => (
     <View style={styles.header}>
@@ -357,12 +522,18 @@ export default function AdminHomeScreen() {
             {!isMobile && <Text style={styles.superAdminButtonText}>Manage Admins</Text>}
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.headerButton}>
+        <TouchableOpacity style={styles.headerButton} onPress={openSearchModal}>
           <Ionicons name="search" size={22} color={COLORS.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerButton}>
+        <TouchableOpacity style={styles.headerButton} onPress={openNotificationModal}>
           <Ionicons name="notifications-outline" size={22} color={COLORS.textSecondary} />
-          <View style={styles.notificationDot} />
+          {totalUnreadCount > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -558,11 +729,7 @@ export default function AdminHomeScreen() {
               <Text style={styles.complianceItemLabel}>Exercise Done</Text>
               <Text style={styles.complianceItemValue}>{dashboardStats.exerciseCompliance}%</Text>
             </View>
-            <View style={styles.complianceItem}>
-              <View style={[styles.complianceIndicator, { backgroundColor: COLORS.accent }]} />
-              <Text style={styles.complianceItemLabel}>Weight Updated</Text>
-              <Text style={styles.complianceItemValue}>{dashboardStats.weightCompliance}%</Text>
-            </View>
+            {/* Weight Updated removed per request */}
           </View>
         </View>
       )}
@@ -648,6 +815,141 @@ export default function AdminHomeScreen() {
     </View>
   );
 
+  // Search Modal
+  const renderSearchModal = () => (
+    <Modal
+      visible={showSearchModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowSearchModal(false)}
+    >
+      <View style={styles.searchModalOverlay}>
+        <View style={[styles.searchModalContent, isMobile && styles.searchModalContentMobile]}>
+          {/* Header */}
+          <View style={styles.searchModalHeader}>
+            <Text style={styles.searchModalTitle}>Search</Text>
+            <TouchableOpacity
+              style={styles.searchModalClose}
+              onPress={() => {
+                setShowSearchModal(false);
+                setSearchQuery('');
+                setSearchResults({ couples: [], admins: [] });
+              }}
+            >
+              <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Input */}
+          <View style={styles.searchInputContainer}>
+            <Ionicons name="search" size={20} color={COLORS.textMuted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search couples or admins..."
+              placeholderTextColor={COLORS.textMuted}
+              value={searchQuery}
+              onChangeText={handleSearch}
+              autoFocus
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults({ couples: [], admins: [] }); }}>
+                <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Results */}
+          <ScrollView style={styles.searchResultsContainer} showsVerticalScrollIndicator={false}>
+            {isSearching ? (
+              <View style={styles.searchLoadingContainer}>
+                <Text style={styles.searchLoadingText}>Loading...</Text>
+              </View>
+            ) : searchQuery.length === 0 ? (
+              <View style={styles.searchEmptyContainer}>
+                <Ionicons name="search-outline" size={48} color={COLORS.textMuted} />
+                <Text style={styles.searchEmptyText}>Search for couples by name, ID, or phone</Text>
+                <Text style={styles.searchEmptyText}>Search for admins by name or email</Text>
+              </View>
+            ) : (
+              <>
+                {/* Couples Results */}
+                {searchResults.couples.length > 0 && (
+                  <View style={styles.searchResultSection}>
+                    <Text style={styles.searchResultSectionTitle}>Couples</Text>
+                    {searchResults.couples.map((couple) => (
+                      <TouchableOpacity
+                        key={couple.coupleId}
+                        style={styles.searchResultItem}
+                        onPress={() => handleSearchResultClick('couple', couple.coupleId)}
+                      >
+                        <View style={styles.searchResultAvatars}>
+                          <View style={[styles.searchResultAvatar, { backgroundColor: COLORS.primary }]}>
+                            <Ionicons name="male" size={14} color="#fff" />
+                          </View>
+                          <View style={[styles.searchResultAvatar, { backgroundColor: '#e91e8c', marginLeft: -8 }]}>
+                            <Ionicons name="female" size={14} color="#fff" />
+                          </View>
+                        </View>
+                        <View style={styles.searchResultInfo}>
+                          <Text style={styles.searchResultName}>
+                            {couple.male?.name || 'N/A'} & {couple.female?.name || 'N/A'}
+                          </Text>
+                          <Text style={styles.searchResultSubtext}>{couple.coupleId}</Text>
+                        </View>
+                        <View style={[styles.searchResultBadge, { backgroundColor: couple.status === 'active' ? COLORS.success + '20' : COLORS.textMuted + '20' }]}>
+                          <Text style={[styles.searchResultBadgeText, { color: couple.status === 'active' ? COLORS.success : COLORS.textMuted }]}>
+                            {couple.status || 'N/A'}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Admins Results */}
+                {searchResults.admins.length > 0 && (
+                  <View style={styles.searchResultSection}>
+                    <Text style={styles.searchResultSectionTitle}>Admins</Text>
+                    {searchResults.admins.map((admin) => (
+                      <TouchableOpacity
+                        key={admin.uid}
+                        style={styles.searchResultItem}
+                        onPress={() => handleSearchResultClick('admin', admin.uid)}
+                      >
+                        <View style={[styles.searchResultAvatar, { backgroundColor: COLORS.accent }]}>
+                          <Ionicons name="shield-checkmark" size={16} color="#fff" />
+                        </View>
+                        <View style={styles.searchResultInfo}>
+                          <Text style={styles.searchResultName}>{admin.displayName || `${admin.firstName} ${admin.lastName}`}</Text>
+                          <Text style={styles.searchResultSubtext}>{admin.email}</Text>
+                        </View>
+                        <View style={[styles.searchResultBadge, { backgroundColor: admin.role === 'owner' ? COLORS.warning + '20' : COLORS.primary + '20' }]}>
+                          <Text style={[styles.searchResultBadgeText, { color: admin.role === 'owner' ? COLORS.warning : COLORS.primary }]}>
+                            {admin.role}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* No Results */}
+                {searchResults.couples.length === 0 && searchResults.admins.length === 0 && (
+                  <View style={styles.searchEmptyContainer}>
+                    <Ionicons name="search-outline" size={48} color={COLORS.textMuted} />
+                    <Text style={styles.searchEmptyText}>No results found for "{searchQuery}"</Text>
+                  </View>
+                )}
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -672,8 +974,117 @@ export default function AdminHomeScreen() {
           </View>
         </View>
       </ScrollView>
+      {renderSearchModal()}
+      {renderNotificationModal()}
     </View>
   );
+
+  // Notification Modal
+  function renderNotificationModal() {
+    return (
+      <Modal
+        visible={showNotificationModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNotificationModal(false)}
+      >
+        <View style={styles.notificationModalOverlay}>
+          <View style={[styles.notificationModalContent, isMobile && styles.notificationModalContentMobile]}>
+            {/* Header */}
+            <View style={styles.notificationModalHeader}>
+              <View style={styles.notificationModalTitleRow}>
+                <Ionicons name="notifications" size={22} color={COLORS.primary} />
+                <Text style={styles.notificationModalTitle}>Notifications</Text>
+                {totalUnreadCount > 0 && (
+                  <View style={styles.notificationHeaderBadge}>
+                    <Text style={styles.notificationHeaderBadgeText}>{totalUnreadCount} new</Text>
+                  </View>
+                )}
+              </View>
+              <TouchableOpacity
+                style={styles.notificationModalClose}
+                onPress={() => setShowNotificationModal(false)}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Content */}
+            <ScrollView style={styles.notificationList} showsVerticalScrollIndicator={false}>
+              {isLoadingNotifications ? (
+                <View style={styles.notificationLoadingContainer}>
+                  <Text style={styles.notificationLoadingText}>Loading...</Text>
+                </View>
+              ) : recentChats.length === 0 ? (
+                <View style={styles.notificationEmptyContainer}>
+                  <Ionicons name="chatbubbles-outline" size={48} color={COLORS.textMuted} />
+                  <Text style={styles.notificationEmptyText}>No recent messages</Text>
+                  <Text style={styles.notificationEmptySubtext}>User messages will appear here</Text>
+                </View>
+              ) : (
+                recentChats.map((chat) => (
+                  <TouchableOpacity
+                    key={chat.id}
+                    style={[
+                      styles.notificationItem,
+                      chat.unreadByAdmin > 0 && styles.notificationItemUnread
+                    ]}
+                    onPress={() => handleNotificationClick(chat)}
+                  >
+                    <View style={[
+                      styles.notificationAvatar,
+                      { backgroundColor: chat.gender === 'male' ? COLORS.primary : '#e91e8c' }
+                    ]}>
+                      <Ionicons
+                        name={chat.gender === 'male' ? 'male' : 'female'}
+                        size={16}
+                        color="#fff"
+                      />
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <View style={styles.notificationTopRow}>
+                        <Text style={styles.notificationName} numberOfLines={1}>
+                          {chat.odAaByuserName || chat.coupleId}
+                        </Text>
+                        <Text style={styles.notificationTime}>
+                          {formatTimeAgo(chat.lastMessageAt)}
+                        </Text>
+                      </View>
+                      <Text style={styles.notificationMessage} numberOfLines={2}>
+                        {chat.lastMessage}
+                      </Text>
+                      {chat.unreadByAdmin > 0 && (
+                        <View style={styles.notificationUnreadBadge}>
+                          <Text style={styles.notificationUnreadText}>
+                            {chat.unreadByAdmin} unread
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+
+            {/* View All Button */}
+            {recentChats.length > 0 && (
+              <TouchableOpacity
+                style={styles.viewAllButton}
+                onPress={() => {
+                  setShowNotificationModal(false);
+                  router.push('/admin/communication' as any);
+                }}
+              >
+                <Text style={styles.viewAllButtonText}>View All Messages</Text>
+                <Ionicons name="arrow-forward" size={18} color={COLORS.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
@@ -1169,5 +1580,341 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+
+  // Search Modal Styles
+  searchModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: isWeb ? 60 : 100,
+    paddingHorizontal: 16,
+  },
+  searchModalContent: {
+    width: '100%',
+    maxWidth: 600,
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  searchModalContentMobile: {
+    maxWidth: '100%',
+    maxHeight: '85%',
+  },
+  searchModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 12,
+  },
+  searchModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  searchModalClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    ...(isWeb && { outlineStyle: 'none' as any }),
+  },
+  searchResultsContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  searchLoadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  searchLoadingText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  searchEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  searchEmptyText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  searchResultSection: {
+    marginBottom: 20,
+  },
+  searchResultSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    marginBottom: 8,
+    gap: 12,
+  },
+  searchResultAvatars: {
+    flexDirection: 'row',
+  },
+  searchResultAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.surface,
+  },
+  searchResultInfo: {
+    flex: 1,
+  },
+  searchResultName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  searchResultSubtext: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  searchResultBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  searchResultBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+
+  // Notification Badge (on bell icon)
+  notificationBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: COLORS.error,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: COLORS.surface,
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+  },
+
+  // Notification Modal Styles
+  notificationModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: isWeb ? 60 : 100,
+    paddingRight: 16,
+  },
+  notificationModalContent: {
+    width: 380,
+    maxWidth: '95%',
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  notificationModalContentMobile: {
+    width: '100%',
+    maxWidth: '100%',
+    marginRight: -16,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  notificationModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  notificationModalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  notificationModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  notificationHeaderBadge: {
+    backgroundColor: COLORS.error + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  notificationHeaderBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.error,
+  },
+  notificationModalClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationList: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  notificationLoadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  notificationLoadingText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  notificationEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  notificationEmptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  notificationEmptySubtext: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 4,
+    gap: 12,
+  },
+  notificationItemUnread: {
+    backgroundColor: COLORS.primary + '08',
+  },
+  notificationAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  notificationName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  notificationTime: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginLeft: 8,
+  },
+  notificationMessage: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  notificationUnreadBadge: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+  },
+  notificationUnreadText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    gap: 8,
+  },
+  viewAllButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
 });

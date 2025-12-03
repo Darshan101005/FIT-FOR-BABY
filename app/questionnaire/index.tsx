@@ -1,9 +1,9 @@
 import {
-    generateQuestionId,
-    getNextPosition,
-    getPreviousPosition,
-    getQuestionByPosition,
-    parseQuestionnaire
+  generateQuestionId,
+  getNextPosition,
+  getPreviousPosition,
+  getQuestionByPosition,
+  parseQuestionnaire
 } from '@/data/questionnaireParser';
 import { questionnaireService } from '@/services/firestore.service';
 import { QuestionnaireProgress as FirestoreQuestionnaireProgress, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireQuestion } from '@/types/firebase.types';
@@ -14,19 +14,19 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -62,6 +62,9 @@ export default function QuestionnaireScreen() {
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  // Track question card positions for scrolling to first unanswered
+  const questionRefs = useRef<Record<string, number>>({});
 
   const isMobile = screenWidth < 768;
 
@@ -575,11 +578,53 @@ export default function QuestionnaireScreen() {
     }
   };
 
+  // Go to previous section (for scroll/form mode)
+  const handleSectionPrevious = async () => {
+    if (viewMode !== 'scroll' || !selectedLanguage) return;
+    
+    // Save the current sectionFormState into answers so it persists
+    const answersToSave: Record<string, QuestionnaireAnswer> = {};
+    for (const item of sectionQuestions) {
+      const stored = sectionFormState[item.questionId];
+      if (stored?.answer !== undefined && (typeof stored.answer === 'string' ? stored.answer.trim() : stored.answer.length > 0)) {
+        answersToSave[item.questionId] = {
+          questionId: item.questionId,
+          partId: item.partId,
+          sectionId: item.sectionId,
+          questionNumber: item.question.number || '',
+          questionText: item.question.question || '',
+          answer: stored.answer,
+          answeredAt: Timestamp.now(),
+          ...(stored.conditional ? { conditionalAnswer: stored.conditional } : {}),
+        };
+      }
+    }
+    // Persist to local state
+    if (Object.keys(answersToSave).length > 0) {
+      setAnswers((prev) => ({ ...prev, ...answersToSave }));
+    }
+
+    // Navigate to previous section
+    const prevPos = getPreviousPosition(
+      selectedLanguage,
+      gender,
+      currentPosition.partIndex,
+      currentPosition.sectionIndex,
+      0 // start of current section
+    );
+
+    if (prevPos) {
+      setCurrentPosition(prevPos);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }
+  };
+
   const handleSectionSubmit = async () => {
     if (viewMode !== 'scroll' || !selectedLanguage) return;
     if (!sectionQuestions.length) return;
 
     const answersToSave: Record<string, QuestionnaireAnswer> = {};
+    let firstInvalidQuestionId: string | null = null;
 
     for (const item of sectionQuestions) {
       const stored = sectionFormState[item.questionId] || {
@@ -589,8 +634,10 @@ export default function QuestionnaireScreen() {
       const answerValue = stored?.answer ?? (isQuestionMultiSelect(item.question) ? [] : '');
       const validation = validateAnswerForQuestion(item.question, answerValue, stored?.conditional);
       if (!validation.valid) {
-        showToast(validation.message || 'Please complete all questions in this section.', 'error');
-        return;
+        if (!firstInvalidQuestionId) {
+          firstInvalidQuestionId = item.questionId;
+        }
+        continue; // Continue to collect all answers, but track first invalid
       }
 
       answersToSave[item.questionId] = {
@@ -603,6 +650,21 @@ export default function QuestionnaireScreen() {
         answeredAt: Timestamp.now(),
         ...(stored?.conditional ? { conditionalAnswer: stored.conditional } : {}),
       };
+    }
+
+    // If there's an unanswered question, scroll to it and show error
+    if (firstInvalidQuestionId) {
+      const yPosition = questionRefs.current[firstInvalidQuestionId];
+      if (yPosition !== undefined && scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({ y: yPosition - 100, animated: true });
+      }
+      showToast(
+        selectedLanguage === 'english'
+          ? 'Please answer all questions before continuing.'
+          : 'தொடர்வதற்கு முன் அனைத்து கேள்விகளுக்கும் பதிலளிக்கவும்.',
+        'error'
+      );
+      return;
     }
 
     setIsSaving(true);
@@ -653,7 +715,6 @@ export default function QuestionnaireScreen() {
   // Go to previous question
   const handlePrevious = () => {
     if (!selectedLanguage) return;
-
     const prevPos = getPreviousPosition(
       selectedLanguage,
       gender,
@@ -663,6 +724,34 @@ export default function QuestionnaireScreen() {
     );
 
     if (prevPos) {
+      // Persist the currently entered answer into local state so it is restored when coming back
+      if (currentQuestionData) {
+        const savedAnswer: QuestionnaireAnswer = {
+          questionId: currentQuestionData.questionId,
+          partId: currentQuestionData.partId,
+          sectionId: currentQuestionData.sectionId,
+          questionNumber: currentQuestionData.question?.number || '',
+          questionText: currentQuestionData.question?.question || '',
+          answer: currentAnswer,
+          answeredAt: Timestamp.now(),
+          ...(conditionalAnswer ? { conditionalAnswer } : {}),
+        };
+
+        setAnswers(prev => ({ ...prev, [currentQuestionData.questionId]: savedAnswer }));
+
+        // Also persist to backend asynchronously (best-effort)
+        (async () => {
+          try {
+            if (coupleId && gender) {
+              await questionnaireService.saveAnswer(coupleId, gender, savedAnswer);
+            }
+          } catch (err) {
+            // non-blocking; local state keeps the value
+            console.error('Failed to persist answer on previous navigation:', err);
+          }
+        })();
+      }
+
       animateTransition(() => {
         setCurrentPosition(prevPos);
         // Load previous answer if exists
@@ -1235,7 +1324,13 @@ export default function QuestionnaireScreen() {
                     ? entry.answer
                     : '';
                   return (
-                    <View key={questionId} style={styles.sectionQuestionCard}>
+                    <View
+                      key={questionId}
+                      style={styles.sectionQuestionCard}
+                      onLayout={(event) => {
+                        questionRefs.current[questionId] = event.nativeEvent.layout.y;
+                      }}
+                    >
                       <Text style={styles.sectionQuestionLabel}>
                         {sectionQuestion.number}. {sectionQuestion.question}
                       </Text>
@@ -1314,22 +1409,38 @@ export default function QuestionnaireScreen() {
                   );
                 })}
 
-                <TouchableOpacity
-                  style={[styles.sectionSubmitButton, isSaving && styles.sectionSubmitButtonDisabled]}
-                  onPress={handleSectionSubmit}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Text style={styles.sectionSubmitText}>
-                        {selectedLanguage === 'english' ? 'Save Section & Continue' : 'பிரிவை சேமித்து தொடரவும்'}
+                <View style={styles.sectionButtonsRow}>
+                  {/* Previous button - only show if not at first section */}
+                  {(currentPosition.partIndex > 0 || currentPosition.sectionIndex > 0) && (
+                    <TouchableOpacity
+                      style={[styles.sectionPreviousButton, { flex: 1 }]}
+                      onPress={handleSectionPrevious}
+                      disabled={isSaving}
+                    >
+                      <Ionicons name="arrow-back" size={18} color="#006dab" />
+                      <Text style={styles.sectionPreviousText}>
+                        {selectedLanguage === 'english' ? 'Previous' : 'முந்தைய'}
                       </Text>
-                      <Ionicons name="arrow-forward" size={18} color="#fff" />
-                    </>
+                    </TouchableOpacity>
                   )}
-                </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.sectionSubmitButton, isSaving && styles.sectionSubmitButtonDisabled, { flex: 1 }]}
+                    onPress={handleSectionSubmit}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Text style={styles.sectionSubmitText}>
+                          {selectedLanguage === 'english' ? 'Next' : 'அடுத்தது'}
+                        </Text>
+                        <Ionicons name="arrow-forward" size={18} color="#fff" />
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </Animated.View>
             )}
           </View>
@@ -1823,6 +1934,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#0f172a',
+  },
+  sectionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+  },
+  sectionPreviousButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#006dab',
+  },
+  sectionPreviousText: {
+    color: '#006dab',
+    fontSize: 16,
+    fontWeight: '600',
   },
   sectionSubmitButton: {
     flexDirection: 'row',
