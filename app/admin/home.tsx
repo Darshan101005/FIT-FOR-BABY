@@ -1,20 +1,71 @@
+import { coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService } from '@/services/firestore.service';
+import { Couple } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Image,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Animated,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
+
+// Shimmer/Skeleton Component
+const SkeletonBox = ({ width, height, style, borderRadius = 8 }: { 
+  width: number | string; 
+  height: number; 
+  style?: any;
+  borderRadius?: number;
+}) => {
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmerAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, []);
+
+  const opacity = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.7],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: COLORS.border,
+          borderRadius,
+          opacity,
+        },
+        style,
+      ]}
+    />
+  );
+};
 
 // Fit for Baby Color Palette
 const COLORS = {
@@ -36,23 +87,29 @@ const COLORS = {
   borderLight: '#f1f5f9',
 };
 
-// Mock data for dashboard
-const dashboardData = {
-  totalCouples: 62,
-  totalUsers: 124,
-  studyGroup: 35,
-  controlGroup: 27,
-  todayCompliance: 78,
-  logsNotCompletedCount: 8,
-};
+// Interface for dashboard statistics
+interface DashboardStats {
+  totalCouples: number;
+  totalUsers: number;
+  activeCouples: number;
+  inactiveCouples: number;
+  todayCompliance: number;
+  logsNotCompletedCount: number;
+  stepsCompliance: number;
+  dietCompliance: number;
+  exerciseCompliance: number;
+  weightCompliance: number;
+}
 
-// Mock logs not completed couples data
-const logsNotCompletedCouples = [
-  { id: 'C_012', maleName: 'Raj Kumar', femaleName: 'Priya Kumar', lastLog: '3 days ago', reason: 'No diet log' },
-  { id: 'C_008', maleName: 'Vikram S', femaleName: 'Lakshmi V', lastLog: '4 days ago', reason: 'Missing steps' },
-  { id: 'C_023', maleName: 'Anand M', femaleName: 'Meena S', lastLog: '2 days ago', reason: 'Incomplete exercise' },
-  { id: 'C_015', maleName: 'Suresh R', femaleName: 'Geetha R', lastLog: '5 days ago', reason: 'No weight update' },
-];
+// Interface for couples with missing logs
+interface CoupleWithMissingLogs {
+  id: string;
+  coupleId: string;
+  maleName: string;
+  femaleName: string;
+  lastLog: string;
+  reason: string;
+}
 
 // Quick Action Cards Data
 const quickActions = [
@@ -101,11 +158,163 @@ export default function AdminHomeScreen() {
   const isTablet = screenWidth >= 768 && screenWidth < 1024;
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [adminName, setAdminName] = useState('Admin');
+  const [isLoading, setIsLoading] = useState(true);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
+    totalCouples: 0,
+    totalUsers: 0,
+    activeCouples: 0,
+    inactiveCouples: 0,
+    todayCompliance: 0,
+    logsNotCompletedCount: 0,
+    stepsCompliance: 0,
+    dietCompliance: 0,
+    exerciseCompliance: 0,
+    weightCompliance: 0,
+  });
+  const [logsNotCompletedCouples, setLogsNotCompletedCouples] = useState<CoupleWithMissingLogs[]>([]);
+
+  // Format date as YYYY-MM-DD
+  const formatDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Load dashboard data
+  const loadDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      const today = formatDate(new Date());
+      
+      // Fetch all couples
+      const couples = await coupleService.getAll() as Couple[];
+      const totalCouples = couples.length;
+      const totalUsers = totalCouples * 2; // Each couple has 2 users
+      const activeCouples = couples.filter(c => c.status === 'active').length;
+      const inactiveCouples = couples.filter(c => c.status === 'inactive').length;
+
+      // Calculate compliance for today
+      let stepsLogged = 0;
+      let dietLogged = 0;
+      let exerciseLogged = 0;
+      let weightLogged = 0;
+      const totalChecks = activeCouples * 2; // Check both male and female for each active couple
+
+      const couplesWithMissingLogs: CoupleWithMissingLogs[] = [];
+
+      // Check logs for each active couple
+      for (const couple of couples.filter(c => c.status === 'active')) {
+        let coupleMissingLogs: string[] = [];
+        
+        // Check both male and female
+        for (const gender of ['male', 'female'] as const) {
+          try {
+            // Check steps
+            const steps = await coupleStepsService.getByDate(couple.coupleId, gender, today);
+            if (steps && steps.length > 0) {
+              stepsLogged++;
+            } else {
+              if (!coupleMissingLogs.includes('steps')) coupleMissingLogs.push('steps');
+            }
+
+            // Check diet/food logs
+            const foodLogs = await coupleFoodLogService.getByDate(couple.coupleId, gender, today);
+            if (foodLogs && foodLogs.length > 0) {
+              dietLogged++;
+            } else {
+              if (!coupleMissingLogs.includes('diet')) coupleMissingLogs.push('diet');
+            }
+
+            // Check exercise
+            const exerciseLogs = await coupleExerciseService.getByDate(couple.coupleId, gender, today);
+            if (exerciseLogs && exerciseLogs.length > 0) {
+              exerciseLogged++;
+            } else {
+              if (!coupleMissingLogs.includes('exercise')) coupleMissingLogs.push('exercise');
+            }
+
+            // Check weight (weekly, so check if logged in last 7 days)
+            const weekAgo = new Date();
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            const weightLogs = await coupleWeightLogService.getByDateRange(
+              couple.coupleId, 
+              gender, 
+              formatDate(weekAgo), 
+              today
+            );
+            if (weightLogs && weightLogs.length > 0) {
+              weightLogged++;
+            } else {
+              if (!coupleMissingLogs.includes('weight')) coupleMissingLogs.push('weight');
+            }
+          } catch (error) {
+            console.error(`Error checking logs for ${couple.coupleId} ${gender}:`, error);
+          }
+        }
+
+        // Add to missing logs list if any logs are missing
+        if (coupleMissingLogs.length > 0) {
+          const reasonMap: Record<string, string> = {
+            'steps': 'Missing steps',
+            'diet': 'No diet log',
+            'exercise': 'No exercise',
+            'weight': 'No weight update',
+          };
+          couplesWithMissingLogs.push({
+            id: couple.coupleId,
+            coupleId: couple.coupleId,
+            maleName: couple.male?.name || 'N/A',
+            femaleName: couple.female?.name || 'N/A',
+            lastLog: 'Today',
+            reason: reasonMap[coupleMissingLogs[0]] || 'Missing logs',
+          });
+        }
+      }
+
+      // Calculate percentages
+      const stepsCompliance = totalChecks > 0 ? Math.round((stepsLogged / totalChecks) * 100) : 0;
+      const dietCompliance = totalChecks > 0 ? Math.round((dietLogged / totalChecks) * 100) : 0;
+      const exerciseCompliance = totalChecks > 0 ? Math.round((exerciseLogged / totalChecks) * 100) : 0;
+      const weightCompliance = totalChecks > 0 ? Math.round((weightLogged / totalChecks) * 100) : 0;
+      
+      // Overall compliance (average of all)
+      const todayCompliance = Math.round((stepsCompliance + dietCompliance + exerciseCompliance + weightCompliance) / 4);
+
+      setDashboardStats({
+        totalCouples,
+        totalUsers,
+        activeCouples,
+        inactiveCouples,
+        todayCompliance,
+        logsNotCompletedCount: couplesWithMissingLogs.length,
+        stepsCompliance,
+        dietCompliance,
+        exerciseCompliance,
+        weightCompliance,
+      });
+
+      // Sort by most missing logs and take top 4
+      setLogsNotCompletedCouples(couplesWithMissingLogs.slice(0, 4));
+
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     checkSuperAdminStatus();
     loadAdminName();
   }, []);
+
+  // Load dashboard data when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, [])
+  );
 
   const checkSuperAdminStatus = async () => {
     try {
@@ -192,47 +401,107 @@ export default function AdminHomeScreen() {
     </View>
   );
 
+  // Skeleton Stat Card
+  const renderSkeletonStatCard = () => (
+    <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
+      <SkeletonBox width={isMobile ? 36 : 44} height={isMobile ? 36 : 44} borderRadius={12} />
+      <SkeletonBox width={60} height={isMobile ? 24 : 32} style={{ marginTop: 12 }} />
+      <SkeletonBox width={80} height={14} style={{ marginTop: 6 }} />
+      <SkeletonBox width={50} height={12} style={{ marginTop: 4 }} />
+    </View>
+  );
+
+  // Skeleton Compliance Card
+  const renderSkeletonComplianceCard = () => (
+    <View style={[styles.complianceCard, isMobile && styles.complianceCardMobile]}>
+      <View style={styles.complianceChart}>
+        <View style={styles.donutContainer}>
+          <SkeletonBox width={isMobile ? 120 : 140} height={isMobile ? 120 : 140} borderRadius={70} />
+        </View>
+      </View>
+      <View style={styles.complianceBreakdown}>
+        {[1, 2, 3, 4].map((i) => (
+          <View key={i} style={styles.complianceItem}>
+            <SkeletonBox width={10} height={10} borderRadius={5} />
+            <SkeletonBox width={100} height={14} style={{ marginLeft: 10, flex: 1 }} />
+            <SkeletonBox width={40} height={14} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+
+  // Skeleton Alert Card
+  const renderSkeletonAlertCard = (index: number) => (
+    <View key={index} style={[styles.alertCard, isMobile && styles.alertCardMobile, index === 3 && styles.alertCardLast]}>
+      <View style={[styles.alertLeft, isMobile && styles.alertLeftMobile]}>
+        <View style={styles.coupleAvatars}>
+          <SkeletonBox width={28} height={28} borderRadius={8} />
+          <SkeletonBox width={28} height={28} borderRadius={8} style={{ marginLeft: -8 }} />
+        </View>
+        <View style={[styles.alertInfo, { flex: 1, minWidth: 0 }]}>
+          <SkeletonBox width={50} height={14} />
+          <SkeletonBox width={120} height={12} style={{ marginTop: 4 }} />
+        </View>
+      </View>
+      <View style={[styles.alertRight, isMobile && styles.alertRightMobile]}>
+        <SkeletonBox width={70} height={20} borderRadius={6} />
+        <SkeletonBox width={50} height={11} style={{ marginTop: 4 }} />
+      </View>
+    </View>
+  );
+
   // Stats Overview Section
   const renderStatsOverview = () => (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Study Overview</Text>
-      <View style={[styles.statsGrid, isMobile && styles.statsGridMobile]}>
-        <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
-          <View style={[styles.statIconBg, { backgroundColor: COLORS.primary + '15' }, isMobile && styles.statIconBgMobile]}>
-            <MaterialCommunityIcons name="account-group" size={isMobile ? 20 : 24} color={COLORS.primary} />
-          </View>
-          <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardData.totalCouples}</Text>
-          <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Total Couples</Text>
-          <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>{dashboardData.totalUsers} Users</Text>
-        </View>
-        
-        <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
-          <View style={[styles.statIconBg, { backgroundColor: COLORS.accent + '25' }, isMobile && styles.statIconBgMobile]}>
-            <MaterialCommunityIcons name="flask" size={isMobile ? 20 : 24} color={COLORS.accentDark} />
-          </View>
-          <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardData.studyGroup}</Text>
-          <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Study Group</Text>
-          <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>{dashboardData.controlGroup} Control</Text>
-        </View>
-        
-        <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
-          <View style={[styles.statIconBg, { backgroundColor: COLORS.success + '15' }, isMobile && styles.statIconBgMobile]}>
-            <Ionicons name="checkmark-circle" size={isMobile ? 20 : 24} color={COLORS.success} />
-          </View>
-          <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardData.todayCompliance}%</Text>
-          <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Today's Compliance</Text>
-          <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>Logs completed</Text>
-        </View>
-        
-        <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
-          <View style={[styles.statIconBg, { backgroundColor: COLORS.error + '15' }, isMobile && styles.statIconBgMobile]}>
-            <Ionicons name="alert-circle" size={isMobile ? 20 : 24} color={COLORS.error} />
-          </View>
-          <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardData.logsNotCompletedCount}</Text>
-          <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Logs Pending</Text>
-          <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>Need attention</Text>
-        </View>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Study Overview</Text>
       </View>
+      {isLoading ? (
+        <View style={[styles.statsGrid, isMobile && styles.statsGridMobile]}>
+          {[1, 2, 3, 4].map((i) => (
+            <React.Fragment key={i}>{renderSkeletonStatCard()}</React.Fragment>
+          ))}
+        </View>
+      ) : (
+        <View style={[styles.statsGrid, isMobile && styles.statsGridMobile]}>
+          <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
+            <View style={[styles.statIconBg, { backgroundColor: COLORS.primary + '15' }, isMobile && styles.statIconBgMobile]}>
+              <MaterialCommunityIcons name="account-group" size={isMobile ? 20 : 24} color={COLORS.primary} />
+            </View>
+            <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardStats.totalCouples}</Text>
+            <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Total Couples</Text>
+            <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>{dashboardStats.totalUsers} Users</Text>
+          </View>
+          
+          <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
+            <View style={[styles.statIconBg, { backgroundColor: COLORS.accent + '25' }, isMobile && styles.statIconBgMobile]}>
+              <MaterialCommunityIcons name="flask" size={isMobile ? 20 : 24} color={COLORS.accentDark} />
+            </View>
+            <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardStats.activeCouples}</Text>
+            <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Active Couples</Text>
+            <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>{dashboardStats.inactiveCouples} Inactive</Text>
+          </View>
+          
+          <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
+            <View style={[styles.statIconBg, { backgroundColor: COLORS.success + '15' }, isMobile && styles.statIconBgMobile]}>
+              <Ionicons name="checkmark-circle" size={isMobile ? 20 : 24} color={COLORS.success} />
+            </View>
+            <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardStats.todayCompliance}%</Text>
+            <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Today's Compliance</Text>
+            <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>Logs completed</Text>
+          </View>
+          
+          <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
+            <View style={[styles.statIconBg, { backgroundColor: COLORS.error + '15' }, isMobile && styles.statIconBgMobile]}>
+              <Ionicons name="alert-circle" size={isMobile ? 20 : 24} color={COLORS.error} />
+            </View>
+            <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardStats.logsNotCompletedCount}</Text>
+            <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Logs Pending</Text>
+            <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>Need attention</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 
@@ -246,53 +515,57 @@ export default function AdminHomeScreen() {
         </TouchableOpacity>
       </View>
       
-      <View style={[styles.complianceCard, isMobile && styles.complianceCardMobile]}>
-        <View style={styles.complianceChart}>
-          {/* Simple Donut Chart Representation */}
-          <View style={styles.donutContainer}>
-            <View style={[styles.donutOuter, isMobile && styles.donutOuterMobile]}>
-              <View style={[
-                styles.donutProgress,
-                isMobile && styles.donutProgressMobile,
-                { 
-                  borderTopColor: COLORS.success,
-                  borderRightColor: COLORS.success,
-                  borderBottomColor: dashboardData.todayCompliance > 75 ? COLORS.success : COLORS.borderLight,
-                  borderLeftColor: dashboardData.todayCompliance > 50 ? COLORS.success : COLORS.borderLight,
-                  transform: [{ rotate: '45deg' }],
-                }
-              ]} />
-              <View style={[styles.donutInner, isMobile && styles.donutInnerMobile]}>
-                <Text style={[styles.donutValue, isMobile && styles.donutValueMobile]}>{dashboardData.todayCompliance}%</Text>
-                <Text style={styles.donutLabel}>Complete</Text>
+      {isLoading ? (
+        renderSkeletonComplianceCard()
+      ) : (
+        <View style={[styles.complianceCard, isMobile && styles.complianceCardMobile]}>
+          <View style={styles.complianceChart}>
+            {/* Simple Donut Chart Representation */}
+            <View style={styles.donutContainer}>
+              <View style={[styles.donutOuter, isMobile && styles.donutOuterMobile]}>
+                <View style={[
+                  styles.donutProgress,
+                  isMobile && styles.donutProgressMobile,
+                  { 
+                    borderTopColor: COLORS.success,
+                    borderRightColor: COLORS.success,
+                    borderBottomColor: dashboardStats.todayCompliance > 75 ? COLORS.success : COLORS.borderLight,
+                    borderLeftColor: dashboardStats.todayCompliance > 50 ? COLORS.success : COLORS.borderLight,
+                    transform: [{ rotate: '45deg' }],
+                  }
+                ]} />
+                <View style={[styles.donutInner, isMobile && styles.donutInnerMobile]}>
+                  <Text style={[styles.donutValue, isMobile && styles.donutValueMobile]}>{dashboardStats.todayCompliance}%</Text>
+                  <Text style={styles.donutLabel}>Complete</Text>
+                </View>
               </View>
             </View>
           </View>
+          
+          <View style={styles.complianceBreakdown}>
+            <View style={styles.complianceItem}>
+              <View style={[styles.complianceIndicator, { backgroundColor: COLORS.success }]} />
+              <Text style={styles.complianceItemLabel}>Steps Logged</Text>
+              <Text style={styles.complianceItemValue}>{dashboardStats.stepsCompliance}%</Text>
+            </View>
+            <View style={styles.complianceItem}>
+              <View style={[styles.complianceIndicator, { backgroundColor: COLORS.info }]} />
+              <Text style={styles.complianceItemLabel}>Diet Logged</Text>
+              <Text style={styles.complianceItemValue}>{dashboardStats.dietCompliance}%</Text>
+            </View>
+            <View style={styles.complianceItem}>
+              <View style={[styles.complianceIndicator, { backgroundColor: COLORS.warning }]} />
+              <Text style={styles.complianceItemLabel}>Exercise Done</Text>
+              <Text style={styles.complianceItemValue}>{dashboardStats.exerciseCompliance}%</Text>
+            </View>
+            <View style={styles.complianceItem}>
+              <View style={[styles.complianceIndicator, { backgroundColor: COLORS.accent }]} />
+              <Text style={styles.complianceItemLabel}>Weight Updated</Text>
+              <Text style={styles.complianceItemValue}>{dashboardStats.weightCompliance}%</Text>
+            </View>
+          </View>
         </View>
-        
-        <View style={styles.complianceBreakdown}>
-          <View style={styles.complianceItem}>
-            <View style={[styles.complianceIndicator, { backgroundColor: COLORS.success }]} />
-            <Text style={styles.complianceItemLabel}>Steps Logged</Text>
-            <Text style={styles.complianceItemValue}>85%</Text>
-          </View>
-          <View style={styles.complianceItem}>
-            <View style={[styles.complianceIndicator, { backgroundColor: COLORS.info }]} />
-            <Text style={styles.complianceItemLabel}>Diet Logged</Text>
-            <Text style={styles.complianceItemValue}>72%</Text>
-          </View>
-          <View style={styles.complianceItem}>
-            <View style={[styles.complianceIndicator, { backgroundColor: COLORS.warning }]} />
-            <Text style={styles.complianceItemLabel}>Exercise Done</Text>
-            <Text style={styles.complianceItemValue}>68%</Text>
-          </View>
-          <View style={styles.complianceItem}>
-            <View style={[styles.complianceIndicator, { backgroundColor: COLORS.accent }]} />
-            <Text style={styles.complianceItemLabel}>Weight Updated</Text>
-            <Text style={styles.complianceItemValue}>45%</Text>
-          </View>
-        </View>
-      </View>
+      )}
     </View>
   );
 
@@ -301,62 +574,77 @@ export default function AdminHomeScreen() {
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
-          <Image 
-            source={require('../../assets/images/favicon.png')} 
-            style={{ width: 24, height: 24 }} 
-          />
           <Text style={styles.sectionTitle}>Logs Not Completed</Text>
-          <View style={styles.alertBadge}>
-            <Text style={styles.alertBadgeText}>{logsNotCompletedCouples.length}</Text>
-          </View>
+          {!isLoading && (
+            <View style={styles.alertBadge}>
+              <Text style={styles.alertBadgeText}>{logsNotCompletedCouples.length}</Text>
+            </View>
+          )}
         </View>
         <TouchableOpacity onPress={() => router.push('/admin/users?filter=logs-pending' as any)}>
           <Text style={styles.viewAllLink}>View All</Text>
         </TouchableOpacity>
       </View>
       
-      <View style={styles.alertsContainer}>
-        {logsNotCompletedCouples.map((couple, index) => (
-          <TouchableOpacity
-            key={couple.id}
-            style={[
-              styles.alertCard,
-              isMobile && styles.alertCardMobile,
-              index === logsNotCompletedCouples.length - 1 && styles.alertCardLast,
-            ]}
-            onPress={() => router.push(`/admin/users?couple=${couple.id}` as any)}
-          >
-            <View style={[styles.alertLeft, isMobile && styles.alertLeftMobile]}>
-              <View style={styles.coupleAvatars}>
-                <View style={[styles.avatarSmall, { backgroundColor: COLORS.primary }]}>
-                  <Ionicons name="male" size={isMobile ? 12 : 14} color="#fff" />
-                </View>
-                <View style={[styles.avatarSmall, { backgroundColor: COLORS.accent, marginLeft: -8 }]}>
-                  <Ionicons name="female" size={isMobile ? 12 : 14} color="#fff" />
-                </View>
+      {isLoading ? (
+        <View style={styles.alertsContainer}>
+          {[0, 1, 2, 3].map((i) => renderSkeletonAlertCard(i))}
+        </View>
+      ) : (
+        <>
+          <View style={styles.alertsContainer}>
+            {logsNotCompletedCouples.length === 0 ? (
+              <View style={styles.emptyAlertContainer}>
+                <Ionicons name="checkmark-circle" size={32} color={COLORS.success} />
+                <Text style={styles.emptyAlertText}>All couples have completed their logs today!</Text>
               </View>
-              <View style={[styles.alertInfo, { flex: 1, minWidth: 0 }]}>
-                <Text style={styles.alertCoupleId}>{couple.id}</Text>
-                <Text style={styles.alertNames} numberOfLines={1}>
-                  {couple.maleName} & {couple.femaleName}
-                </Text>
-              </View>
-            </View>
-            <View style={[styles.alertRight, isMobile && styles.alertRightMobile]}>
-              <View style={[styles.alertReasonBadge, isMobile && styles.alertReasonBadgeMobile]}>
-                <Text style={[styles.alertReasonText, isMobile && styles.alertReasonTextMobile]}>{couple.reason}</Text>
-              </View>
-              <Text style={styles.alertTime}>{couple.lastLog}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={isMobile ? 16 : 18} color={COLORS.textMuted} />
-          </TouchableOpacity>
-        ))}
-      </View>
-      
-      <TouchableOpacity style={styles.sendReminderButton}>
-        <Ionicons name="notifications" size={18} color="#fff" />
-        <Text style={styles.sendReminderText}>{isMobile ? 'Send Reminder' : 'Send Reminder to All Pending'}</Text>
-      </TouchableOpacity>
+            ) : (
+              logsNotCompletedCouples.map((couple, index) => (
+                <TouchableOpacity
+                  key={couple.id}
+                  style={[
+                    styles.alertCard,
+                    isMobile && styles.alertCardMobile,
+                    index === logsNotCompletedCouples.length - 1 && styles.alertCardLast,
+                  ]}
+                  onPress={() => router.push(`/admin/users?couple=${couple.id}` as any)}
+                >
+                  <View style={[styles.alertLeft, isMobile && styles.alertLeftMobile]}>
+                    <View style={styles.coupleAvatars}>
+                      <View style={[styles.avatarSmall, { backgroundColor: COLORS.primary }]}>
+                        <Ionicons name="male" size={isMobile ? 12 : 14} color="#fff" />
+                      </View>
+                      <View style={[styles.avatarSmall, { backgroundColor: COLORS.accent, marginLeft: -8 }]}>
+                        <Ionicons name="female" size={isMobile ? 12 : 14} color="#fff" />
+                      </View>
+                    </View>
+                    <View style={[styles.alertInfo, { flex: 1, minWidth: 0 }]}>
+                      <Text style={styles.alertCoupleId}>{couple.coupleId}</Text>
+                      <Text style={styles.alertNames} numberOfLines={1}>
+                        {couple.maleName} & {couple.femaleName}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.alertRight, isMobile && styles.alertRightMobile]}>
+                    <View style={[styles.alertReasonBadge, isMobile && styles.alertReasonBadgeMobile]}>
+                      <Text style={[styles.alertReasonText, isMobile && styles.alertReasonTextMobile]}>{couple.reason}</Text>
+                    </View>
+                    <Text style={styles.alertTime}>{couple.lastLog}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={isMobile ? 16 : 18} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+          
+          {logsNotCompletedCouples.length > 0 && (
+            <TouchableOpacity style={styles.sendReminderButton}>
+              <Ionicons name="notifications" size={18} color="#fff" />
+              <Text style={styles.sendReminderText}>{isMobile ? 'Send Reminder' : 'Send Reminder to All Pending'}</Text>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
     </View>
   );
 
@@ -371,7 +659,7 @@ export default function AdminHomeScreen() {
       >
         <View style={[styles.content, !isMobile && styles.contentDesktop]}>
           {renderHeader()}
-          {renderQuickActions()}
+          {!isLoading && renderQuickActions()}
           {renderStatsOverview()}
           
           <View style={[styles.twoColumnSection, isMobile && styles.twoColumnSectionMobile]}>
@@ -512,8 +800,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   quickActionCard: {
-    flex: 1,
-    minWidth: 280,
+    flex: 0,
+    flexBasis: 280,
+    minWidth: 220,
     borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -533,7 +822,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     gap: 12,
-    flex: 1,
+    width: '100%',
     minHeight: 80,
   },
   quickActionIcon: {
@@ -772,6 +1061,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 1,
+    minHeight: 80,
+  },
+  emptyAlertContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  emptyAlertText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
   alertCard: {
     flexDirection: 'row',
