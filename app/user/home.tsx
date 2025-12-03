@@ -100,6 +100,9 @@ export default function UserHomeScreen() {
   
   const dates = generateDates(isMobile);
   const todayIndex = isMobile ? 3 : 3; // Today is always at index 3
+  
+  // Check if selected date is today (only allow logging for today)
+  const isSelectedDateToday = dates[selectedDateIndex]?.isToday || false;
 
   // Calculate time from steps (100 steps per minute for normal walking)
   const calculateTimeFromSteps = (steps: number): number => {
@@ -508,56 +511,64 @@ export default function UserHomeScreen() {
               </View>
             </View>
 
-            {/* Log Steps Button */}
-            <TouchableOpacity 
-              style={styles.logStepsButton}
-              onPress={() => router.push('/user/log-steps' as any)}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="shoe-print" size={20} color="#ffffff" />
-              <Text style={styles.logStepsButtonText}>Log Step Count</Text>
-            </TouchableOpacity>
+            {/* Log Steps Button - Only show for today */}
+            {isSelectedDateToday && (
+              <TouchableOpacity 
+                style={styles.logStepsButton}
+                onPress={() => router.push('/user/log-steps' as any)}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="shoe-print" size={20} color="#ffffff" />
+                <Text style={styles.logStepsButtonText}>Log Step Count</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          {/* Quick Actions */}
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
-          <View style={styles.quickActionsRow}>
-            <TouchableOpacity
-              style={[styles.quickActionCard, { backgroundColor: colors.cardBackground }]}
-              onPress={() => router.push('/user/log-food' as any)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: isDarkMode ? '#1a3329' : '#e8f5d6' }]}>
-                <Ionicons name="restaurant" size={22} color="#98be4e" />
-              </View>
-              <Text style={[styles.quickActionLabel, { color: colors.text }]}>Log Food</Text>
-            </TouchableOpacity>
+          {/* Quick Actions - Only show for today */}
+          {isSelectedDateToday && (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
+              <View style={styles.quickActionsRow}>
+                <TouchableOpacity
+                  style={[styles.quickActionCard, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => router.push('/user/log-food' as any)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: isDarkMode ? '#1a3329' : '#e8f5d6' }]}>
+                    <Ionicons name="restaurant" size={22} color="#98be4e" />
+                  </View>
+                  <Text style={[styles.quickActionLabel, { color: colors.text }]}>Log Food</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.quickActionCard, { backgroundColor: colors.cardBackground }]}
-              onPress={() => router.push('/user/log-exercise' as any)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: isDarkMode ? '#1a2d3d' : '#e0f2fe' }]}>
-                <Ionicons name="fitness" size={22} color="#006dab" />
-              </View>
-              <Text style={[styles.quickActionLabel, { color: colors.text }]}>Log Exercise</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.quickActionCard, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => router.push('/user/log-exercise' as any)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: isDarkMode ? '#1a2d3d' : '#e0f2fe' }]}>
+                    <Ionicons name="fitness" size={22} color="#006dab" />
+                  </View>
+                  <Text style={[styles.quickActionLabel, { color: colors.text }]}>Log Exercise</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.quickActionCard, { backgroundColor: colors.cardBackground }]}
-              onPress={() => router.push('/user/log-weight' as any)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: isDarkMode ? '#2d2a1a' : '#fef3c7' }]}>
-                <Ionicons name="scale" size={22} color="#f59e0b" />
+                <TouchableOpacity
+                  style={[styles.quickActionCard, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => router.push('/user/log-weight' as any)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: isDarkMode ? '#2d2a1a' : '#fef3c7' }]}>
+                    <Ionicons name="scale" size={22} color="#f59e0b" />
+                  </View>
+                  <Text style={[styles.quickActionLabel, { color: colors.text }]}>Log Weight</Text>
+                </TouchableOpacity>
               </View>
-              <Text style={[styles.quickActionLabel, { color: colors.text }]}>Log Weight</Text>
-            </TouchableOpacity>
-          </View>
+            </>
+          )}
 
-          {/* Today's Completed Tasks */}
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Today's Activity</Text>
+          {/* Activity Section - Shows data for selected date */}
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            {isSelectedDateToday ? "Today's Activity" : `${dates[selectedDateIndex]?.weekday} ${dates[selectedDateIndex]?.day} Activity`}
+          </Text>
           <View style={styles.activityGrid}>
             {/* Exercise Minutes */}
             <View style={[styles.activityCard, { backgroundColor: colors.cardBackground }]}>
