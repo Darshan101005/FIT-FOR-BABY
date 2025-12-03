@@ -523,15 +523,15 @@ export default function MessagesScreen() {
         )}
       </View>
 
-      {/* Support Options */}
-      <Text style={styles.sectionTitle}>Get Help</Text>
+      {/* Technical Support Options */}
+      <Text style={styles.sectionTitle}>Technical Support</Text>
       
       <View style={styles.helpOptions}>
         <TouchableOpacity style={styles.helpOption} onPress={handleCallSupport}>
           <View style={[styles.helpIcon, { backgroundColor: '#dcfce7' }]}>
             <Ionicons name="call" size={24} color="#22c55e" />
           </View>
-          <Text style={styles.helpLabel}>Call Support</Text>
+          <Text style={styles.helpLabel}>CONTACT US</Text>
           <Text style={styles.helpDetail}>9884671395</Text>
         </TouchableOpacity>
         
@@ -539,7 +539,7 @@ export default function MessagesScreen() {
           <View style={[styles.helpIcon, { backgroundColor: '#dbeafe' }]}>
             <Ionicons name="mail" size={24} color="#3b82f6" />
           </View>
-          <Text style={styles.helpLabel}>Email Us</Text>
+          <Text style={styles.helpLabel}>EMAIL US</Text>
           <Text style={styles.helpDetail}>e0323040@sriher.edu.in</Text>
         </TouchableOpacity>
       </View>
