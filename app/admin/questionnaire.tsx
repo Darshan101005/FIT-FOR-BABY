@@ -2,7 +2,7 @@ import { questionnaireService } from '@/services/firestore.service';
 import { QuestionnaireProgress } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
