@@ -4,17 +4,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 import { coupleService, coupleWeightLogService } from '../../services/firestore.service';
 
@@ -194,6 +194,9 @@ export default function LogWeightScreen() {
 
       const logId = await coupleWeightLogService.add(coupleId, userGender, logData);
       console.log('Weight log saved with ID:', logId);
+      
+      // Update streak for logging activity
+      await coupleService.updateStreak(coupleId, userGender);
 
       showToast('Weight logged successfully!', 'success');
       setWeight('');

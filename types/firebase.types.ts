@@ -817,6 +817,12 @@ export interface CoupleUser {
   // App Settings
   pushNotificationsEnabled?: boolean; // Default true
   
+  // Streak & Activity Tracking
+  currentStreak?: number; // Days of consecutive logging
+  lastLogDate?: string; // YYYY-MM-DD of last log (any type)
+  longestStreak?: number; // Best streak ever achieved
+  weeklyGoalsAchieved?: number; // Total weekly goals completed
+  
   // Timestamps
   lastLoginAt?: Timestamp;
   lastActive?: string; // For display purposes

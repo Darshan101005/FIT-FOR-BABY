@@ -1,31 +1,32 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
-import { coupleFoodLogService } from '@/services/firestore.service';
+import { coupleFoodLogService, coupleService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useWindowDimensions,
-    View
+  ActivityIndicator,
+  Animated,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
 } from 'react-native';
 import {
-    calculateNutrition,
-    foodCategories,
-    foodDatabase,
-    FoodItemData,
-    getFoodsByMealTime,
-    mealTimes,
-    searchFoods,
-    searchFoodsByMealTime
+  calculateNutrition,
+  foodCategories,
+  foodDatabase,
+  FoodItemData,
+  getFoodsByMealTime,
+  mealTimes,
+  searchFoods,
+  searchFoodsByMealTime
 } from '../../data/foodDatabase';
 
 const isWeb = Platform.OS === 'web';
@@ -357,6 +358,9 @@ export default function LogFoodScreen() {
         totalFat: totalNutrition.fat,
         totalGrams: totalGrams,
       });
+      
+      // Update streak for logging activity
+      await coupleService.updateStreak(coupleId, userGender);
 
       showToast(`${currentMealLabel} logged! ${totalNutrition.calories} cal intake recorded.`, 'success');
       setTimeout(() => {

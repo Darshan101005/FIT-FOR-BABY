@@ -1,4 +1,4 @@
-import { coupleExerciseService, globalSettingsService } from '@/services/firestore.service';
+import { coupleExerciseService, coupleService, globalSettingsService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -248,6 +248,9 @@ export default function LogExerciseScreen() {
         partnerParticipated: partnerParticipated,
         notes: notes || undefined,
       });
+      
+      // Update streak for logging activity
+      await coupleService.updateStreak(coupleId, userGender);
 
       // Check if goal achieved
       let goalMessage = '';

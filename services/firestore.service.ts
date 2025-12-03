@@ -883,6 +883,226 @@ export const coupleService = {
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
     await deleteDoc(coupleRef);
   },
+
+  // ============================================
+  // STREAK & GOALS TRACKING
+  // ============================================
+
+  // Update streak when user logs something (weight, food, exercise, steps)
+  async updateStreak(coupleId: string, gender: 'male' | 'female'): Promise<{ currentStreak: number; isNewStreak: boolean }> {
+    try {
+      const couple = await this.get(coupleId);
+      if (!couple) return { currentStreak: 0, isNewStreak: false };
+
+      const user = couple[gender];
+      const today = formatDateString(new Date());
+      const lastLogDate = user.lastLogDate || '';
+      const currentStreak = user.currentStreak || 0;
+      const longestStreak = user.longestStreak || 0;
+
+      let newStreak = currentStreak;
+      let isNewStreak = false;
+
+      if (lastLogDate === today) {
+        // Already logged today, no change
+        return { currentStreak: newStreak, isNewStreak: false };
+      }
+
+      // Calculate yesterday's date
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatDateString(yesterday);
+
+      if (lastLogDate === yesterdayStr) {
+        // Consecutive day - increment streak
+        newStreak = currentStreak + 1;
+        isNewStreak = true;
+      } else if (!lastLogDate) {
+        // First log ever - start streak at 1
+        newStreak = 1;
+        isNewStreak = true;
+      } else {
+        // Streak broken - reset to 1
+        newStreak = 1;
+        isNewStreak = true;
+      }
+
+      // Update user with new streak data
+      const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+      const updateData: Record<string, any> = {
+        [`${gender}.currentStreak`]: newStreak,
+        [`${gender}.lastLogDate`]: today,
+        updatedAt: now(),
+      };
+
+      // Update longest streak if current is higher
+      if (newStreak > longestStreak) {
+        updateData[`${gender}.longestStreak`] = newStreak;
+      }
+
+      await updateDoc(coupleRef, updateData);
+      return { currentStreak: newStreak, isNewStreak };
+    } catch (error) {
+      console.error('Error updating streak:', error);
+      return { currentStreak: 0, isNewStreak: false };
+    }
+  },
+
+  // Check and fix streak if user missed a day (call on app open)
+  async checkAndUpdateStreak(coupleId: string, gender: 'male' | 'female'): Promise<number> {
+    try {
+      const couple = await this.get(coupleId);
+      if (!couple) return 0;
+
+      const user = couple[gender];
+      const today = new Date().toISOString().split('T')[0];
+      const lastLogDate = user.lastLogDate || '';
+      const currentStreak = user.currentStreak || 0;
+
+      // If already checked today, return current streak
+      if (lastLogDate === today) {
+        return currentStreak;
+      }
+
+      // Calculate yesterday
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      // If last log was yesterday, streak is still valid (waiting for today's log)
+      if (lastLogDate === yesterdayStr) {
+        return currentStreak;
+      }
+
+      // Streak is broken - reset to 0
+      if (currentStreak > 0 && lastLogDate && lastLogDate !== today && lastLogDate !== yesterdayStr) {
+        const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+        await updateDoc(coupleRef, {
+          [`${gender}.currentStreak`]: 0,
+          updatedAt: now(),
+        });
+        return 0;
+      }
+
+      return currentStreak;
+    } catch (error) {
+      console.error('Error checking streak:', error);
+      return 0;
+    }
+  },
+
+  // Increment weekly goals achieved
+  async incrementWeeklyGoals(coupleId: string, gender: 'male' | 'female', count: number = 1): Promise<number> {
+    try {
+      const couple = await this.get(coupleId);
+      if (!couple) return 0;
+
+      const user = couple[gender];
+      const currentGoals = user.weeklyGoalsAchieved || 0;
+      const newGoals = currentGoals + count;
+
+      const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+      await updateDoc(coupleRef, {
+        [`${gender}.weeklyGoalsAchieved`]: newGoals,
+        updatedAt: now(),
+      });
+
+      return newGoals;
+    } catch (error) {
+      console.error('Error incrementing weekly goals:', error);
+      return 0;
+    }
+  },
+
+  // Get user stats (streak, goals, etc.)
+  async getUserStats(coupleId: string, gender: 'male' | 'female'): Promise<{
+    currentStreak: number;
+    longestStreak: number;
+    weeklyGoalsAchieved: number;
+    lastLogDate: string;
+    daysActive: number;
+  }> {
+    try {
+      const couple = await this.get(coupleId);
+      if (!couple) {
+        return {
+          currentStreak: 0,
+          longestStreak: 0,
+          weeklyGoalsAchieved: 0,
+          lastLogDate: '',
+          daysActive: 0,
+        };
+      }
+
+      const user = couple[gender];
+      
+      // Calculate days active from enrollment date
+      let daysActive = 0;
+      if (couple.enrollmentDate) {
+        const enrollDate = new Date(couple.enrollmentDate);
+        const today = new Date();
+        const diffTime = Math.abs(today.getTime() - enrollDate.getTime());
+        daysActive = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+
+      return {
+        currentStreak: user.currentStreak || 0,
+        longestStreak: user.longestStreak || 0,
+        weeklyGoalsAchieved: user.weeklyGoalsAchieved || 0,
+        lastLogDate: user.lastLogDate || '',
+        daysActive,
+      };
+    } catch (error) {
+      console.error('Error getting user stats:', error);
+      return {
+        currentStreak: 0,
+        longestStreak: 0,
+        weeklyGoalsAchieved: 0,
+        lastLogDate: '',
+        daysActive: 0,
+      };
+    }
+  },
+
+  // Initialize streak for user - checks if streak is still valid on app load
+  async initializeStreak(coupleId: string, gender: 'male' | 'female'): Promise<{ currentStreak: number; longestStreak: number }> {
+    try {
+      const couple = await this.get(coupleId);
+      if (!couple) return { currentStreak: 0, longestStreak: 0 };
+
+      const user = couple[gender];
+      const today = formatDateString(new Date());
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatDateString(yesterday);
+
+      const currentStreak = user.currentStreak || 0;
+      const longestStreak = user.longestStreak || 0;
+      const lastLogDate = user.lastLogDate || '';
+
+      // If no lastLogDate, user hasn't logged yet - return 0
+      if (!lastLogDate) {
+        return { currentStreak: 0, longestStreak: 0 };
+      }
+
+      // If last log was today or yesterday, streak is valid
+      if (lastLogDate === today || lastLogDate === yesterdayStr) {
+        return { currentStreak, longestStreak };
+      }
+
+      // Streak is broken (last log was before yesterday) - reset to 0
+      const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+      await updateDoc(coupleRef, {
+        [`${gender}.currentStreak`]: 0,
+        updatedAt: now(),
+      });
+
+      return { currentStreak: 0, longestStreak };
+    } catch (error) {
+      console.error('Error initializing streak:', error);
+      return { currentStreak: 0, longestStreak: 0 };
+    }
+  },
 };
 
 // ============================================

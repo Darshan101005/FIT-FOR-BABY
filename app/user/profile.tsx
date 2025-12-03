@@ -99,13 +99,6 @@ interface SettingItem {
   color?: string;
 }
 
-const profileStats = {
-  daysActive: 42,
-  goalsAchieved: 18,
-  currentStreak: 7,
-  totalSteps: 325000,
-};
-
 export default function ProfileScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
@@ -129,8 +122,9 @@ export default function ProfileScreen() {
   // Profile stats
   const [profileStats, setProfileStats] = useState({
     daysActive: 0,
-    goalsAchieved: 0,
+    weeklyGoalsAchieved: 0,
     currentStreak: 0,
+    longestStreak: 0,
   });
 
   // Fetch profile data when screen loads
@@ -169,14 +163,25 @@ export default function ProfileScreen() {
               // Load push notification setting (default to true)
               setNotifications(user.pushNotificationsEnabled !== false);
               
+              // Check and update streak (reset if missed a day)
+              const currentStreak = await coupleService.checkAndUpdateStreak(coupleId, userGender as 'male' | 'female');
+              
               // Calculate days active (from enrollment date)
+              let daysActive = 0;
               if (couple.enrollmentDate) {
                 const enrollDate = new Date(couple.enrollmentDate);
                 const today = new Date();
                 const diffTime = Math.abs(today.getTime() - enrollDate.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                setProfileStats(prev => ({ ...prev, daysActive: diffDays }));
+                daysActive = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
               }
+              
+              // Set all stats
+              setProfileStats({
+                daysActive,
+                weeklyGoalsAchieved: user.weeklyGoalsAchieved || 0,
+                currentStreak: currentStreak,
+                longestStreak: user.longestStreak || 0,
+              });
             } else {
               // Fallback if no couple data
               setProfileData({
@@ -335,13 +340,13 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{profileStats.goalsAchieved}</Text>
-              <Text style={styles.statLabel}>Goals Done</Text>
+              <Text style={styles.statValue}>{profileStats.weeklyGoalsAchieved}</Text>
+              <Text style={styles.statLabel}>Weekly Goals</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{profileStats.currentStreak}🔥</Text>
-              <Text style={styles.statLabel}>Day Streak</Text>
+              <Text style={styles.statLabel}>Log Streak</Text>
             </View>
           </View>
         </>
@@ -397,13 +402,13 @@ export default function ProfileScreen() {
           </View>
           <View style={[styles.webStatDivider, { backgroundColor: colors.borderLight }]} />
           <View style={styles.webStatItem}>
-            <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.goalsAchieved}</Text>
-            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Goals Done</Text>
+            <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.weeklyGoalsAchieved}</Text>
+            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Weekly Goals</Text>
           </View>
           <View style={[styles.webStatDivider, { backgroundColor: colors.borderLight }]} />
           <View style={styles.webStatItem}>
             <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.currentStreak}🔥</Text>
-            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Day Streak</Text>
+            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Log Streak</Text>
           </View>
         </View>
       </View>
@@ -964,6 +969,7 @@ const styles = StyleSheet.create({
     padding: 40,
     marginTop: 0,
   },
+  // Questionnaire Card
   questionnaireCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,

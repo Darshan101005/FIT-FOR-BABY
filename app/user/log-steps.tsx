@@ -1,4 +1,4 @@
-import { coupleStepsService, formatDateString } from '@/services/firestore.service';
+import { coupleService, coupleStepsService, formatDateString } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -185,6 +185,9 @@ export default function LogStepsScreen() {
         proofType: imageUri ? 'gallery' : undefined,
         source: 'manual',
       });
+      
+      // Update streak for logging activity
+      await coupleService.updateStreak(coupleId, userGender);
 
       // Add to local state
       const newEntry: StepEntry = {

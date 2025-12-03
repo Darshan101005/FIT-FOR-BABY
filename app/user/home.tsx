@@ -92,6 +92,12 @@ export default function UserHomeScreen() {
   // Broadcasts/Reminders from admin
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   
+  // Streak data
+  const [streakData, setStreakData] = useState<{ currentStreak: number; longestStreak: number }>({ 
+    currentStreak: 0, 
+    longestStreak: 0 
+  });
+  
   const dates = generateDates(isMobile);
   const todayIndex = isMobile ? 3 : 3; // Today is always at index 3
 
@@ -224,6 +230,10 @@ export default function UserHomeScreen() {
             // Fetch recent broadcasts (last 7 days)
             const recentBroadcasts = await broadcastService.getRecent(7);
             setBroadcasts(recentBroadcasts);
+            
+            // Initialize streak from historical logs
+            const streak = await coupleService.initializeStreak(coupleId, userGender as 'male' | 'female');
+            setStreakData(streak);
           } else {
             // Fallback to basic data
             setUserData({
@@ -620,6 +630,44 @@ export default function UserHomeScreen() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} style={styles.activityArrow} />
             </TouchableOpacity>
+          </View>
+
+          {/* Streak Card - Duolingo Style */}
+          <View style={[styles.streakCard, { backgroundColor: colors.cardBackground }]}>
+            <View style={styles.streakMainContent}>
+              <View style={styles.streakFireContainer}>
+                <MaterialCommunityIcons 
+                  name="fire" 
+                  size={56} 
+                  color={streakData.currentStreak > 0 ? '#ff5722' : colors.textMuted} 
+                />
+                <Text style={[
+                  styles.streakNumber, 
+                  { color: streakData.currentStreak > 0 ? '#ff5722' : colors.textMuted }
+                ]}>
+                  {streakData.currentStreak}
+                </Text>
+              </View>
+              <View style={styles.streakTextContent}>
+                <Text style={[styles.streakLabel, { color: colors.text }]}>
+                  Day Streak
+                </Text>
+                <Text style={[styles.streakMotivation, { color: colors.textSecondary }]}>
+                  {streakData.currentStreak === 0 
+                    ? "Log today to start your streak!" 
+                    : streakData.currentStreak === 1 
+                      ? "Great start! Keep it going!" 
+                      : `${streakData.currentStreak} days of healthy logging!`}
+                </Text>
+              </View>
+            </View>
+            
+            {streakData.longestStreak > 0 && streakData.longestStreak > streakData.currentStreak && (
+              <View style={[styles.bestStreakRow, { borderTopColor: colors.borderLight }]}>
+                <Text style={[styles.bestStreakLabel, { color: colors.textSecondary }]}>Best Streak:</Text>
+                <Text style={[styles.bestStreakValue, { color: colors.primary }]}>{streakData.longestStreak} days 🏅</Text>
+              </View>
+            )}
           </View>
 
           {/* Today's Tip Card */}
@@ -1068,6 +1116,59 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     marginTop: 2,
+  },
+
+  // Streak Card - Duolingo Style
+  streakCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  streakMainContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  streakFireContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  streakNumber: {
+    fontSize: 32,
+    fontWeight: '800',
+    marginTop: -10,
+  },
+  streakTextContent: {
+    flex: 1,
+  },
+  streakLabel: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  streakMotivation: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  bestStreakRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+  },
+  bestStreakLabel: {
+    fontSize: 13,
+  },
+  bestStreakValue: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   // Notification Sidebar

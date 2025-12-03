@@ -171,6 +171,11 @@ service cloud.firestore {
         allow read, write: if true;
       }
       
+      // Step logs subcollection (for couple step tracking)
+      match /stepLogs/{logId} {
+        allow read, write: if true;
+      }
+      
       // Food logs subcollection
       match /foodLogs/{logId} {
         allow read, write: if true;
