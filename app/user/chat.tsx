@@ -3,12 +3,14 @@ import { chatService } from '@/services/firestore.service';
 import { Chat, ChatMessage } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
     Alert,
+    Animated,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
@@ -21,11 +23,72 @@ import {
 
 const isWeb = Platform.OS === 'web';
 
+// Hide scrollbar CSS for web
+const hideScrollbarStyle = isWeb ? `
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+` : '';
+
+// Welcome message for new chats
+const WELCOME_MESSAGE = "Welcome to the Nursing Department Support Chat. Please feel free to share your queries, and our team will assist you shortly.";
+
+// Shimmer component for loading state
+const ShimmerBlock = ({ width, height, style }: { width: number | string; height: number; style?: any }) => {
+  const animatedValue = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(animatedValue, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(animatedValue, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, []);
+
+  const opacity = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.7],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: '#e2e8f0',
+          borderRadius: 8,
+          opacity,
+        },
+        style,
+      ]}
+    />
+  );
+};
+
 export default function ChatScreen() {
   const { isDarkMode } = useTheme();
-  const { width } = useWindowDimensions();
+  const { width: screenWidth } = useWindowDimensions();
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Calculate max width for desktop layout (like other pages)
+  const maxContentWidth = Math.min(screenWidth, 800);
 
   // User info state
   const [userId, setUserId] = useState<string>('');
@@ -41,9 +104,24 @@ export default function ChatScreen() {
   const [messageText, setMessageText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [adminTyping, setAdminTyping] = useState(false);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   // Typing debounce
-  const typingTimeoutRef = useRef<number | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Inject scrollbar hide CSS for web
+  useEffect(() => {
+    if (isWeb && typeof document !== 'undefined') {
+      const styleId = 'hide-scrollbar-style';
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = hideScrollbarStyle;
+        document.head.appendChild(style);
+      }
+    }
+  }, []);
 
   // Load user info from AsyncStorage
   useEffect(() => {
@@ -76,7 +154,6 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!userId || !coupleId) return;
 
-    // Use a default name if userName is empty
     const displayName = userName || 'User';
 
     let unsubscribeChat: (() => void) | undefined;
@@ -87,50 +164,31 @@ export default function ChatScreen() {
       try {
         setIsLoading(true);
 
-        // Set a timeout to prevent infinite loading
         timeoutId = setTimeout(() => {
-          if (isLoading) {
-            console.warn('Chat initialization timed out');
-            setIsLoading(false);
-          }
-        }, 10000); // 10 second timeout
+          console.warn('Chat initialization timed out');
+          setIsLoading(false);
+        }, 10000);
 
-        // Get or create chat
         const existingChat = await chatService.getOrCreate(userId, displayName, coupleId, gender);
         setChat(existingChat);
 
-        // Mark messages as read
         await chatService.markAsRead(userId, 'user');
-
-        // Cleanup old messages (7-day policy)
         await chatService.cleanupOldMessages(userId);
 
-        // Subscribe to chat updates
         unsubscribeChat = chatService.subscribe(userId, (updatedChat) => {
           setChat(updatedChat);
-          if (updatedChat?.typing?.admin) {
-            setAdminTyping(true);
-          } else {
-            setAdminTyping(false);
-          }
+          setAdminTyping(updatedChat?.typing?.admin || false);
         });
 
-        // Subscribe to messages
         unsubscribeMessages = chatService.subscribeToMessages(userId, (msgs) => {
-          // Filter out messages deleted by user
           const visibleMessages = msgs.filter((msg) => !msg.deletedByUser);
           setMessages(visibleMessages);
-          
-          // Mark as read when messages arrive
           chatService.markAsRead(userId, 'user');
-          
-          // Auto scroll to bottom
           setTimeout(() => {
             scrollViewRef.current?.scrollToEnd({ animated: true });
           }, 100);
         });
 
-        // Clear the timeout since we loaded successfully
         if (timeoutId) clearTimeout(timeoutId);
         setIsLoading(false);
       } catch (error) {
@@ -147,60 +205,53 @@ export default function ChatScreen() {
       if (unsubscribeChat) unsubscribeChat();
       if (unsubscribeMessages) unsubscribeMessages();
       if (timeoutId) clearTimeout(timeoutId);
-      // Clear typing indicator when leaving
       if (userId) {
         chatService.setTyping(userId, false, 'user');
       }
     };
   }, [userId, userName, coupleId, gender]);
 
-  // Handle typing indicator
   const handleTextChange = useCallback((text: string) => {
     setMessageText(text);
+    if (!userId || chat?.status === 'resolved') return;
 
-    if (!userId) return;
-
-    // Set typing to true
     if (!isTyping && text.length > 0) {
       setIsTyping(true);
       chatService.setTyping(userId, true, 'user');
     }
 
-    // Clear previous timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Set typing to false after 2 seconds of inactivity
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
       chatService.setTyping(userId, false, 'user');
     }, 2000);
-  }, [userId, isTyping]);
+  }, [userId, isTyping, chat?.status]);
 
-  // Send message
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !userId || isSending) return;
+    if (!messageText.trim() || !userId || isSending || chat?.status === 'resolved') return;
 
     const textToSend = messageText.trim();
     setMessageText('');
     setIsSending(true);
 
-    // Clear typing indicator
-    setIsTyping(false);
-    chatService.setTyping(userId, false, 'user');
+    if (isTyping) {
+      setIsTyping(false);
+      chatService.setTyping(userId, false, 'user');
+    }
 
     try {
       await chatService.sendMessage(userId, {
         senderId: userId,
-        senderName: userName,
         senderType: 'user',
+        senderName: userName || 'User',
         message: textToSend,
         messageType: 'text',
       });
     } catch (error) {
       console.error('Error sending message:', error);
-      // Restore message if failed
       setMessageText(textToSend);
       if (Platform.OS === 'web') {
         alert('Failed to send message. Please try again.');
@@ -212,7 +263,34 @@ export default function ChatScreen() {
     }
   };
 
-  // Delete message
+  const handleReopenChat = async () => {
+    if (!userId || !chat) return;
+    try {
+      await chatService.updateStatus(userId, 'active');
+    } catch (error) {
+      console.error('Error reopening chat:', error);
+      Alert.alert('Error', 'Failed to reopen chat.');
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!userId) return;
+    setIsClearing(true);
+    try {
+      await chatService.clearAllMessages(userId);
+      setShowClearModal(false);
+    } catch (error) {
+      console.error('Error clearing chat:', error);
+      if (Platform.OS === 'web') {
+        alert('Failed to clear chat. Please try again.');
+      } else {
+        Alert.alert('Error', 'Failed to clear chat. Please try again.');
+      }
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const handleDeleteMessage = (messageId: string) => {
     if (Platform.OS === 'web') {
       if (confirm('Delete this message?')) {
@@ -234,14 +312,20 @@ export default function ChatScreen() {
     }
   };
 
-  // Format timestamp
+  const handleAttachFile = () => {
+    if (Platform.OS === 'web') {
+      alert('File attachments will be available soon!');
+    } else {
+      Alert.alert('Coming Soon', 'File attachments will be available in a future update.');
+    }
+  };
+
   const formatTime = (timestamp: any) => {
     if (!timestamp) return '';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Format date for day separators
   const formatDate = (timestamp: any) => {
     if (!timestamp) return '';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -249,16 +333,11 @@ export default function ChatScreen() {
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
-    } else {
-      return date.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
-    }
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
   };
 
-  // Group messages by date
   const groupMessagesByDate = (msgs: ChatMessage[]) => {
     const groups: { date: string; messages: ChatMessage[] }[] = [];
     let currentDate = '';
@@ -276,10 +355,8 @@ export default function ChatScreen() {
     return groups;
   };
 
-  // Render read receipt ticks
   const renderTicks = (message: ChatMessage) => {
     if (message.senderType !== 'user') return null;
-
     const isRead = message.readAt !== null && message.readAt !== undefined;
     const tickColor = isRead ? '#34b7f1' : '#8696a0';
 
@@ -292,422 +369,714 @@ export default function ChatScreen() {
   };
 
   const messageGroups = groupMessagesByDate(messages);
+  const isResolved = chat?.status === 'resolved';
 
-  const styles = createStyles(isDarkMode, width);
-
-  // Show loading if still loading user info or chat
+  // Shimmer loading state
   if (isLoading || !userId) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#006dab" />
-        <Text style={styles.loadingText}>
-          {!userId ? 'Loading user info...' : 'Loading chat...'}
-        </Text>
+      <View style={[styles.container, { backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc' }]}>
+        <View style={[styles.header, { backgroundColor: isDarkMode ? '#1e293b' : '#ffffff' }]}>
+          <View style={[styles.headerInner, { maxWidth: maxContentWidth }]}>
+            <ShimmerBlock width={40} height={40} style={{ borderRadius: 12 }} />
+            <View style={{ marginLeft: 12, flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+              <ShimmerBlock width={44} height={44} style={{ borderRadius: 22 }} />
+              <View style={{ marginLeft: 12 }}>
+                <ShimmerBlock width={140} height={18} style={{ marginBottom: 6, borderRadius: 6 }} />
+                <ShimmerBlock width={100} height={14} style={{ borderRadius: 6 }} />
+              </View>
+            </View>
+          </View>
+        </View>
+        <View style={[styles.chatContentWrapper, { maxWidth: maxContentWidth }]}>
+          <View style={styles.shimmerMessages}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 16 }}>
+              <ShimmerBlock width={32} height={32} style={{ borderRadius: 16, marginRight: 8 }} />
+              <ShimmerBlock width={220} height={60} style={{ borderRadius: 20 }} />
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 16 }}>
+              <ShimmerBlock width={180} height={50} style={{ borderRadius: 20 }} />
+              <ShimmerBlock width={32} height={32} style={{ borderRadius: 16, marginLeft: 8 }} />
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 16 }}>
+              <ShimmerBlock width={32} height={32} style={{ borderRadius: 16, marginRight: 8 }} />
+              <ShimmerBlock width={250} height={70} style={{ borderRadius: 20 }} />
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 16 }}>
+              <ShimmerBlock width={160} height={45} style={{ borderRadius: 20 }} />
+              <ShimmerBlock width={32} height={32} style={{ borderRadius: 16, marginLeft: 8 }} />
+            </View>
+          </View>
+        </View>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc' }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={isDarkMode ? '#fff' : '#0f172a'} />
-        </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <View style={styles.headerAvatar}>
-            <Ionicons name="headset" size={24} color="#fff" />
+      {/* Full-width Header */}
+      <View style={[styles.header, { backgroundColor: isDarkMode ? '#1e293b' : '#ffffff' }]}>
+        <View style={[styles.headerInner, { maxWidth: maxContentWidth }]}>
+          <TouchableOpacity style={[styles.backButton, { backgroundColor: isDarkMode ? '#334155' : '#f1f5f9' }]} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={isDarkMode ? '#fff' : '#0f172a'} />
+          </TouchableOpacity>
+          <View style={styles.headerInfo}>
+            <View style={styles.headerAvatarContainer}>
+              <Image
+                source={require('../../assets/images/nurse.png')}
+                style={styles.headerAvatar}
+                contentFit="cover"
+              />
+            </View>
+            <View style={styles.headerText}>
+              <Text style={[styles.headerTitle, { color: isDarkMode ? '#fff' : '#0f172a' }]}>
+                Nursing Department
+              </Text>
+              <Text style={styles.headerSubtitle}>
+                {adminTyping ? (
+                  <Text style={styles.typingText}>typing...</Text>
+                ) : (
+                  'Usually replies within 1 hour'
+                )}
+              </Text>
+            </View>
           </View>
-          <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>Support Chat</Text>
-            <Text style={styles.headerSubtitle}>
-              {adminTyping ? (
-                <Text style={styles.typingText}>typing...</Text>
-              ) : chat?.status === 'resolved' ? (
-                'Resolved'
-              ) : (
-                'Online'
-              )}
-            </Text>
-          </View>
+          {/* Clear Chat Button */}
+          {messages.length > 0 && (
+            <TouchableOpacity 
+              style={[styles.clearChatButton, { backgroundColor: isDarkMode ? '#334155' : '#fef2f2' }]} 
+              onPress={() => setShowClearModal(true)}
+            >
+              <Ionicons name="trash-outline" size={18} color="#ef4444" />
+            </TouchableOpacity>
+          )}
         </View>
-        {chat?.status === 'resolved' && (
-          <View style={styles.resolvedBadge}>
-            <Ionicons name="checkmark-circle" size={16} color="#22c55e" />
-            <Text style={styles.resolvedText}>Resolved</Text>
-          </View>
-        )}
       </View>
 
-      {/* Messages List */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
-      >
-        {messages.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="chatbubbles-outline" size={48} color="#94a3b8" />
+      {/* Resolved Banner - Full Width */}
+      {isResolved && (
+        <View style={styles.resolvedBannerContainer}>
+          <View style={[styles.resolvedBanner, { maxWidth: maxContentWidth }]}>
+            <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
+            <Text style={styles.resolvedBannerText}>This chat has been marked as resolved</Text>
+            <TouchableOpacity style={styles.reopenButtonStyled} onPress={handleReopenChat}>
+              <Ionicons name="refresh" size={16} color="#006dab" />
+              <Text style={styles.reopenButtonText}>Reopen</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Chat Content - Centered */}
+      <View style={[styles.chatContentWrapper, { maxWidth: maxContentWidth }]}>
+        {/* Messages List */}
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
+          showsVerticalScrollIndicator={false}
+          {...(isWeb ? { className: 'hide-scrollbar' } : {})}
+        >
+          {messages.length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={[styles.welcomeCard, { backgroundColor: isDarkMode ? '#1e293b' : '#ffffff' }]}>
+                <Image
+                  source={require('../../assets/images/nurse.png')}
+                  style={styles.welcomeAvatar}
+                  contentFit="cover"
+                />
+                <Text style={[styles.welcomeTitle, { color: isDarkMode ? '#fff' : '#0f172a' }]}>
+                  Nursing Department Support
+                </Text>
+                <Text style={[styles.welcomeText, { color: isDarkMode ? '#94a3b8' : '#64748b' }]}>
+                  {WELCOME_MESSAGE}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.emptyTitle}>Start a conversation</Text>
-            <Text style={styles.emptySubtitle}>
-              Send a message to our support team.{'\n'}We typically respond within a few minutes.
+          ) : (
+            messageGroups.map((group, groupIndex) => (
+              <View key={groupIndex}>
+                {/* Date separator */}
+                <View style={styles.dateSeparator}>
+                  <View style={[styles.dateLine, { backgroundColor: isDarkMode ? '#334155' : '#e2e8f0' }]} />
+                  <Text style={styles.dateText}>{group.date}</Text>
+                  <View style={[styles.dateLine, { backgroundColor: isDarkMode ? '#334155' : '#e2e8f0' }]} />
+                </View>
+
+                {/* Messages */}
+                {group.messages.map((message) => (
+                  <View
+                    key={message.id}
+                    style={[
+                      styles.messageRow,
+                      message.senderType === 'user' ? styles.messageRowUser : styles.messageRowAdmin,
+                    ]}
+                  >
+                    {/* Admin avatar on left */}
+                    {message.senderType === 'admin' && (
+                      <Image
+                        source={require('../../assets/images/nurse.png')}
+                        style={styles.messageAvatar}
+                        contentFit="cover"
+                      />
+                    )}
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.messageBubble,
+                        message.senderType === 'user' 
+                          ? styles.userMessage 
+                          : [styles.adminMessage, { backgroundColor: isDarkMode ? '#1e293b' : '#ffffff' }],
+                      ]}
+                      onLongPress={() => message.senderType === 'user' && handleDeleteMessage(message.id)}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.messageText,
+                          message.senderType === 'user' 
+                            ? styles.userMessageText 
+                            : [styles.adminMessageText, { color: isDarkMode ? '#fff' : '#0f172a' }],
+                        ]}
+                      >
+                        {message.message}
+                      </Text>
+                      <View style={styles.messageFooter}>
+                        <Text
+                          style={[
+                            styles.messageTime,
+                            message.senderType === 'user' ? styles.userMessageTime : styles.adminMessageTime,
+                          ]}
+                        >
+                          {formatTime(message.createdAt)}
+                        </Text>
+                        {renderTicks(message)}
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* User avatar on right */}
+                    {message.senderType === 'user' && (
+                      <View style={styles.userAvatarContainer}>
+                        <Text style={styles.userAvatarText}>
+                          {(userName || 'U').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            ))
+          )}
+
+          {/* Typing indicator */}
+          {adminTyping && (
+            <View style={[styles.messageRow, styles.messageRowAdmin]}>
+              <Image
+                source={require('../../assets/images/nurse.png')}
+                style={styles.messageAvatar}
+                contentFit="cover"
+              />
+              <View style={[styles.messageBubble, styles.adminMessage, styles.typingBubble, { backgroundColor: isDarkMode ? '#1e293b' : '#ffffff' }]}>
+                <View style={styles.typingDots}>
+                  <View style={[styles.typingDot, styles.typingDot1]} />
+                  <View style={[styles.typingDot, styles.typingDot2]} />
+                  <View style={[styles.typingDot, styles.typingDot3]} />
+                </View>
+              </View>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+
+      {/* Full-width Input Area */}
+      <View style={[styles.inputAreaContainer, { backgroundColor: isDarkMode ? '#1e293b' : '#ffffff' }]}>
+        {isResolved ? (
+          <View style={[styles.resolvedInputArea, { maxWidth: maxContentWidth }]}>
+            <Text style={styles.resolvedInputText}>
+              Chat is resolved. Tap "Reopen" above to continue the conversation.
             </Text>
           </View>
         ) : (
-          messageGroups.map((group, groupIndex) => (
-            <View key={groupIndex}>
-              {/* Date separator */}
-              <View style={styles.dateSeparator}>
-                <View style={styles.dateLine} />
-                <Text style={styles.dateText}>{group.date}</Text>
-                <View style={styles.dateLine} />
-              </View>
-
-              {/* Messages */}
-              {group.messages.map((message) => (
-                <TouchableOpacity
-                  key={message.id}
-                  style={[
-                    styles.messageBubble,
-                    message.senderType === 'user' ? styles.userMessage : styles.adminMessage,
-                  ]}
-                  onLongPress={() => message.senderType === 'user' && handleDeleteMessage(message.id)}
-                  activeOpacity={0.8}
-                >
-                  {message.senderType === 'admin' && (
-                    <Text style={styles.senderName}>{message.senderName}</Text>
-                  )}
-                  <Text
-                    style={[
-                      styles.messageText,
-                      message.senderType === 'user' ? styles.userMessageText : styles.adminMessageText,
-                    ]}
-                  >
-                    {message.message}
-                  </Text>
-                  <View style={styles.messageFooter}>
-                    <Text
-                      style={[
-                        styles.messageTime,
-                        message.senderType === 'user' ? styles.userMessageTime : styles.adminMessageTime,
-                      ]}
-                    >
-                      {formatTime(message.createdAt)}
-                    </Text>
-                    {renderTicks(message)}
-                  </View>
-                </TouchableOpacity>
-              ))}
+          <View style={[styles.inputContainer, { maxWidth: maxContentWidth }]}>
+            <TouchableOpacity style={styles.attachButton} onPress={handleAttachFile}>
+              <Ionicons name="attach" size={24} color="#64748b" />
+            </TouchableOpacity>
+            <View style={[styles.inputWrapper, { backgroundColor: isDarkMode ? '#334155' : '#f1f5f9' }]}>
+              <TextInput
+                style={[styles.textInput, { color: isDarkMode ? '#fff' : '#0f172a' }]}
+                value={messageText}
+                onChangeText={handleTextChange}
+                placeholder="Type a message..."
+                placeholderTextColor="#94a3b8"
+                multiline
+                maxLength={1000}
+              />
             </View>
-          ))
-        )}
-
-        {/* Typing indicator */}
-        {adminTyping && (
-          <View style={[styles.messageBubble, styles.adminMessage, styles.typingBubble]}>
-            <View style={styles.typingDots}>
-              <View style={[styles.typingDot, styles.typingDot1]} />
-              <View style={[styles.typingDot, styles.typingDot2]} />
-              <View style={[styles.typingDot, styles.typingDot3]} />
-            </View>
+            <TouchableOpacity
+              style={[styles.sendButton, (!messageText.trim() || isSending) && styles.sendButtonDisabled]}
+              onPress={handleSendMessage}
+              disabled={!messageText.trim() || isSending}
+            >
+              <Ionicons name="send" size={20} color="#fff" />
+            </TouchableOpacity>
           </View>
         )}
-      </ScrollView>
-
-      {/* Input Area */}
-      <View style={styles.inputContainer}>
-        <View style={styles.inputWrapper}>
-          <TextInput
-            style={styles.textInput}
-            value={messageText}
-            onChangeText={handleTextChange}
-            placeholder="Type a message..."
-            placeholderTextColor="#94a3b8"
-            multiline
-            maxLength={1000}
-          />
-        </View>
-        <TouchableOpacity
-          style={[styles.sendButton, (!messageText.trim() || isSending) && styles.sendButtonDisabled]}
-          onPress={handleSendMessage}
-          disabled={!messageText.trim() || isSending}
-        >
-          {isSending ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Ionicons name="send" size={20} color="#fff" />
-          )}
-        </TouchableOpacity>
       </View>
+
+      {/* Clear Chat Confirmation Modal */}
+      <Modal
+        visible={showClearModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowClearModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: isDarkMode ? '#1e293b' : '#ffffff' }]}>
+            <View style={styles.modalIconContainer}>
+              <Ionicons name="trash-outline" size={32} color="#ef4444" />
+            </View>
+            <Text style={[styles.modalTitle, { color: isDarkMode ? '#fff' : '#0f172a' }]}>
+              Clear Chat History
+            </Text>
+            <Text style={[styles.modalMessage, { color: isDarkMode ? '#94a3b8' : '#64748b' }]}>
+              This will permanently delete all messages for both you and the admin. This action cannot be undone.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton, { backgroundColor: isDarkMode ? '#334155' : '#f1f5f9' }]}
+                onPress={() => setShowClearModal(false)}
+                disabled={isClearing}
+              >
+                <Text style={[styles.modalCancelText, { color: isDarkMode ? '#fff' : '#64748b' }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalClearButton]}
+                onPress={handleClearChat}
+                disabled={isClearing}
+              >
+                {isClearing ? (
+                  <Text style={styles.modalClearText}>Clearing...</Text>
+                ) : (
+                  <Text style={styles.modalClearText}>Clear Chat</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
-const createStyles = (isDarkMode: boolean, width: number) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: isDarkMode ? '#0f172a' : '#f0f4f8',
-    },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: isDarkMode ? '#0f172a' : '#f0f4f8',
-    },
-    loadingText: {
-      marginTop: 12,
-      fontSize: 16,
-      color: '#64748b',
-    },
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  shimmerMessages: {
+    flex: 1,
+    padding: 16,
+  },
 
-    // Header
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      paddingTop: Platform.OS === 'ios' ? 50 : isWeb ? 16 : 40,
-      backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
-      borderBottomWidth: 1,
-      borderBottomColor: isDarkMode ? '#334155' : '#e2e8f0',
-    },
-    backButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: isDarkMode ? '#334155' : '#f1f5f9',
-    },
-    headerInfo: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginLeft: 12,
-    },
-    headerAvatar: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: '#006dab',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    headerText: {
-      marginLeft: 12,
-    },
-    headerTitle: {
-      fontSize: 17,
-      fontWeight: '600',
-      color: isDarkMode ? '#fff' : '#0f172a',
-    },
-    headerSubtitle: {
-      fontSize: 13,
-      color: '#22c55e',
-      marginTop: 2,
-    },
-    typingText: {
-      color: '#22c55e',
-      fontStyle: 'italic',
-    },
-    resolvedBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: 'rgba(34, 197, 94, 0.1)',
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 16,
-      gap: 4,
-    },
-    resolvedText: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: '#22c55e',
-    },
+  // Header - Full width
+  header: {
+    width: '100%',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 50 : isWeb ? 16 : 40,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  headerInner: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  headerAvatarContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: '#e0f2fe',
+  },
+  headerAvatar: {
+    width: 44,
+    height: 44,
+  },
+  headerText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  typingText: {
+    color: '#22c55e',
+    fontStyle: 'italic',
+  },
+  clearChatButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-    // Messages
-    messagesContainer: {
-      flex: 1,
-    },
-    messagesContent: {
-      paddingHorizontal: 16,
-      paddingVertical: 16,
-      paddingBottom: 24,
-    },
+  // Resolved Banner - Full width
+  resolvedBannerContainer: {
+    width: '100%',
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#dcfce7',
+  },
+  resolvedBanner: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  resolvedBannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#15803d',
+    fontWeight: '500',
+  },
+  reopenButtonStyled: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e0f2fe',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  reopenButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#006dab',
+  },
 
-    // Empty State
-    emptyState: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingVertical: 80,
-    },
-    emptyIcon: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: isDarkMode ? '#334155' : '#f1f5f9',
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 20,
-    },
-    emptyTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: isDarkMode ? '#fff' : '#0f172a',
-      marginBottom: 8,
-    },
-    emptySubtitle: {
-      fontSize: 14,
-      color: '#64748b',
-      textAlign: 'center',
-      lineHeight: 20,
-    },
+  // Chat content wrapper - Centered
+  chatContentWrapper: {
+    flex: 1,
+    width: '100%',
+    alignSelf: 'center',
+  },
 
-    // Date Separator
-    dateSeparator: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginVertical: 16,
-    },
-    dateLine: {
-      flex: 1,
-      height: 1,
-      backgroundColor: isDarkMode ? '#334155' : '#e2e8f0',
-    },
-    dateText: {
-      marginHorizontal: 12,
-      fontSize: 12,
-      color: '#64748b',
-      fontWeight: '500',
-    },
+  // Messages
+  messagesContainer: {
+    flex: 1,
+  },
+  messagesContent: {
+    padding: 16,
+    paddingBottom: 24,
+  },
 
-    // Message Bubbles
-    messageBubble: {
-      maxWidth: '80%',
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 18,
-      marginBottom: 8,
-    },
-    userMessage: {
-      alignSelf: 'flex-end',
-      backgroundColor: '#006dab',
-      borderBottomRightRadius: 4,
-    },
-    adminMessage: {
-      alignSelf: 'flex-start',
-      backgroundColor: isDarkMode ? '#334155' : '#ffffff',
-      borderBottomLeftRadius: 4,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 1,
-    },
-    senderName: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: '#006dab',
-      marginBottom: 4,
-    },
-    messageText: {
-      fontSize: 15,
-      lineHeight: 20,
-    },
-    userMessageText: {
-      color: '#ffffff',
-    },
-    adminMessageText: {
-      color: isDarkMode ? '#f1f5f9' : '#0f172a',
-    },
-    messageFooter: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
-      marginTop: 4,
-    },
-    messageTime: {
-      fontSize: 11,
-    },
-    userMessageTime: {
-      color: 'rgba(255, 255, 255, 0.7)',
-    },
-    adminMessageTime: {
-      color: '#94a3b8',
-    },
-    ticksContainer: {
-      flexDirection: 'row',
-      marginLeft: 4,
-    },
+  // Empty State / Welcome
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  welcomeCard: {
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    maxWidth: 320,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  welcomeAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginBottom: 16,
+  },
+  welcomeTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  welcomeText: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 
-    // Typing Indicator
-    typingBubble: {
-      paddingVertical: 14,
-    },
-    typingDots: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-    },
-    typingDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: '#64748b',
-    },
-    typingDot1: {
-      opacity: 0.4,
-    },
-    typingDot2: {
-      opacity: 0.6,
-    },
-    typingDot3: {
-      opacity: 0.8,
-    },
+  // Date Separator
+  dateSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dateLine: {
+    flex: 1,
+    height: 1,
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginHorizontal: 12,
+    fontWeight: '500',
+  },
 
-    // Input Area
-    inputContainer: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      paddingBottom: Platform.OS === 'ios' ? 30 : 16,
-      backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
-      borderTopWidth: 1,
-      borderTopColor: isDarkMode ? '#334155' : '#e2e8f0',
-    },
-    inputWrapper: {
-      flex: 1,
-      backgroundColor: isDarkMode ? '#334155' : '#f1f5f9',
-      borderRadius: 24,
-      paddingHorizontal: 16,
-      paddingVertical: Platform.OS === 'ios' ? 10 : 6,
-      marginRight: 10,
-      maxHeight: 120,
-    },
-    textInput: {
-      fontSize: 16,
-      color: isDarkMode ? '#fff' : '#0f172a',
-      maxHeight: 100,
-    },
-    sendButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: '#006dab',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    sendButtonDisabled: {
-      backgroundColor: '#94a3b8',
-    },
-  });
+  // Message Row
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginBottom: 12,
+  },
+  messageRowUser: {
+    justifyContent: 'flex-end',
+  },
+  messageRowAdmin: {
+    justifyContent: 'flex-start',
+  },
+  messageAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  userAvatarContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#006dab',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  userAvatarText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+
+  // Message Bubble - Softer borders
+  messageBubble: {
+    maxWidth: '70%',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+  userMessage: {
+    backgroundColor: '#006dab',
+    borderBottomRightRadius: 6,
+  },
+  adminMessage: {
+    borderBottomLeftRadius: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  messageText: {
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  userMessageText: {
+    color: '#ffffff',
+  },
+  adminMessageText: {
+    color: '#0f172a',
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 4,
+    gap: 4,
+  },
+  messageTime: {
+    fontSize: 11,
+  },
+  userMessageTime: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  adminMessageTime: {
+    color: '#94a3b8',
+  },
+  ticksContainer: {
+    flexDirection: 'row',
+  },
+
+  // Typing
+  typingBubble: {
+    paddingVertical: 14,
+  },
+  typingDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  typingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#94a3b8',
+  },
+  typingDot1: {
+    opacity: 0.4,
+  },
+  typingDot2: {
+    opacity: 0.6,
+  },
+  typingDot3: {
+    opacity: 0.8,
+  },
+
+  // Input Area Container - Full width
+  inputAreaContainer: {
+    width: '100%',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  inputContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 16,
+    gap: 8,
+  },
+  attachButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inputWrapper: {
+    flex: 1,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+    maxHeight: 120,
+  },
+  textInput: {
+    fontSize: 16,
+    maxHeight: 100,
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#006dab',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#94a3b8',
+  },
+
+  // Resolved Input Area
+  resolvedInputArea: {
+    width: '100%',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  resolvedInputText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fef2f2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelButton: {
+    borderWidth: 0,
+  },
+  modalClearButton: {
+    backgroundColor: '#ef4444',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalClearText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+});

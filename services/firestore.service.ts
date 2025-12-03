@@ -10,6 +10,7 @@ import {
     doc,
     getDoc,
     getDocs,
+    increment,
     limit,
     onSnapshot,
     orderBy,
@@ -2737,15 +2738,12 @@ export const chatService = {
       const chatRef = doc(db, COLLECTIONS.CHATS, userId);
       const unreadField = data.senderType === 'user' ? 'unreadByAdmin' : 'unreadByUser';
       
-      // Get current unread count and increment
-      const chatSnapshot = await getDoc(chatRef);
-      const currentUnread = chatSnapshot.exists() ? (chatSnapshot.data()[unreadField] || 0) : 0;
-      
+      // Use atomic increment for unread count
       await updateDoc(chatRef, {
         lastMessage: data.message.substring(0, 100),
         lastMessageAt: now(),
         lastMessageBy: data.senderType,
-        [unreadField]: currentUnread + 1,
+        [unreadField]: increment(1),
         updatedAt: now(),
       });
       
@@ -2862,6 +2860,35 @@ export const chatService = {
     } catch (error) {
       console.error('Error cleaning up old messages:', error);
       return 0;
+    }
+  },
+
+  // Clear all messages in a chat (for both user and admin)
+  async clearAllMessages(userId: string): Promise<void> {
+    try {
+      const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
+      const snapshot = await getDocs(messagesRef);
+      
+      if (snapshot.docs.length === 0) return;
+      
+      const batch = writeBatch(db);
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      
+      // Reset the chat's last message info
+      const chatRef = doc(db, COLLECTIONS.CHATS, userId);
+      await updateDoc(chatRef, {
+        lastMessage: '',
+        lastMessageAt: now(),
+        unreadByUser: 0,
+        unreadByAdmin: 0,
+        updatedAt: now(),
+      });
+    } catch (error) {
+      console.error('Error clearing all messages:', error);
+      throw error;
     }
   },
 

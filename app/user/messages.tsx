@@ -1,8 +1,8 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import SkeletonLoader from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
-import { broadcastService } from '@/services/firestore.service';
-import { Broadcast } from '@/types/firebase.types';
+import { broadcastService, chatService } from '@/services/firestore.service';
+import { Broadcast, Chat } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -83,27 +83,6 @@ const mockFAQs: FAQItem[] = [
   },
 ];
 
-const mockThreads: ChatThread[] = [
-  {
-    id: '1',
-    title: 'Support Team',
-    lastMessage: 'Your query has been resolved. Let us know if you need anything else!',
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    unread: 2,
-    avatar: '👨‍💻',
-    type: 'support',
-  },
-  {
-    id: '2',
-    title: 'Dr. Priya Sharma',
-    lastMessage: 'Remember to log your meals daily for better tracking.',
-    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    unread: 0,
-    avatar: '👩‍⚕️',
-    type: 'counsellor',
-  },
-];
-
 // Initial welcome message when user starts a new chat
 const getWelcomeMessage = (): Message => ({
   id: '1',
@@ -128,6 +107,48 @@ export default function MessagesScreen() {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [isLoadingBroadcasts, setIsLoadingBroadcasts] = useState(true);
   const [unreadBroadcastCount, setUnreadBroadcastCount] = useState(0);
+  
+  // Chat state for nursing department
+  const [nursingChat, setNursingChat] = useState<Chat | null>(null);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [isLoadingChat, setIsLoadingChat] = useState(true);
+
+  // Subscribe to nursing chat for unread count
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    
+    const loadChatData = async () => {
+      try {
+        const storedCoupleId = await AsyncStorage.getItem('coupleId');
+        const storedGender = await AsyncStorage.getItem('userGender');
+        
+        if (storedCoupleId && storedGender) {
+          const odAaByuserId = `${storedCoupleId}_${storedGender === 'male' ? 'M' : 'F'}`;
+          
+          // Subscribe to chat updates for real-time unread count
+          unsubscribe = chatService.subscribe(odAaByuserId, (chat) => {
+            setNursingChat(chat);
+            setChatUnreadCount(chat?.unreadByUser || 0);
+            setIsLoadingChat(false);
+          });
+        } else {
+          setIsLoadingChat(false);
+        }
+      } catch (error) {
+        console.error('Error loading chat data:', error);
+        setIsLoadingChat(false);
+      }
+    };
+
+    loadChatData();
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  // Total unread = broadcasts + chat messages
+  const totalUnreadCount = unreadBroadcastCount + chatUnreadCount;
 
   // Fetch broadcasts and check which are unread
   useEffect(() => {
@@ -218,6 +239,22 @@ export default function MessagesScreen() {
       return 'Yesterday';
     } else if (days < 7) {
       return `${days} days ago`;
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  };
+
+  const formatChatTime = (timestamp: any) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+    
+    if (days === 0) {
+      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    } else if (days === 1) {
+      return 'Yesterday';
     } else {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
@@ -349,52 +386,68 @@ export default function MessagesScreen() {
       {/* Conversations */}
       <Text style={styles.sectionTitle}>Conversations</Text>
       
-      {mockThreads.map((thread) => (
+      {/* Nursing Department Chat - only show if there are messages */}
+      {isLoadingChat ? (
+        <View style={styles.threadCard}>
+          <SkeletonLoader width={50} height={50} style={{ borderRadius: 25 }} />
+          <View style={styles.threadContent}>
+            <SkeletonLoader width="60%" height={16} style={{ marginBottom: 8 }} />
+            <SkeletonLoader width="80%" height={14} />
+          </View>
+        </View>
+      ) : nursingChat?.lastMessage && nursingChat.lastMessage.trim() !== '' ? (
         <TouchableOpacity
-          key={thread.id}
           style={styles.threadCard}
-          onPress={() => handleSelectThread(thread)}
+          onPress={() => router.push('/user/chat')}
           activeOpacity={0.85}
         >
           <View style={styles.threadAvatar}>
-            {thread.type === 'counsellor' ? (
-              <Image 
-                source={require('../../assets/images/nurse.png')} 
-                style={styles.nurseAvatarImage}
-                contentFit="cover"
-              />
-            ) : thread.type === 'support' ? (
-              <Image 
-                source={require('../../assets/images/supporter.png')} 
-                style={styles.nurseAvatarImage}
-                contentFit="cover"
-              />
-            ) : (
-              <Text style={styles.avatarEmoji}>{thread.avatar}</Text>
-            )}
-            {thread.unread > 0 && (
+            <Image 
+              source={require('../../assets/images/nurse.png')} 
+              style={styles.nurseAvatarImage}
+              contentFit="cover"
+            />
+            {chatUnreadCount > 0 && (
               <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>{thread.unread}</Text>
+                <Text style={styles.unreadText}>{chatUnreadCount > 9 ? '9+' : chatUnreadCount}</Text>
               </View>
             )}
           </View>
           <View style={styles.threadContent}>
             <View style={styles.threadHeader}>
-              <Text style={styles.threadTitle}>{thread.title}</Text>
-              <Text style={styles.threadTime}>{formatTime(thread.timestamp)}</Text>
+              <Text style={styles.threadTitle}>Chat with Nursing Department</Text>
+              <Text style={styles.threadTime}>
+                {nursingChat?.lastMessageAt ? formatChatTime(nursingChat.lastMessageAt) : ''}
+              </Text>
             </View>
             <Text 
               style={[
                 styles.threadPreview,
-                thread.unread > 0 && styles.threadPreviewUnread,
+                chatUnreadCount > 0 && styles.threadPreviewUnread,
               ]}
-              numberOfLines={2}
+              numberOfLines={1}
             >
-              {thread.lastMessage}
+              {nursingChat?.lastMessage}
             </Text>
           </View>
         </TouchableOpacity>
-      ))}
+      ) : (
+        /* No active conversations - show a prompt to start one */
+        <TouchableOpacity
+          style={styles.startChatCard}
+          onPress={() => router.push('/user/chat')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.startChatIcon}>
+            <Ionicons name="chatbubbles-outline" size={28} color="#006dab" />
+          </View>
+          <View style={styles.startChatContent}>
+            <Text style={styles.startChatTitle}>Start a Conversation</Text>
+            <Text style={styles.startChatSubtitle}>Chat with our nursing team for support</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+        </TouchableOpacity>
+      )}
 
       {/* Broadcasts / Announcements Section */}
       <View style={styles.broadcastsSection}>
@@ -1148,6 +1201,46 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  
+  // Start Chat Card (when no conversations)
+  startChatCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed' as const,
+  },
+  startChatIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  startChatContent: {
+    flex: 1,
+  },
+  startChatTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  startChatSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
   },
   
   // Broadcasts Section

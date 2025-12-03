@@ -21,6 +21,17 @@ import {
 
 const isWeb = Platform.OS === 'web';
 
+// Hide scrollbar CSS for web
+const hideScrollbarStyle = isWeb ? `
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+` : '';
+
 // Character limits for push notifications
 const TITLE_MAX_LENGTH = 50;
 const MESSAGE_MAX_LENGTH = 178;
@@ -262,6 +273,8 @@ export default function AdminCommunicationScreen() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [adminTyping, setAdminTyping] = useState(false);
+  const [showClearChatModal, setShowClearChatModal] = useState(false);
+  const [isClearingChat, setIsClearingChat] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesScrollRef = useRef<ScrollView>(null);
 
@@ -286,6 +299,19 @@ export default function AdminCommunicationScreen() {
     expiryValue: 0, // 0 = never expires
     expiryUnit: 'days' as 'minutes' | 'hours' | 'days',
   });
+
+  // Inject scrollbar hide CSS for web
+  useEffect(() => {
+    if (isWeb && typeof document !== 'undefined') {
+      const styleId = 'hide-scrollbar-style-admin';
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = hideScrollbarStyle;
+        document.head.appendChild(style);
+      }
+    }
+  }, []);
 
   // Load admin data, broadcasts, and subscribe to chats on focus
   useFocusEffect(
@@ -399,8 +425,11 @@ export default function AdminCommunicationScreen() {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Filter support chats
+  // Filter support chats - exclude chats with no messages
   const filteredSupportChats = supportChats.filter(chat => {
+    // Hide chats with no messages (cleared or never messaged)
+    if (!chat.lastMessage || chat.lastMessage.trim() === '') return false;
+    
     const matchesSearch =
       chat.coupleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       chat.odAaByuserName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -485,6 +514,22 @@ export default function AdminCommunicationScreen() {
     } catch (error) {
       console.error('Error updating chat status:', error);
       showToast('Failed to update chat status', 'error');
+    }
+  };
+
+  // Handle clear chat (for admin)
+  const handleClearChat = async () => {
+    if (!selectedChat) return;
+    setIsClearingChat(true);
+    try {
+      await chatService.clearAllMessages(selectedChat.id);
+      setShowClearChatModal(false);
+      showToast('Chat cleared successfully', 'success');
+    } catch (error) {
+      console.error('Error clearing chat:', error);
+      showToast('Failed to clear chat', 'error');
+    } finally {
+      setIsClearingChat(false);
     }
   };
 
@@ -899,20 +944,30 @@ export default function AdminCommunicationScreen() {
             </View>
           </View>
           <View style={styles.chatHeaderActions}>
+            {/* Clear Chat Button */}
+            {chatMessages.length > 0 && (
+              <TouchableOpacity 
+                style={styles.clearChatHeaderButton}
+                onPress={() => setShowClearChatModal(true)}
+              >
+                <Ionicons name="trash-outline" size={18} color={COLORS.error} />
+              </TouchableOpacity>
+            )}
+            {/* Resolve/Reopen Button */}
             <TouchableOpacity 
               style={[
-                styles.chatAction, 
-                selectedChat.status === 'resolved' ? styles.reopenButton : styles.resolveButton
+                styles.statusActionButton, 
+                selectedChat.status === 'resolved' ? styles.reopenActionButton : styles.resolveActionButton
               ]}
               onPress={() => handleToggleChatStatus(selectedChat)}
             >
               <Ionicons 
                 name={selectedChat.status === 'resolved' ? 'refresh' : 'checkmark-circle'} 
-                size={18} 
+                size={16} 
                 color={selectedChat.status === 'resolved' ? COLORS.info : COLORS.success} 
               />
               <Text style={[
-                styles.chatActionText,
+                styles.statusActionText,
                 { color: selectedChat.status === 'resolved' ? COLORS.info : COLORS.success }
               ]}>
                 {selectedChat.status === 'resolved' ? 'Reopen' : 'Resolve'}
@@ -926,11 +981,24 @@ export default function AdminCommunicationScreen() {
           ref={messagesScrollRef}
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
+          showsVerticalScrollIndicator={false}
+          {...(isWeb ? { className: 'hide-scrollbar' } : {})}
           onContentSizeChange={() => messagesScrollRef.current?.scrollToEnd({ animated: false })}
         >
           {isLoadingMessages ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={COLORS.primary} />
+            <View style={styles.shimmerMessagesContainer}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 16 }}>
+                <View style={styles.shimmerBlock} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 16 }}>
+                <View style={[styles.shimmerBlock, { width: 180 }]} />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 16 }}>
+                <View style={[styles.shimmerBlock, { width: 250 }]} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 16 }}>
+                <View style={[styles.shimmerBlock, { width: 160 }]} />
+              </View>
             </View>
           ) : chatMessages.length === 0 ? (
             <View style={styles.emptyMessages}>
@@ -1972,6 +2040,51 @@ export default function AdminCommunicationScreen() {
     </Animated.View>
   );
 
+  // Clear Chat Modal
+  const renderClearChatModal = () => (
+    <Modal
+      visible={showClearChatModal}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setShowClearChatModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.confirmModalContent}>
+          <View style={[styles.confirmIcon, { backgroundColor: COLORS.error + '15' }]}>
+            <Ionicons name="trash-outline" size={32} color={COLORS.error} />
+          </View>
+          <Text style={styles.confirmTitle}>Clear Chat History</Text>
+          <Text style={styles.confirmMessage}>
+            This will permanently delete all messages for both you and the user. This action cannot be undone.
+          </Text>
+          <View style={styles.confirmActions}>
+            <TouchableOpacity
+              style={styles.confirmCancelButton}
+              onPress={() => setShowClearChatModal(false)}
+              disabled={isClearingChat}
+            >
+              <Text style={styles.confirmCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.confirmSendButton, { backgroundColor: COLORS.error }]}
+              onPress={handleClearChat}
+              disabled={isClearingChat}
+            >
+              {isClearingChat ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="trash" size={18} color="#fff" />
+                  <Text style={styles.confirmSendText}>Clear</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       {renderHeader()}
@@ -2007,6 +2120,7 @@ export default function AdminCommunicationScreen() {
       {renderDeleteModal()}
       {renderEditModal()}
       {renderChatModal()}
+      {renderClearChatModal()}
       {toast.visible && renderToast()}
     </View>
   );
@@ -2330,7 +2444,9 @@ const styles = StyleSheet.create({
   },
   chatHeaderActions: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    gap: 10,
+    marginRight: 12,
   },
   chatAction: {
     width: 40,
@@ -2340,11 +2456,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  clearChatHeaderButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: COLORS.error + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+    borderWidth: 1,
+  },
+  resolveActionButton: {
+    backgroundColor: COLORS.success + '10',
+    borderColor: COLORS.success + '30',
+  },
+  reopenActionButton: {
+    backgroundColor: COLORS.info + '10',
+    borderColor: COLORS.info + '30',
+  },
+  statusActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
 
   // Messages
   messagesContainer: {
     flex: 1,
     padding: 16,
+  },
+  shimmerMessagesContainer: {
+    padding: 16,
+  },
+  shimmerBlock: {
+    width: 220,
+    height: 60,
+    borderRadius: 20,
+    backgroundColor: COLORS.borderLight,
+    opacity: 0.6,
   },
   messageItem: {
     marginBottom: 16,
@@ -2357,16 +2512,16 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     maxWidth: '80%',
-    padding: 12,
-    borderRadius: 16,
+    padding: 14,
+    borderRadius: 20,
   },
   messageBubbleUser: {
     backgroundColor: COLORS.borderLight,
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 6,
   },
   messageBubbleAdmin: {
     backgroundColor: COLORS.primary,
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 6,
   },
   messageSender: {
     fontSize: 11,
@@ -2377,7 +2532,7 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 14,
     color: COLORS.textPrimary,
-    lineHeight: 20,
+    lineHeight: 21,
   },
   messageTextAdmin: {
     color: '#fff',
@@ -3215,19 +3370,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.success + '15',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
     gap: 6,
+    borderWidth: 1,
+    borderColor: COLORS.success + '30',
   },
   reopenButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.info + '15',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
     gap: 6,
+    borderWidth: 1,
+    borderColor: COLORS.info + '30',
   },
   chatActionText: {
     fontSize: 13,

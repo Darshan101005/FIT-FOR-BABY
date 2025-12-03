@@ -1,5 +1,5 @@
 import { useTheme } from '@/context/ThemeContext';
-import { broadcastService } from '@/services/firestore.service';
+import { broadcastService, chatService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePathname, useRouter } from 'expo-router';
@@ -72,6 +72,7 @@ export default function BottomNavBar() {
   const isMobile = width < 768;
   const { colors } = useTheme();
   const [unreadBroadcastCount, setUnreadBroadcastCount] = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   // Fetch unread broadcast count for badge
   useEffect(() => {
@@ -101,6 +102,37 @@ export default function BottomNavBar() {
     const interval = setInterval(fetchUnreadCount, 30 * 1000);
     return () => clearInterval(interval);
   }, [pathname]); // Re-fetch when pathname changes (user navigates)
+
+  // Subscribe to chat unread count
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    
+    const loadChatUnread = async () => {
+      try {
+        const storedCoupleId = await AsyncStorage.getItem('coupleId');
+        const storedGender = await AsyncStorage.getItem('userGender');
+        
+        if (storedCoupleId && storedGender) {
+          const odAaByuserId = `${storedCoupleId}_${storedGender === 'male' ? 'M' : 'F'}`;
+          
+          unsubscribe = chatService.subscribe(odAaByuserId, (chat) => {
+            setChatUnreadCount(chat?.unreadByUser || 0);
+          });
+        }
+      } catch (error) {
+        console.error('Error loading chat unread:', error);
+      }
+    };
+
+    loadChatUnread();
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  // Total unread = broadcasts + chat
+  const totalUnreadCount = unreadBroadcastCount + chatUnreadCount;
 
   const isActive = (route: string) => {
     // Check if the current path matches or starts with the route
@@ -145,10 +177,10 @@ export default function BottomNavBar() {
                   size={active ? 26 : 24}
                   color={active ? colors.primary : colors.textMuted}
                 />
-                {tab.showBadge && unreadBroadcastCount > 0 && (
+                {tab.showBadge && totalUnreadCount > 0 && (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>
-                      {unreadBroadcastCount > 9 ? '9+' : unreadBroadcastCount}
+                      {totalUnreadCount > 9 ? '9+' : totalUnreadCount}
                     </Text>
                   </View>
                 )}
