@@ -657,6 +657,283 @@ export const ProgressPageSkeleton: React.FC<{ isMobile?: boolean }> = ({ isMobil
   );
 };
 
+// User Appointments Page Skeleton
+export const AppointmentsPageSkeleton: React.FC<{ isMobile?: boolean }> = ({ isMobile = true }) => {
+  const { colors } = useTheme();
+  
+  return (
+    <View style={[appointmentStyles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[appointmentStyles.header, { backgroundColor: colors.surface }]}>
+        <View style={appointmentStyles.headerLeft}>
+          <Skeleton width={40} height={40} borderRadius={12} />
+          <View>
+            <Skeleton width={120} height={18} borderRadius={4} />
+            <Skeleton width={80} height={12} borderRadius={4} style={{ marginTop: 4 }} />
+          </View>
+        </View>
+        <Skeleton width={40} height={40} borderRadius={20} />
+      </View>
+
+      {/* Section Tabs */}
+      <View style={appointmentStyles.tabsContainer}>
+        <Skeleton width="48%" height={44} borderRadius={12} />
+        <Skeleton width="48%" height={44} borderRadius={12} />
+      </View>
+
+      {/* Calendar Skeleton */}
+      <View style={[appointmentStyles.calendarCard, { backgroundColor: colors.surface }]}>
+        <View style={appointmentStyles.calendarHeader}>
+          <Skeleton width={24} height={24} borderRadius={6} />
+          <Skeleton width={120} height={18} borderRadius={4} />
+          <Skeleton width={24} height={24} borderRadius={6} />
+        </View>
+        <View style={appointmentStyles.weekdaysRow}>
+          {[1, 2, 3, 4, 5, 6, 7].map((_, index) => (
+            <Skeleton key={index} width={30} height={14} borderRadius={4} />
+          ))}
+        </View>
+        <View style={appointmentStyles.daysGrid}>
+          {Array.from({ length: 35 }).map((_, index) => (
+            <View key={index} style={appointmentStyles.dayCell}>
+              <Skeleton width={32} height={32} borderRadius={16} />
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Appointment Form Skeleton */}
+      <View style={[appointmentStyles.formCard, { backgroundColor: colors.surface }]}>
+        <View style={appointmentStyles.formHeader}>
+          <Skeleton width={40} height={40} borderRadius={20} />
+          <Skeleton width={180} height={18} borderRadius={4} />
+        </View>
+        <View style={appointmentStyles.formFields}>
+          <Skeleton width="100%" height={48} borderRadius={12} />
+          <Skeleton width="100%" height={48} borderRadius={12} style={{ marginTop: 12 }} />
+          <Skeleton width="100%" height={48} borderRadius={12} style={{ marginTop: 12 }} />
+        </View>
+        <Skeleton width="100%" height={50} borderRadius={12} style={{ marginTop: 16 }} />
+      </View>
+
+      {/* Logged Appointments Skeleton */}
+      <View style={appointmentStyles.loggedSection}>
+        <Skeleton width={80} height={16} borderRadius={4} style={{ marginBottom: 12 }} />
+        {[1, 2].map((_, index) => (
+          <View key={index} style={[appointmentStyles.appointmentCard, { backgroundColor: colors.surface }]}>
+            <View style={appointmentStyles.dateBox}>
+              <Skeleton width={32} height={24} borderRadius={4} />
+              <Skeleton width={28} height={12} borderRadius={4} style={{ marginTop: 4 }} />
+            </View>
+            <View style={appointmentStyles.cardContent}>
+              <Skeleton width={80} height={14} borderRadius={4} />
+              <Skeleton width={120} height={12} borderRadius={4} style={{ marginTop: 6 }} />
+              <Skeleton width={100} height={10} borderRadius={4} style={{ marginTop: 4 }} />
+            </View>
+            <Skeleton width={24} height={24} borderRadius={12} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+// Admin Appointments Page Skeleton
+export const AdminAppointmentsPageSkeleton: React.FC<{ isMobile?: boolean }> = ({ isMobile = true }) => {
+  const { colors } = useTheme();
+  
+  return (
+    <View style={[appointmentStyles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[appointmentStyles.adminHeader, { backgroundColor: colors.surface }]}>
+        <View>
+          <Skeleton width={180} height={24} borderRadius={6} />
+          <Skeleton width={140} height={14} borderRadius={4} style={{ marginTop: 6 }} />
+        </View>
+        <Skeleton width={140} height={44} borderRadius={12} />
+      </View>
+
+      {/* Tabs */}
+      <View style={appointmentStyles.adminTabs}>
+        <Skeleton width="48%" height={48} borderRadius={12} />
+        <Skeleton width="48%" height={48} borderRadius={12} />
+      </View>
+
+      {/* Search and Filter */}
+      <View style={appointmentStyles.searchFilterRow}>
+        <Skeleton width={isMobile ? '100%' : '60%'} height={48} borderRadius={12} />
+        {!isMobile && <Skeleton width="35%" height={48} borderRadius={12} />}
+      </View>
+
+      {/* Visit Cards */}
+      <View style={appointmentStyles.visitsList}>
+        {[1, 2, 3, 4].map((_, index) => (
+          <View key={index} style={[appointmentStyles.visitCard, { backgroundColor: colors.surface }]}>
+            <View style={appointmentStyles.visitCardHeader}>
+              <View style={appointmentStyles.visitCardLeft}>
+                <Skeleton width={48} height={48} borderRadius={12} />
+                <View>
+                  <Skeleton width={140} height={16} borderRadius={4} />
+                  <Skeleton width={100} height={12} borderRadius={4} style={{ marginTop: 6 }} />
+                </View>
+              </View>
+              <Skeleton width={80} height={28} borderRadius={14} />
+            </View>
+            <View style={appointmentStyles.visitCardBody}>
+              <View style={appointmentStyles.visitInfoRow}>
+                <Skeleton width={18} height={18} borderRadius={4} />
+                <Skeleton width={120} height={14} borderRadius={4} />
+              </View>
+              <View style={appointmentStyles.visitInfoRow}>
+                <Skeleton width={18} height={18} borderRadius={4} />
+                <Skeleton width={80} height={14} borderRadius={4} />
+              </View>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+const appointmentStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 50,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  calendarCard: {
+    marginHorizontal: 16,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  weekdaysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
+  },
+  daysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  dayCell: {
+    width: '14.28%',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  formCard: {
+    marginHorizontal: 16,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  formHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  formFields: {
+    gap: 0,
+  },
+  loggedSection: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  appointmentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 12,
+    gap: 12,
+  },
+  dateBox: {
+    alignItems: 'center',
+    padding: 8,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  adminHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  adminTabs: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  searchFilterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  visitsList: {
+    paddingHorizontal: 20,
+  },
+  visitCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  visitCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  visitCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  visitCardBody: {
+    gap: 8,
+  },
+  visitInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,

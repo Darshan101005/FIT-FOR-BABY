@@ -1,4 +1,5 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { Skeleton } from '@/components/ui/SkeletonLoader';
 import { useApp } from '@/context/AppContext';
 import { doctorVisitService, formatDateString, nursingVisitService } from '@/services/firestore.service';
 import { DoctorVisit, NursingDepartmentVisit } from '@/types/firebase.types';
@@ -652,6 +653,10 @@ export default function AppointmentsScreen() {
     const upcomingVisits = nursingVisits
       .filter((v: NursingDepartmentVisit) => v.status === 'scheduled' || v.status === 'confirmed')
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const cancelledVisits = nursingVisits
+      .filter((v: NursingDepartmentVisit) => v.status === 'cancelled')
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 3);
     const pastVisits = nursingVisits.filter((v: NursingDepartmentVisit) => v.status === 'completed').slice(-3);
     const nextVisit = upcomingVisits[0];
 
@@ -788,9 +793,149 @@ export default function AppointmentsScreen() {
             ))}
           </View>
         )}
+
+        {/* Cancelled Visits */}
+        {cancelledVisits.length > 0 && (
+          <View style={styles.visitCategory}>
+            <Text style={styles.visitCategoryTitle}>Cancelled Visits</Text>
+            {cancelledVisits.map((visit: NursingDepartmentVisit) => (
+              <View key={visit.id} style={[styles.nurseVisitCard, styles.nurseVisitCardCancelled]}>
+                <View style={[styles.visitDateBox, styles.visitDateBoxCancelled]}>
+                  <Text style={[styles.visitDayNum, styles.visitDayNumCancelled]}>
+                    {new Date(visit.date).getDate()}
+                  </Text>
+                  <Text style={[styles.visitMonth, styles.visitMonthCancelled]}>
+                    {MONTHS[new Date(visit.date).getMonth()]}
+                  </Text>
+                </View>
+                <View style={styles.visitContent}>
+                  <View style={styles.visitTimeRow}>
+                    <Ionicons name="time-outline" size={14} color="#ef4444" />
+                    <Text style={[styles.visitTime, styles.visitTimeCancelled]}>{visit.time}</Text>
+                  </View>
+                  {visit.departmentName && (
+                    <Text style={[styles.visitNurseName, styles.visitNurseNameCancelled]}>{visit.departmentName}</Text>
+                  )}
+                  {visit.visitNumber && (
+                    <Text style={[styles.visitNumberText, styles.visitNumberTextCancelled]}>Visit #{visit.visitNumber}</Text>
+                  )}
+                </View>
+                <View style={[styles.visitStatusBadge, styles.visitStatusCancelled]}>
+                  <Text style={[styles.visitStatusText, styles.visitStatusTextCancelled]}>Cancelled</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     );
   };
+
+  // Inline skeleton for loading state
+  const renderLoadingSkeleton = () => (
+    <View style={styles.contentContainer}>
+      {activeSection === 'appointments' ? (
+        <>
+          {/* Calendar Skeleton */}
+          <View style={styles.skeletonCalendarCard}>
+            <View style={styles.skeletonCalendarHeader}>
+              <Skeleton width={24} height={24} borderRadius={6} />
+              <Skeleton width={120} height={18} borderRadius={4} />
+              <Skeleton width={24} height={24} borderRadius={6} />
+            </View>
+            <View style={styles.skeletonWeekdays}>
+              {[1, 2, 3, 4, 5, 6, 7].map((_, i) => (
+                <Skeleton key={i} width={28} height={14} borderRadius={4} />
+              ))}
+            </View>
+            <View style={styles.skeletonDaysGrid}>
+              {Array.from({ length: 35 }).map((_, i) => (
+                <View key={i} style={styles.skeletonDayCell}>
+                  <Skeleton width={32} height={32} borderRadius={16} />
+                </View>
+              ))}
+            </View>
+          </View>
+          
+          {/* Form Skeleton */}
+          <View style={styles.skeletonFormCard}>
+            <View style={styles.skeletonFormHeader}>
+              <Skeleton width={40} height={40} borderRadius={20} />
+              <Skeleton width={180} height={18} borderRadius={4} />
+            </View>
+            <Skeleton width="100%" height={48} borderRadius={12} style={{ marginTop: 16 }} />
+            <Skeleton width="100%" height={48} borderRadius={12} style={{ marginTop: 12 }} />
+            <Skeleton width="100%" height={50} borderRadius={12} style={{ marginTop: 16 }} />
+          </View>
+          
+          {/* Logged Cards Skeleton */}
+          <View style={styles.skeletonLoggedSection}>
+            <Skeleton width={80} height={16} borderRadius={4} style={{ marginBottom: 12 }} />
+            {[1, 2].map((_, i) => (
+              <View key={i} style={styles.skeletonAppointmentCard}>
+                <View style={styles.skeletonDateBox}>
+                  <Skeleton width={32} height={24} borderRadius={4} />
+                  <Skeleton width={28} height={12} borderRadius={4} style={{ marginTop: 4 }} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Skeleton width={80} height={14} borderRadius={4} />
+                  <Skeleton width={120} height={12} borderRadius={4} style={{ marginTop: 6 }} />
+                </View>
+                <Skeleton width={24} height={24} borderRadius={12} />
+              </View>
+            ))}
+          </View>
+        </>
+      ) : (
+        /* Nurse Visits Skeleton */
+        <View style={styles.skeletonNurseSection}>
+          <View style={styles.skeletonNurseHeader}>
+            <Skeleton width={48} height={48} borderRadius={24} />
+            <View style={{ flex: 1 }}>
+              <Skeleton width={160} height={18} borderRadius={4} />
+              <Skeleton width={120} height={12} borderRadius={4} style={{ marginTop: 4 }} />
+            </View>
+          </View>
+          
+          {/* Calendar Skeleton */}
+          <View style={styles.skeletonCalendarCard}>
+            <View style={styles.skeletonCalendarHeader}>
+              <Skeleton width={24} height={24} borderRadius={6} />
+              <Skeleton width={120} height={18} borderRadius={4} />
+              <Skeleton width={24} height={24} borderRadius={6} />
+            </View>
+            <View style={styles.skeletonWeekdays}>
+              {[1, 2, 3, 4, 5, 6, 7].map((_, i) => (
+                <Skeleton key={i} width={28} height={14} borderRadius={4} />
+              ))}
+            </View>
+            <View style={styles.skeletonDaysGrid}>
+              {Array.from({ length: 35 }).map((_, i) => (
+                <View key={i} style={styles.skeletonDayCell}>
+                  <Skeleton width={32} height={32} borderRadius={16} />
+                </View>
+              ))}
+            </View>
+          </View>
+          
+          {/* Visit Cards Skeleton */}
+          {[1, 2, 3].map((_, i) => (
+            <View key={i} style={styles.skeletonVisitCard}>
+              <View style={styles.skeletonDateBox}>
+                <Skeleton width={32} height={24} borderRadius={4} />
+                <Skeleton width={28} height={12} borderRadius={4} style={{ marginTop: 4 }} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Skeleton width={80} height={14} borderRadius={4} />
+                <Skeleton width={100} height={12} borderRadius={4} style={{ marginTop: 6 }} />
+              </View>
+              <Skeleton width={70} height={24} borderRadius={12} />
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -816,17 +961,19 @@ export default function AppointmentsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.contentContainer}>
-          {activeSection === 'appointments' ? (
-            <>
-              {renderCalendar()}
-              {renderAppointmentForm()}
-              {renderLoggedAppointments()}
-            </>
-          ) : (
-            renderNurseVisits()
-          )}
-        </View>
+        {isLoading ? renderLoadingSkeleton() : (
+          <View style={styles.contentContainer}>
+            {activeSection === 'appointments' ? (
+              <>
+                {renderCalendar()}
+                {renderAppointmentForm()}
+                {renderLoggedAppointments()}
+              </>
+            ) : (
+              renderNurseVisits()
+            )}
+          </View>
+        )}
       </ScrollView>
       
       <BottomNavBar />
@@ -1769,5 +1916,112 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     color: '#98be4e',
+  },
+  // Cancelled visit styles
+  nurseVisitCardCancelled: {
+    opacity: 0.8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#ef4444',
+  },
+  visitDateBoxCancelled: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  visitDayNumCancelled: {
+    color: '#ef4444',
+  },
+  visitMonthCancelled: {
+    color: '#ef4444',
+  },
+  visitTimeCancelled: {
+    color: '#ef4444',
+    textDecorationLine: 'line-through',
+  },
+  visitNurseNameCancelled: {
+    color: '#94a3b8',
+  },
+  visitNumberTextCancelled: {
+    color: '#94a3b8',
+  },
+  visitStatusCancelled: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  visitStatusTextCancelled: {
+    color: '#ef4444',
+  },
+  // Skeleton styles
+  skeletonCalendarCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    marginHorizontal: 4,
+  },
+  skeletonCalendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  skeletonWeekdays: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
+  },
+  skeletonDaysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  skeletonDayCell: {
+    width: '14.28%',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  skeletonFormCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    marginHorizontal: 4,
+  },
+  skeletonFormHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  skeletonLoggedSection: {
+    paddingHorizontal: 4,
+    paddingTop: 8,
+  },
+  skeletonAppointmentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 12,
+    gap: 12,
+  },
+  skeletonDateBox: {
+    alignItems: 'center',
+    padding: 8,
+  },
+  skeletonNurseSection: {
+    paddingHorizontal: 4,
+  },
+  skeletonNurseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  skeletonVisitCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 12,
+    gap: 12,
   },
 });

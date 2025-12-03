@@ -1,3 +1,4 @@
+import { Skeleton } from '@/components/ui/SkeletonLoader';
 import { useApp } from '@/context/AppContext';
 import { coupleService, doctorVisitService, formatDateString, nursingVisitService } from '@/services/firestore.service';
 import { Couple, DoctorVisit, NursingDepartmentVisit } from '@/types/firebase.types';
@@ -5,16 +6,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
-    ActivityIndicator,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -1398,10 +1399,33 @@ export default function AdminAppointmentsScreen() {
   const renderContent = () => {
     if (isLoading) {
       return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading appointments...</Text>
-        </View>
+        <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
+          {[1, 2, 3, 4].map((_, index) => (
+            <View key={index} style={styles.skeletonCard}>
+              <View style={styles.skeletonCardHeader}>
+                <View style={styles.skeletonCardLeft}>
+                  <Skeleton width={48} height={48} borderRadius={12} />
+                  <View style={{ gap: 6 }}>
+                    <Skeleton width={140} height={16} borderRadius={4} />
+                    <Skeleton width={100} height={12} borderRadius={4} />
+                  </View>
+                </View>
+                <Skeleton width={80} height={28} borderRadius={14} />
+              </View>
+              <View style={styles.skeletonCardBody}>
+                <View style={styles.skeletonInfoRow}>
+                  <Skeleton width={18} height={18} borderRadius={4} />
+                  <Skeleton width={120} height={14} borderRadius={4} />
+                </View>
+                <View style={styles.skeletonInfoRow}>
+                  <Skeleton width={18} height={18} borderRadius={4} />
+                  <Skeleton width={80} height={14} borderRadius={4} />
+                </View>
+              </View>
+            </View>
+          ))}
+          <View style={{ height: 20 }} />
+        </ScrollView>
       );
     }
 
@@ -1867,7 +1891,7 @@ export default function AdminAppointmentsScreen() {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const checkDate = new Date(postponeCalendarMonth.getFullYear(), postponeCalendarMonth.getMonth(), day);
-      return checkDate < today;
+      return checkDate <= today;
     };
 
     const isPostponeDateSelected = (day: number) => {
@@ -3239,5 +3263,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.textPrimary,
+  },
+  // Skeleton styles
+  skeletonCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  skeletonCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  skeletonCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  skeletonCardBody: {
+    gap: 8,
+  },
+  skeletonInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });
