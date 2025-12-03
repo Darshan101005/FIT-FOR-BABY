@@ -82,18 +82,18 @@ const navItems: NavItem[] = [
     route: '/admin/appointments',
   },
   {
-    id: 'requested-calls',
-    label: 'Requested Calls',
-    icon: 'call-outline',
-    iconFamily: 'Ionicons',
-    route: '/admin/requested-calls',
-  },
-  {
     id: 'communication',
     label: 'Communication',
     icon: 'chatbubbles-outline',
     iconFamily: 'Ionicons',
     route: '/admin/communication',
+  },
+  {
+    id: 'requested-calls',
+    label: 'Requested Calls',
+    icon: 'call-outline',
+    iconFamily: 'Ionicons',
+    route: '/admin/requested-calls',
   },
 ];
 

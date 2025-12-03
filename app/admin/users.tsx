@@ -1,21 +1,21 @@
-import { adminService, coupleService } from '@/services/firestore.service';
-import { Couple as FirestoreCouple } from '@/types/firebase.types';
+import { adminService, coupleService, nursingVisitService } from '@/services/firestore.service';
+import { Couple as FirestoreCouple, NursingDepartmentVisit } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -45,24 +45,14 @@ interface Couple extends FirestoreCouple {
   id: string;
 }
 
-// Mock appointments data for users (will be replaced with real data later)
-interface UserAppointment {
-  id: string;
-  date: string;
-  time: string;
-  doctor: string;
-  purpose: string;
-  type: 'checkup' | 'consultation' | 'follow-up' | 'counseling';
-}
-
-const mockUserAppointments: Record<string, UserAppointment | null> = {};
-
-const getAppointmentTypeColor = (type: string) => {
-  switch (type) {
-    case 'checkup': return COLORS.success;
-    case 'consultation': return COLORS.info;
-    case 'follow-up': return COLORS.warning;
-    case 'counseling': return COLORS.accent;
+// Get color for visit status
+const getVisitStatusColor = (status: string) => {
+  switch (status) {
+    case 'scheduled': return COLORS.info;
+    case 'confirmed': return COLORS.success;
+    case 'completed': return COLORS.textMuted;
+    case 'cancelled': return COLORS.error;
+    case 'missed': return COLORS.warning;
     default: return COLORS.textMuted;
   }
 };
@@ -95,6 +85,8 @@ export default function AdminUsersScreen() {
     femaleTempPassword: '' 
   });
   const [currentAdminUid, setCurrentAdminUid] = useState('');
+  const [upcomingVisits, setUpcomingVisits] = useState<Record<string, NursingDepartmentVisit | null>>({});
+  const [loadingVisits, setLoadingVisits] = useState<Record<string, boolean>>({});
 
   // Enrollment form state
   const [enrollForm, setEnrollForm] = useState({
@@ -193,12 +185,28 @@ export default function AdminUsersScreen() {
     }, 2500);
   };
 
-  const toggleCoupleExpand = (coupleId: string) => {
+  const toggleCoupleExpand = async (coupleId: string) => {
+    const isExpanding = !expandedCouples.includes(coupleId);
+    
     setExpandedCouples(prev =>
       prev.includes(coupleId)
         ? prev.filter(id => id !== coupleId)
         : [...prev, coupleId]
     );
+
+    // Load upcoming visit when expanding if not already loaded
+    if (isExpanding && upcomingVisits[coupleId] === undefined) {
+      setLoadingVisits(prev => ({ ...prev, [coupleId]: true }));
+      try {
+        const nextVisit = await nursingVisitService.getNext(coupleId);
+        setUpcomingVisits(prev => ({ ...prev, [coupleId]: nextVisit }));
+      } catch (error) {
+        console.error('Error loading upcoming visit:', error);
+        setUpcomingVisits(prev => ({ ...prev, [coupleId]: null }));
+      } finally {
+        setLoadingVisits(prev => ({ ...prev, [coupleId]: false }));
+      }
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -741,43 +749,86 @@ export default function AdminUsersScreen() {
 
             {/* Upcoming Appointment Section */}
             {(() => {
-              const appointment = mockUserAppointments[couple.coupleId];
+              const visit = upcomingVisits[couple.coupleId];
+              const isLoadingVisit = loadingVisits[couple.coupleId];
+              
+              // Format date for display
+              const formatVisitDate = (dateStr: string) => {
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('en-US', { 
+                  weekday: 'short', 
+                  month: 'short', 
+                  day: 'numeric',
+                  year: 'numeric'
+                });
+              };
+              
               return (
                 <View style={styles.appointmentCard}>
                   <View style={styles.appointmentHeader}>
                     <Ionicons name="calendar" size={18} color={COLORS.primary} />
-                    <Text style={styles.appointmentTitle}>Upcoming Appointment</Text>
+                    <Text style={styles.appointmentTitle}>Upcoming Visit</Text>
                   </View>
-                  {appointment ? (
+                  {isLoadingVisit ? (
+                    <View style={styles.noAppointmentContent}>
+                      <ActivityIndicator size="small" color={COLORS.primary} />
+                      <Text style={styles.noAppointmentText}>Loading...</Text>
+                    </View>
+                  ) : visit ? (
                     <View style={styles.appointmentContent}>
                       <View style={styles.appointmentRow}>
                         <View style={styles.appointmentInfo}>
                           <View style={styles.appointmentDateBadge}>
                             <Ionicons name="time-outline" size={14} color={COLORS.primary} />
-                            <Text style={styles.appointmentDateText}>{appointment.date} at {appointment.time}</Text>
+                            <Text style={styles.appointmentDateText}>{formatVisitDate(visit.date)} at {visit.time}</Text>
                           </View>
-                          <View style={[styles.appointmentTypeBadge, { backgroundColor: getAppointmentTypeColor(appointment.type) + '15' }]}>
-                            <Text style={[styles.appointmentTypeText, { color: getAppointmentTypeColor(appointment.type) }]}>
-                              {appointment.type.charAt(0).toUpperCase() + appointment.type.slice(1)}
+                          <View style={[styles.appointmentTypeBadge, { backgroundColor: getVisitStatusColor(visit.status) + '15' }]}>
+                            <Text style={[styles.appointmentTypeText, { color: getVisitStatusColor(visit.status) }]}>
+                              {visit.status.charAt(0).toUpperCase() + visit.status.slice(1)}
                             </Text>
                           </View>
                         </View>
                       </View>
-                      <View style={styles.appointmentDetailRow}>
-                        <Ionicons name="medkit" size={14} color={COLORS.accent} />
-                        <Text style={styles.appointmentDetailLabel}>Doctor:</Text>
-                        <Text style={styles.appointmentDetailValue}>{appointment.doctor}</Text>
-                      </View>
-                      <View style={styles.appointmentDetailRow}>
-                        <Ionicons name="document-text" size={14} color={COLORS.info} />
-                        <Text style={styles.appointmentDetailLabel}>Purpose:</Text>
-                        <Text style={styles.appointmentDetailValue}>{appointment.purpose}</Text>
-                      </View>
+                      {visit.departmentName && (
+                        <View style={styles.appointmentDetailRow}>
+                          <Ionicons name="business" size={14} color={COLORS.accent} />
+                          <Text style={styles.appointmentDetailLabel}>Department:</Text>
+                          <Text style={styles.appointmentDetailValue}>{visit.departmentName}</Text>
+                        </View>
+                      )}
+                      {visit.assignedNurse && (
+                        <View style={styles.appointmentDetailRow}>
+                          <Ionicons name="person" size={14} color={COLORS.info} />
+                          <Text style={styles.appointmentDetailLabel}>Nurse:</Text>
+                          <Text style={styles.appointmentDetailValue}>{visit.assignedNurse}</Text>
+                        </View>
+                      )}
+                      {visit.purpose && (
+                        <View style={styles.appointmentDetailRow}>
+                          <Ionicons name="document-text" size={14} color={COLORS.info} />
+                          <Text style={styles.appointmentDetailLabel}>Purpose:</Text>
+                          <Text style={styles.appointmentDetailValue}>{visit.purpose}</Text>
+                        </View>
+                      )}
+                      {visit.location && (
+                        <View style={styles.appointmentDetailRow}>
+                          <Ionicons name="location" size={14} color={COLORS.warning} />
+                          <Text style={styles.appointmentDetailLabel}>Location:</Text>
+                          <Text style={styles.appointmentDetailValue}>{visit.location}</Text>
+                        </View>
+                      )}
+                      {visit.visitNumber && (
+                        <View style={styles.appointmentDetailRow}>
+                          <Ionicons name="list" size={14} color={COLORS.textMuted} />
+                          <Text style={styles.appointmentDetailLabel}>Visit #:</Text>
+                          <Text style={styles.appointmentDetailValue}>{visit.visitNumber}</Text>
+                        </View>
+                      )}
                     </View>
                   ) : (
                     <View style={styles.noAppointmentContent}>
                       <Ionicons name="calendar-outline" size={24} color={COLORS.textMuted} />
-                      <Text style={styles.noAppointmentText}>No upcoming appointments</Text>
+                      <Text style={styles.noAppointmentText}>No upcoming visits scheduled</Text>
                     </View>
                   )}
                 </View>

@@ -197,40 +197,40 @@ export default function AdminHomeScreen() {
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Study Overview</Text>
       <View style={[styles.statsGrid, isMobile && styles.statsGridMobile]}>
-        <View style={styles.statCard}>
-          <View style={[styles.statIconBg, { backgroundColor: COLORS.primary + '15' }]}>
-            <MaterialCommunityIcons name="account-group" size={24} color={COLORS.primary} />
+        <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
+          <View style={[styles.statIconBg, { backgroundColor: COLORS.primary + '15' }, isMobile && styles.statIconBgMobile]}>
+            <MaterialCommunityIcons name="account-group" size={isMobile ? 20 : 24} color={COLORS.primary} />
           </View>
-          <Text style={styles.statValue}>{dashboardData.totalCouples}</Text>
-          <Text style={styles.statLabel}>Total Couples</Text>
-          <Text style={styles.statSubLabel}>{dashboardData.totalUsers} Users</Text>
+          <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardData.totalCouples}</Text>
+          <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Total Couples</Text>
+          <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>{dashboardData.totalUsers} Users</Text>
         </View>
         
-        <View style={styles.statCard}>
-          <View style={[styles.statIconBg, { backgroundColor: COLORS.accent + '25' }]}>
-            <MaterialCommunityIcons name="flask" size={24} color={COLORS.accentDark} />
+        <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
+          <View style={[styles.statIconBg, { backgroundColor: COLORS.accent + '25' }, isMobile && styles.statIconBgMobile]}>
+            <MaterialCommunityIcons name="flask" size={isMobile ? 20 : 24} color={COLORS.accentDark} />
           </View>
-          <Text style={styles.statValue}>{dashboardData.studyGroup}</Text>
-          <Text style={styles.statLabel}>Study Group</Text>
-          <Text style={styles.statSubLabel}>{dashboardData.controlGroup} Control</Text>
+          <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardData.studyGroup}</Text>
+          <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Study Group</Text>
+          <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>{dashboardData.controlGroup} Control</Text>
         </View>
         
-        <View style={styles.statCard}>
-          <View style={[styles.statIconBg, { backgroundColor: COLORS.success + '15' }]}>
-            <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
+        <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
+          <View style={[styles.statIconBg, { backgroundColor: COLORS.success + '15' }, isMobile && styles.statIconBgMobile]}>
+            <Ionicons name="checkmark-circle" size={isMobile ? 20 : 24} color={COLORS.success} />
           </View>
-          <Text style={styles.statValue}>{dashboardData.todayCompliance}%</Text>
-          <Text style={styles.statLabel}>Today's Compliance</Text>
-          <Text style={styles.statSubLabel}>Logs completed</Text>
+          <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardData.todayCompliance}%</Text>
+          <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Today's Compliance</Text>
+          <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>Logs completed</Text>
         </View>
         
-        <View style={styles.statCard}>
-          <View style={[styles.statIconBg, { backgroundColor: COLORS.error + '15' }]}>
-            <Ionicons name="alert-circle" size={24} color={COLORS.error} />
+        <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
+          <View style={[styles.statIconBg, { backgroundColor: COLORS.error + '15' }, isMobile && styles.statIconBgMobile]}>
+            <Ionicons name="alert-circle" size={isMobile ? 20 : 24} color={COLORS.error} />
           </View>
-          <Text style={styles.statValue}>{dashboardData.logsNotCompletedCount}</Text>
-          <Text style={styles.statLabel}>Logs Pending</Text>
-          <Text style={styles.statSubLabel}>Need attention</Text>
+          <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>{dashboardData.logsNotCompletedCount}</Text>
+          <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Logs Pending</Text>
+          <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>Need attention</Text>
         </View>
       </View>
     </View>
@@ -246,13 +246,14 @@ export default function AdminHomeScreen() {
         </TouchableOpacity>
       </View>
       
-      <View style={styles.complianceCard}>
+      <View style={[styles.complianceCard, isMobile && styles.complianceCardMobile]}>
         <View style={styles.complianceChart}>
           {/* Simple Donut Chart Representation */}
           <View style={styles.donutContainer}>
-            <View style={styles.donutOuter}>
+            <View style={[styles.donutOuter, isMobile && styles.donutOuterMobile]}>
               <View style={[
                 styles.donutProgress,
+                isMobile && styles.donutProgressMobile,
                 { 
                   borderTopColor: COLORS.success,
                   borderRightColor: COLORS.success,
@@ -261,8 +262,8 @@ export default function AdminHomeScreen() {
                   transform: [{ rotate: '45deg' }],
                 }
               ]} />
-              <View style={styles.donutInner}>
-                <Text style={styles.donutValue}>{dashboardData.todayCompliance}%</Text>
+              <View style={[styles.donutInner, isMobile && styles.donutInnerMobile]}>
+                <Text style={[styles.donutValue, isMobile && styles.donutValueMobile]}>{dashboardData.todayCompliance}%</Text>
                 <Text style={styles.donutLabel}>Complete</Text>
               </View>
             </View>
@@ -320,40 +321,41 @@ export default function AdminHomeScreen() {
             key={couple.id}
             style={[
               styles.alertCard,
+              isMobile && styles.alertCardMobile,
               index === logsNotCompletedCouples.length - 1 && styles.alertCardLast,
             ]}
             onPress={() => router.push(`/admin/users?couple=${couple.id}` as any)}
           >
-            <View style={styles.alertLeft}>
+            <View style={[styles.alertLeft, isMobile && styles.alertLeftMobile]}>
               <View style={styles.coupleAvatars}>
                 <View style={[styles.avatarSmall, { backgroundColor: COLORS.primary }]}>
-                  <Ionicons name="male" size={14} color="#fff" />
+                  <Ionicons name="male" size={isMobile ? 12 : 14} color="#fff" />
                 </View>
                 <View style={[styles.avatarSmall, { backgroundColor: COLORS.accent, marginLeft: -8 }]}>
-                  <Ionicons name="female" size={14} color="#fff" />
+                  <Ionicons name="female" size={isMobile ? 12 : 14} color="#fff" />
                 </View>
               </View>
-              <View style={styles.alertInfo}>
+              <View style={[styles.alertInfo, { flex: 1, minWidth: 0 }]}>
                 <Text style={styles.alertCoupleId}>{couple.id}</Text>
                 <Text style={styles.alertNames} numberOfLines={1}>
                   {couple.maleName} & {couple.femaleName}
                 </Text>
               </View>
             </View>
-            <View style={styles.alertRight}>
-              <View style={styles.alertReasonBadge}>
-                <Text style={styles.alertReasonText}>{couple.reason}</Text>
+            <View style={[styles.alertRight, isMobile && styles.alertRightMobile]}>
+              <View style={[styles.alertReasonBadge, isMobile && styles.alertReasonBadgeMobile]}>
+                <Text style={[styles.alertReasonText, isMobile && styles.alertReasonTextMobile]}>{couple.reason}</Text>
               </View>
               <Text style={styles.alertTime}>{couple.lastLog}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+            <Ionicons name="chevron-forward" size={isMobile ? 16 : 18} color={COLORS.textMuted} />
           </TouchableOpacity>
         ))}
       </View>
       
       <TouchableOpacity style={styles.sendReminderButton}>
         <Ionicons name="notifications" size={18} color="#fff" />
-        <Text style={styles.sendReminderText}>Send Reminder to All Pending</Text>
+        <Text style={styles.sendReminderText}>{isMobile ? 'Send Reminder' : 'Send Reminder to All Pending'}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -523,14 +525,16 @@ const styles = StyleSheet.create({
   },
   quickActionCardMobile: {
     minWidth: '100%',
+    flex: 0,
+    width: '100%',
   },
   quickActionGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    gap: 16,
+    padding: 16,
+    gap: 12,
     flex: 1,
-    minHeight: 90,
+    minHeight: 80,
   },
   quickActionIcon: {
     width: 52,
@@ -563,6 +567,7 @@ const styles = StyleSheet.create({
   },
   statsGridMobile: {
     gap: 10,
+    justifyContent: 'space-between',
   },
   statCard: {
     flex: 1,
@@ -576,6 +581,12 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 1,
   },
+  statCardMobile: {
+    flex: 0,
+    width: '48%',
+    minWidth: 0,
+    padding: 12,
+  },
   statIconBg: {
     width: 44,
     height: 44,
@@ -584,10 +595,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
   },
+  statIconBgMobile: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
   statValue: {
     fontSize: 28,
     fontWeight: '800',
     color: COLORS.textPrimary,
+  },
+  statValueMobile: {
+    fontSize: 22,
   },
   statLabel: {
     fontSize: 13,
@@ -595,10 +615,17 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 4,
   },
+  statLabelMobile: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   statSubLabel: {
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 2,
+  },
+  statSubLabelMobile: {
+    fontSize: 10,
   },
 
   // Two Column Layout
@@ -631,6 +658,9 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 1,
   },
+  complianceCardMobile: {
+    padding: 16,
+  },
   complianceChart: {
     alignItems: 'center',
     marginBottom: 20,
@@ -647,6 +677,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
   },
+  donutOuterMobile: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
   donutProgress: {
     position: 'absolute',
     width: 140,
@@ -654,6 +689,12 @@ const styles = StyleSheet.create({
     borderRadius: 70,
     borderWidth: 12,
     borderColor: COLORS.borderLight,
+  },
+  donutProgressMobile: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 10,
   },
   donutInner: {
     width: 100,
@@ -668,10 +709,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  donutInnerMobile: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+  },
   donutValue: {
     fontSize: 28,
     fontWeight: '800',
     color: COLORS.success,
+  },
+  donutValueMobile: {
+    fontSize: 22,
   },
   donutLabel: {
     fontSize: 12,
@@ -731,6 +780,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
+  alertCardMobile: {
+    padding: 12,
+    flexWrap: 'wrap',
+  },
   alertCardLast: {
     borderBottomWidth: 0,
   },
@@ -739,6 +792,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     gap: 12,
+  },
+  alertLeftMobile: {
+    gap: 8,
+    minWidth: 0,
+    flex: 1,
   },
   coupleAvatars: {
     flexDirection: 'row',
@@ -769,16 +827,26 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginRight: 8,
   },
+  alertRightMobile: {
+    marginRight: 4,
+  },
   alertReasonBadge: {
     backgroundColor: COLORS.error + '15',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
+  alertReasonBadgeMobile: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
   alertReasonText: {
     fontSize: 11,
     fontWeight: '600',
     color: COLORS.error,
+  },
+  alertReasonTextMobile: {
+    fontSize: 10,
   },
   alertTime: {
     fontSize: 11,
