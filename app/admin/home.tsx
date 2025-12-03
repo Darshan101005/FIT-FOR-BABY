@@ -133,7 +133,7 @@ const quickActions = [
   },
   {
     id: 'upload-task',
-    title: 'Upload Daily Task',
+    title: 'Task and Goals',
     subtitle: 'Set goals & content',
     icon: 'cloud-upload',
     iconFamily: 'Ionicons',

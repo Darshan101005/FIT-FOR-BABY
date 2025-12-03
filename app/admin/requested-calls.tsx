@@ -51,7 +51,7 @@ export default function RequestedCallsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in-progress' | 'completed' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'cancelled'>('all');
 
   // Video link inline states (expanded card ID)
   const [expandedVideoCardId, setExpandedVideoCardId] = useState<string | null>(null);
@@ -141,7 +141,6 @@ export default function RequestedCallsScreen() {
 
   // Get counts by status
   const pendingCount = supportRequests.filter(r => r.status === 'pending').length;
-  const inProgressCount = supportRequests.filter(r => r.status === 'in-progress').length;
   const completedCount = supportRequests.filter(r => r.status === 'completed').length;
 
   // Format date/time
@@ -158,7 +157,6 @@ export default function RequestedCallsScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return COLORS.warning;
-      case 'in-progress': return COLORS.info;
       case 'completed': return COLORS.success;
       case 'cancelled': return COLORS.error;
       default: return COLORS.textMuted;
@@ -225,7 +223,7 @@ export default function RequestedCallsScreen() {
   };
 
   // Handle status update
-  const handleUpdateStatus = async (request: SupportRequest, newStatus: 'in-progress' | 'completed' | 'cancelled') => {
+  const handleUpdateStatus = async (request: SupportRequest, newStatus: 'completed' | 'cancelled') => {
     setIsSaving(true);
     try {
       await supportRequestService.updateStatus(
@@ -312,10 +310,6 @@ export default function RequestedCallsScreen() {
           <Text style={styles.statNumber}>{pendingCount}</Text>
           <Text style={styles.statLabel}>Pending</Text>
         </View>
-        <View style={[styles.statCard, { borderLeftColor: COLORS.info }]}>
-          <Text style={styles.statNumber}>{inProgressCount}</Text>
-          <Text style={styles.statLabel}>In Progress</Text>
-        </View>
         <View style={[styles.statCard, { borderLeftColor: COLORS.success }]}>
           <Text style={styles.statNumber}>{completedCount}</Text>
           <Text style={styles.statLabel}>Completed</Text>
@@ -337,14 +331,14 @@ export default function RequestedCallsScreen() {
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterChipsScroll}>
           <View style={styles.filterChips}>
-            {(['all', 'pending', 'in-progress', 'completed', 'cancelled'] as const).map(status => (
+            {(['all', 'pending', 'completed', 'cancelled'] as const).map(status => (
               <TouchableOpacity
                 key={status}
                 style={[styles.filterChip, statusFilter === status && styles.filterChipActive]}
                 onPress={() => setStatusFilter(status)}
               >
                 <Text style={[styles.filterChipText, statusFilter === status && styles.filterChipTextActive]}>
-                  {status === 'in-progress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1)}
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -446,7 +440,7 @@ export default function RequestedCallsScreen() {
               { backgroundColor: getStatusColor(request.status) + '20' }
             ]}>
               <Text style={[styles.statusBadgeText, { color: getStatusColor(request.status) }]}>
-                {request.status === 'in-progress' ? 'In Progress' : request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
               </Text>
             </View>
             {!isExpanded && (

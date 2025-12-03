@@ -2,18 +2,18 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
-import { CoupleData, CoupleStepEntry, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService } from '../../services/firestore.service';
+import { CoupleStepEntry, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
 
@@ -50,7 +50,6 @@ interface DailyLog {
   diet: { male: LogStatus; female: LogStatus };
   weight: { male: LogStatus; female: LogStatus };
   coupleWalking: LogStatus;
-  feedback: { male: LogStatus; female: LogStatus };
 }
 
 interface CoupleDetails {
@@ -90,7 +89,6 @@ const metrics = [
   { id: 'diet', label: 'Diet', icon: 'nutrition', iconFamily: 'Ionicons' },
   { id: 'weight', label: 'Weight', icon: 'scale-bathroom', iconFamily: 'MaterialCommunityIcons' },
   { id: 'coupleWalking', label: 'Couple Walk', icon: 'people', iconFamily: 'Ionicons' },
-  { id: 'feedback', label: 'Feedback', icon: 'chatbubble', iconFamily: 'Ionicons' },
 ];
 
 export default function AdminMonitoringScreen() {
@@ -104,7 +102,7 @@ export default function AdminMonitoringScreen() {
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'complete' | 'partial' | 'missed'>('all');
   const [selectedGroup, setSelectedGroup] = useState<'all' | 'study' | 'control'>('all');
   const [logs, setLogs] = useState<DailyLog[]>([]);
-  const [couples, setCouples] = useState<CoupleData[]>([]);
+  const [couples, setCouples] = useState<any[]>([]);
   const [coupleDetails, setCoupleDetails] = useState<Record<string, CoupleDetails>>({});
   const [selectedCouple, setSelectedCouple] = useState<DailyLog | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -144,7 +142,7 @@ export default function AdminMonitoringScreen() {
         
         // Create daily log entry - for now mark weight as pending/complete based on last log
         // This is a simplified version - in production you'd check actual daily logs
-        dailyLogs.push({
+          dailyLogs.push({
           coupleId,
           maleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
           femaleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
@@ -154,7 +152,7 @@ export default function AdminMonitoringScreen() {
           diet: { male: 'pending', female: 'pending' },
           weight: { male: 'pending', female: 'pending' },
           coupleWalking: 'pending',
-          feedback: { male: 'pending', female: 'pending' },
+          // feedback removed
         });
       });
       
@@ -280,14 +278,14 @@ export default function AdminMonitoringScreen() {
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
       
-      pastLogs.push({
+        pastLogs.push({
         date: dateStr,
         steps: { male: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus, female: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus },
         exercise: { male: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus, female: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus },
         diet: { male: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus, female: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus },
         weight: { male: ['complete', 'partial', 'missed', 'pending'][Math.floor(Math.random() * 4)] as LogStatus, female: ['complete', 'partial', 'missed', 'pending'][Math.floor(Math.random() * 4)] as LogStatus },
         coupleWalking: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus,
-        feedback: { male: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus, female: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus },
+        // feedback removed
       });
     }
     return pastLogs;
@@ -315,8 +313,7 @@ export default function AdminMonitoringScreen() {
       log.weight.male === selectedStatus ||
       log.weight.female === selectedStatus ||
       log.coupleWalking === selectedStatus ||
-      log.feedback.male === selectedStatus ||
-      log.feedback.female === selectedStatus;
+      false;
     
     return matchesSearch && hasStatus;
   });
@@ -334,8 +331,7 @@ export default function AdminMonitoringScreen() {
         log.weight.male === status ||
         log.weight.female === status ||
         log.coupleWalking === status ||
-        log.feedback.male === status ||
-        log.feedback.female === status
+        false
       );
     }).length;
   };
@@ -362,7 +358,7 @@ export default function AdminMonitoringScreen() {
     let missed = 0;
 
     logs.forEach(log => {
-      ['steps', 'exercise', 'diet', 'weight', 'feedback'].forEach(metric => {
+      ['steps', 'exercise', 'diet', 'weight'].forEach(metric => {
         const val = log[metric as keyof DailyLog] as { male: LogStatus; female: LogStatus };
         if (val.male === 'complete') complete++;
         else if (val.male === 'partial') partial++;
@@ -373,7 +369,7 @@ export default function AdminMonitoringScreen() {
       });
     });
 
-    return { complete, partial, missed, total: total * 5 };
+    return { complete, partial, missed, total: total * 4 };
   };
 
   const stats = getSummaryStats();
@@ -599,7 +595,6 @@ export default function AdminMonitoringScreen() {
             {renderDualStatus(log.diet)}
             {renderDualStatus(log.weight)}
             {renderSingleStatus(log.coupleWalking)}
-            {renderDualStatus(log.feedback)}
           </View>
         </ScrollView>
       </TouchableOpacity>
@@ -693,7 +688,7 @@ export default function AdminMonitoringScreen() {
       { metric: 'Diet Log', icon: 'nutrition', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.diet.male === 'complete' ? '3 meals' : selectedCouple.diet.male === 'partial' ? '1 meal' : 'Not logged', femaleValue: selectedCouple.diet.female === 'complete' ? '3 meals' : selectedCouple.diet.female === 'partial' ? '1 meal' : 'Not logged', maleStatus: selectedCouple.diet.male, femaleStatus: selectedCouple.diet.female, unit: '' },
       { metric: 'Weight', icon: 'scale-bathroom', iconFamily: 'MaterialCommunityIcons' as const, maleValue: details?.maleWeight ? `${details.maleWeight} kg` : (selectedCouple.weight.male === 'pending' ? 'Pending' : 'Not logged'), femaleValue: details?.femaleWeight ? `${details.femaleWeight} kg` : (selectedCouple.weight.female === 'pending' ? 'Pending' : 'Not logged'), maleStatus: selectedCouple.weight.male, femaleStatus: selectedCouple.weight.female, unit: '' },
       { metric: 'Couple Walking', icon: 'people', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.coupleWalking === 'complete' ? '30 min' : selectedCouple.coupleWalking === 'partial' ? '15 min' : 'Not done', femaleValue: selectedCouple.coupleWalking === 'complete' ? '30 min' : selectedCouple.coupleWalking === 'partial' ? '15 min' : 'Not done', maleStatus: selectedCouple.coupleWalking, femaleStatus: selectedCouple.coupleWalking, unit: '' },
-      { metric: 'Feedback', icon: 'chatbubble', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.feedback.male === 'complete' ? 'Submitted' : selectedCouple.feedback.male === 'pending' ? 'Pending' : 'Not submitted', femaleValue: selectedCouple.feedback.female === 'complete' ? 'Submitted' : selectedCouple.feedback.female === 'pending' ? 'Pending' : 'Not submitted', maleStatus: selectedCouple.feedback.male, femaleStatus: selectedCouple.feedback.female, unit: '' },
+      // Feedback metric removed from monitoring
     ];
 
     const getStatusColor = (status: LogStatus) => {
@@ -728,7 +723,7 @@ export default function AdminMonitoringScreen() {
                 <View>
                   <Text style={styles.modalTitle}>{selectedCouple.coupleId}</Text>
                   <Text style={styles.modalSubtitle}>
-                    {coupleDetails ? `${coupleDetails.maleName} & ${coupleDetails.femaleName}` : 'Couple Details'}
+                    {details ? `${details.maleName} & ${details.femaleName}` : 'Couple Details'}
                   </Text>
                 </View>
               </View>

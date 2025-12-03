@@ -15,6 +15,7 @@ import {
   View,
   useWindowDimensions
 } from 'react-native';
+import { supportRequestService } from '../../services/firestore.service';
 
 // Fit for Baby Color Palette
 const COLORS = {
@@ -123,9 +124,28 @@ export default function AdminLayout() {
   const [adminName, setAdminName] = useState('Admin');
   const [adminRole, setAdminRole] = useState('admin');
   const [adminInitials, setAdminInitials] = useState('AD');
+  const [requestedCallsCount, setRequestedCallsCount] = useState<number>(0);
 
   useEffect(() => {
     loadAdminInfo();
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadCount = async () => {
+      try {
+        const requests = await supportRequestService.getAll();
+        if (!mounted) return;
+        const pending = requests.filter((r: any) => r.status === 'pending').length;
+        setRequestedCallsCount(pending);
+      } catch (err) {
+        console.error('Error loading requested calls count:', err);
+      }
+    };
+
+    loadCount();
+    const iv = setInterval(loadCount, 15000); // refresh every 15s
+    return () => { mounted = false; clearInterval(iv); };
   }, []);
 
   const loadAdminInfo = async () => {
@@ -185,11 +205,14 @@ export default function AdminLayout() {
             {item.label}
           </Text>
         )}
-        {item.badge && !collapsed && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{item.badge}</Text>
-          </View>
-        )}
+        {(!collapsed) && (() => {
+          const badgeNumber = item.id === 'requested-calls' ? requestedCallsCount : item.badge;
+          return badgeNumber ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{badgeNumber}</Text>
+            </View>
+          ) : null;
+        })()}
       </TouchableOpacity>
     );
   };

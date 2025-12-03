@@ -3,6 +3,7 @@ import React, { createContext, ReactNode, useContext, useState } from 'react';
 export interface ThemeColors {
   // Backgrounds
   background: string;
+  surface: string;
   cardBackground: string;
   inputBackground: string;
   headerBackground: string[];
@@ -39,12 +40,15 @@ export interface ThemeColors {
   overlay: string;
   tabBar: string;
   tabBarBorder: string;
+  // Surface / elevated card background
+  surface: string;
 }
 
 const lightTheme: ThemeColors = {
   // Backgrounds
   background: '#f5f5f5',
   cardBackground: '#ffffff',
+  surface: '#ffffff',
   inputBackground: '#f8fafc',
   headerBackground: ['#006dab', '#005a8f'],
   
@@ -80,12 +84,14 @@ const lightTheme: ThemeColors = {
   overlay: 'rgba(0,0,0,0.5)',
   tabBar: '#ffffff',
   tabBarBorder: '#e5e7eb',
+  surface: '#ffffff',
 };
 
 const darkTheme: ThemeColors = {
   // Backgrounds
   background: '#0f172a',
   cardBackground: '#1e293b',
+  surface: '#1e293b',
   inputBackground: '#334155',
   headerBackground: ['#1e3a5f', '#0f2744'],
   
@@ -121,6 +127,7 @@ const darkTheme: ThemeColors = {
   overlay: 'rgba(0,0,0,0.7)',
   tabBar: '#1e293b',
   tabBarBorder: '#334155',
+  surface: '#1e293b',
 };
 
 interface ThemeContextType {

@@ -124,7 +124,7 @@ export default function AdminUsersScreen() {
         if (isMounted) {
           const map: Record<string, string> = {};
           allAdmins.forEach(admin => {
-            map[admin.uid] = admin.name || admin.email || 'Admin';
+            map[admin.uid] = admin.displayName || (admin.firstName && admin.lastName ? `${admin.firstName} ${admin.lastName}` : admin.email) || 'Admin';
           });
           setAdminsMap(map);
         }

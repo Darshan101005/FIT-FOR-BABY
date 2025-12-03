@@ -1,9 +1,9 @@
 import {
-    getNextPosition,
-    getPreviousPosition,
-    getQuestionByPosition,
-    getSectionSummary,
-    parseQuestionnaire
+  getNextPosition,
+  getPreviousPosition,
+  getQuestionByPosition,
+  getSectionSummary,
+  parseQuestionnaire
 } from '@/data/questionnaireParser';
 import { questionnaireService } from '@/services/firestore.service';
 import { QuestionnaireProgress as FirestoreQuestionnaireProgress, QuestionnaireAnswer, QuestionnaireLanguage } from '@/types/firebase.types';
@@ -12,20 +12,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -47,6 +48,9 @@ export default function QuestionnaireScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [showSectionOverview, setShowSectionOverview] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'scroll'>('card');
+  const [showLangSwitchModal, setShowLangSwitchModal] = useState(false);
+  const [showLangConfirmModal, setShowLangConfirmModal] = useState(false);
+  const [pendingLanguage, setPendingLanguage] = useState<QuestionnaireLanguage | null>(null);
   
   // User data from AsyncStorage
   const [coupleId, setCoupleId] = useState<string>('');
@@ -499,6 +503,104 @@ export default function QuestionnaireScreen() {
     );
   }
 
+  // Language switch modal (shown during questionnaire)
+  const renderLangSwitchModal = () => (
+    <Modal
+      visible={showLangSwitchModal}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setShowLangSwitchModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.langModalContent}>
+          <Text style={styles.langModalTitle}>Switch Language / மொழி மாற்றவும்</Text>
+          <Text style={styles.langModalSubtitle}>Switching language will restart the questionnaire from the first question and delete previous answers. மொழியை மாற்றினால் கேள்வித்தாள் மீண்டும் முதல் கேள்வியிலிருந்து தொடங்கி, பழைய பதில்கள் அழிக்கப்படும்.</Text>
+
+          <TouchableOpacity
+            style={[styles.langOption, selectedLanguage === 'english' && styles.langOptionActive]}
+            onPress={() => {
+              setPendingLanguage('english');
+              if (selectedLanguage !== 'english') setShowLangConfirmModal(true);
+              else setShowLangSwitchModal(false);
+            }}
+          >
+            <Text style={styles.langOptionText}>English</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.langOption, selectedLanguage === 'tamil' && styles.langOptionActive]}
+            onPress={() => {
+              setPendingLanguage('tamil');
+              if (selectedLanguage !== 'tamil') setShowLangConfirmModal(true);
+              else setShowLangSwitchModal(false);
+            }}
+          >
+            <Text style={styles.langOptionText}>தமிழ்</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.cancelButton} onPress={() => setShowLangSwitchModal(false)}>
+            <Text style={styles.cancelButtonText}>Cancel / ரத்து செய்</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Confirmation modal shown when switching to a different language
+  const renderLangConfirmModal = () => (
+    <Modal
+      visible={showLangConfirmModal}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setShowLangConfirmModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.langConfirmContent}>
+          <Text style={styles.langConfirmTitle}>Confirm Language Change</Text>
+          <Text style={styles.langConfirmText}>
+            English: Changing language will delete your previous answers and restart the questionnaire from the first question. Do you want to continue?
+          </Text>
+          <Text style={styles.langConfirmText}>
+            தமிழ்: மொழியை மாற்றினால் உங்கள் முன் பதில்கள் அழிக்கப்படும் மற்றும் கேள்வித்தாள் முதல் கேள்வியிலிருந்து மீண்டும் தொடங்கப்படும். தொடரவா?
+          </Text>
+
+          <View style={styles.langConfirmActions}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => {
+                setShowLangConfirmModal(false);
+                setShowLangSwitchModal(false);
+                setPendingLanguage(null);
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Cancel / ரத்து செய்</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={async () => {
+                if (!pendingLanguage) return;
+                setShowLangConfirmModal(false);
+                setShowLangSwitchModal(false);
+                // Reset stored progress and start fresh in chosen language
+                try {
+                  await questionnaireService.resetQuestionnaire(coupleId, gender);
+                } catch (err) {
+                  console.error('Error resetting questionnaire:', err);
+                }
+                // startNewQuestionnaire handles starting state and saving
+                startNewQuestionnaire(pendingLanguage);
+                setPendingLanguage(null);
+              }}
+            >
+              <Text style={styles.confirmButtonText}>Continue / தொடர்</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   // Render section overview - showing questions and progress
   if (showSectionOverview) {
     return (
@@ -642,8 +744,13 @@ export default function QuestionnaireScreen() {
           <TouchableOpacity onPress={() => setShowSectionOverview(true)} style={styles.overviewButton}>
             <Ionicons name="menu" size={22} color="#006dab" />
           </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowLangSwitchModal(true)} style={styles.languageSwitchButton}>
+            <Ionicons name="language" size={22} color="#006dab" />
+          </TouchableOpacity>
         </View>
       </View>
+      {renderLangSwitchModal()}
+      {renderLangConfirmModal()}
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
@@ -1495,5 +1602,89 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  // Language switch / modal styles
+  languageSwitchButton: {
+    marginLeft: 12,
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  langModalContent: {
+    width: '100%',
+    maxWidth: 520,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+  },
+  langModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
+  langModalSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 16,
+  },
+  langOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 10,
+    backgroundColor: '#fff',
+  },
+  langOptionActive: {
+    borderColor: '#006dab',
+    backgroundColor: '#eff6ff',
+  },
+  langOptionText: {
+    fontSize: 16,
+    color: '#0f172a',
+    fontWeight: '600',
+  },
+  langConfirmContent: {
+    width: '100%',
+    maxWidth: 520,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+  },
+  langConfirmTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 12,
+  },
+  langConfirmText: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 8,
+  },
+  langConfirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 12,
+  },
+  confirmButton: {
+    backgroundColor: '#ef4444',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontWeight: '700',
   },
 });
