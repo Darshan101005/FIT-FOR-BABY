@@ -58,6 +58,10 @@ export default function AdminQuestionnaireScreen() {
   const [selectedResponse, setSelectedResponse] = useState<QuestionnaireResponse | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [resetConfirmModal, setResetConfirmModal] = useState<{
+    show: boolean;
+    response: QuestionnaireResponse | null;
+  }>({ show: false, response: null });
 
   // Load questionnaire responses
   useEffect(() => {
@@ -315,12 +319,117 @@ export default function AdminQuestionnaireScreen() {
           </View>
         </View>
 
-        {/* View Details Arrow */}
-        <View style={styles.viewDetailsArrow}>
-          <Text style={styles.viewDetailsText}>View Details</Text>
-          <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+        {/* Action Buttons Row */}
+        <View style={styles.cardActionsRow}>
+          {/* Reset Button */}
+          <TouchableOpacity
+            style={styles.cardResetButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              setResetConfirmModal({ show: true, response });
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="refresh" size={16} color={COLORS.error} />
+            <Text style={styles.cardResetButtonText}>Reset</Text>
+          </TouchableOpacity>
+
+          {/* View Details Arrow */}
+          <View style={styles.viewDetailsArrow}>
+            <Text style={styles.viewDetailsText}>View Details</Text>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.primary} />
+          </View>
         </View>
       </TouchableOpacity>
+    );
+  };
+
+  // Handle reset questionnaire with confirmation
+  const handleConfirmReset = async () => {
+    const response = resetConfirmModal.response;
+    if (!response) return;
+
+    try {
+      setResetting(true);
+      await questionnaireService.resetQuestionnaire(response.coupleId, response.gender);
+      setResetConfirmModal({ show: false, response: null });
+      setShowDetailModal(false);
+      await loadResponses();
+      Alert.alert(
+        'Reset Successful',
+        `${response.coupleName}'s questionnaire has been reset successfully. They can now attend the questionnaire again from the beginning.`
+      );
+    } catch (error) {
+      console.error('Error resetting questionnaire:', error);
+      Alert.alert('Error', 'Failed to reset questionnaire. Please try again.');
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  // Render reset confirmation modal
+  const renderResetConfirmModal = () => {
+    const response = resetConfirmModal.response;
+    if (!response) return null;
+
+    return (
+      <Modal
+        visible={resetConfirmModal.show}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setResetConfirmModal({ show: false, response: null })}
+      >
+        <View style={styles.resetModalOverlay}>
+          <View style={styles.resetModalContent}>
+            {/* Warning Icon */}
+            <View style={styles.resetModalIconContainer}>
+              <Ionicons name="warning" size={48} color={COLORS.error} />
+            </View>
+
+            {/* Title */}
+            <Text style={styles.resetModalTitle}>Reset Questionnaire?</Text>
+
+            {/* Description */}
+            <Text style={styles.resetModalDescription}>
+              You are about to reset the questionnaire for <Text style={styles.resetModalHighlight}>{response.coupleName}</Text> ({response.gender === 'male' ? 'Husband' : 'Wife'}).
+            </Text>
+
+            <Text style={styles.resetModalWarning}>
+              This action will permanently delete all their answers and progress. They will need to complete the questionnaire again from the beginning.
+            </Text>
+
+            <Text style={styles.resetModalConfirmText}>
+              Are you sure you want to proceed?
+            </Text>
+
+            {/* Action Buttons */}
+            <View style={styles.resetModalActions}>
+              <TouchableOpacity
+                style={styles.resetModalCancelButton}
+                onPress={() => setResetConfirmModal({ show: false, response: null })}
+                disabled={resetting}
+              >
+                <Text style={styles.resetModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.resetModalConfirmButton, resetting && styles.resetModalButtonDisabled]}
+                onPress={handleConfirmReset}
+                disabled={resetting}
+              >
+                {resetting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="refresh" size={18} color="#fff" />
+                    <Text style={styles.resetModalConfirmButtonText}>Yes, Reset</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     );
   };
 
@@ -330,35 +439,6 @@ export default function AdminQuestionnaireScreen() {
     
     const { progress, coupleName, coupleId, gender } = selectedResponse;
     const status = getStatusBadge(progress);
-
-    // Handle reset questionnaire
-    const handleResetQuestionnaire = () => {
-      Alert.alert(
-        'Reset Questionnaire',
-        `Are you sure you want to reset ${coupleName}'s questionnaire? This will delete all their answers and they will need to start again.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Reset',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                setResetting(true);
-                await questionnaireService.resetQuestionnaire(coupleId, gender);
-                setShowDetailModal(false);
-                await loadResponses();
-                Alert.alert('Success', `${coupleName}'s questionnaire has been reset. They can now start fresh.`);
-              } catch (error) {
-                console.error('Error resetting questionnaire:', error);
-                Alert.alert('Error', 'Failed to reset questionnaire. Please try again.');
-              } finally {
-                setResetting(false);
-              }
-            },
-          },
-        ]
-      );
-    };
 
     // Group answers by section for better display
     const groupAnswersBySection = () => {
@@ -471,22 +551,6 @@ export default function AdminQuestionnaireScreen() {
                   </Text>
                 </View>
               </View>
-
-              {/* Reset Button */}
-              <TouchableOpacity 
-                style={styles.resetButton}
-                onPress={handleResetQuestionnaire}
-                disabled={resetting}
-              >
-                {resetting ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="refresh" size={18} color="#fff" />
-                    <Text style={styles.resetButtonText}>Reset Questionnaire</Text>
-                  </>
-                )}
-              </TouchableOpacity>
 
               {/* Info Cards */}
               <View style={styles.infoCards}>
@@ -656,6 +720,7 @@ export default function AdminQuestionnaireScreen() {
       </ScrollView>
 
       {renderDetailModal()}
+      {renderResetConfirmModal()}
     </View>
   );
 }
@@ -1237,20 +1302,134 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: 'center',
   },
-  // Reset Button
-  resetButton: {
+  // Card Actions Row
+  cardActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.error,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    gap: 8,
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
   },
-  resetButtonText: {
+  cardResetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: COLORS.error + '12',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.error + '30',
+  },
+  cardResetButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.error,
+  },
+  // Reset Confirmation Modal
+  resetModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  resetModalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    padding: 28,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  resetModalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.error + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  resetModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  resetModalDescription: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  resetModalHighlight: {
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  resetModalWarning: {
     fontSize: 14,
+    color: COLORS.error,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+    backgroundColor: COLORS.error + '10',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.error + '20',
+  },
+  resetModalConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  resetModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  resetModalCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resetModalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  resetModalConfirmButton: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: COLORS.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  resetModalButtonDisabled: {
+    opacity: 0.7,
+  },
+  resetModalConfirmButtonText: {
+    fontSize: 15,
     fontWeight: '600',
     color: '#fff',
   },
