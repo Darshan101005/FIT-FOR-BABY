@@ -5,16 +5,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -93,11 +93,31 @@ export default function AdminAppointmentsScreen() {
   const [visitPurpose, setVisitPurpose] = useState('');
   const [visitNotes, setVisitNotes] = useState('');
   
-  // Automatic scheduling
-  const [autoScheduleDay, setAutoScheduleDay] = useState<number>(1); // Monday default
-  const [showDayDropdown, setShowDayDropdown] = useState(false);
+  // Automatic scheduling - new logic
+  const [autoFirstDate, setAutoFirstDate] = useState<Date | null>(null);
+  const [autoCalendarMonth, setAutoCalendarMonth] = useState(new Date());
+  const [showAutoCalendar, setShowAutoCalendar] = useState(false);
+  const [numberOfVisits, setNumberOfVisits] = useState<string>('4');
   
   const [isSaving, setIsSaving] = useState(false);
+
+  // Nursing visit action modal
+  const [selectedNursingVisit, setSelectedNursingVisit] = useState<NursingDepartmentVisit | null>(null);
+  const [showVisitActionModal, setShowVisitActionModal] = useState(false);
+  const [showAddVisitModal, setShowAddVisitModal] = useState(false);
+  const [addVisitDate, setAddVisitDate] = useState<Date | null>(null);
+  const [addVisitCalendarMonth, setAddVisitCalendarMonth] = useState(new Date());
+  const [showAddVisitCalendar, setShowAddVisitCalendar] = useState(false);
+  const [confirmCancelModal, setConfirmCancelModal] = useState(false);
+  
+  // Postpone modal states
+  const [showPostponeModal, setShowPostponeModal] = useState(false);
+  const [postponeDate, setPostponeDate] = useState<Date | null>(null);
+  const [postponeCalendarMonth, setPostponeCalendarMonth] = useState(new Date());
+  const [showPostponeCalendar, setShowPostponeCalendar] = useState(false);
+  const [postponeHour, setPostponeHour] = useState('09');
+  const [postponeMinute, setPostponeMinute] = useState('00');
+  const [postponePeriod, setPostponePeriod] = useState<'AM' | 'PM'>('AM');
 
   // Message modal states
   const [messageModal, setMessageModal] = useState<{
@@ -171,7 +191,7 @@ export default function AdminAppointmentsScreen() {
     
     const matchesStatus = selectedStatus === 'all' || visit.status === selectedStatus;
     return matchesSearch && matchesStatus;
-  });
+  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   // Filter nursing visits
   const filteredNursingVisits = nursingVisits.filter(visit => {
@@ -181,7 +201,7 @@ export default function AdminAppointmentsScreen() {
     
     const matchesStatus = selectedStatus === 'all' || visit.status === selectedStatus;
     return matchesSearch && matchesStatus;
-  });
+  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   // Filter couples for dropdown
   const filteredCouples = couples.filter(couple => {
@@ -227,34 +247,51 @@ export default function AdminAppointmentsScreen() {
     );
   };
 
-  // Generate automatic schedule dates (every 4 weeks for 3 months, starting from next week)
-  const generateAutoScheduleDates = (startDate: Date, dayOfWeek: number): Date[] => {
+  // Generate automatic schedule dates (every 28 days from first date)
+  const generateAutoScheduleDates = (firstDate: Date, numVisits: number): Date[] => {
     const dates: Date[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    let currentDate = new Date(firstDate);
     
-    // Calculate end date (3 months from today)
-    const endDate = new Date(today);
-    endDate.setMonth(endDate.getMonth() + 3);
-
-    // Start from next week - add 7 days to today first
-    let currentDate = new Date(today);
-    currentDate.setDate(currentDate.getDate() + 7); // Move to next week
-    
-    // Find the first occurrence of the selected day in next week or after
-    while (currentDate.getDay() !== dayOfWeek) {
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    // Add dates every 4 weeks (limit to 4 visits)
-    let visitCount = 0;
-    while (currentDate <= endDate && visitCount < 4) {
+    for (let i = 0; i < numVisits; i++) {
       dates.push(new Date(currentDate));
-      currentDate.setDate(currentDate.getDate() + 28); // 4 weeks
-      visitCount++;
+      currentDate.setDate(currentDate.getDate() + 28); // Add 28 days
     }
 
     return dates;
+  };
+
+  // Check if date is past for auto calendar
+  const isAutoPastDate = (day: number) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(autoCalendarMonth.getFullYear(), autoCalendarMonth.getMonth(), day);
+    return checkDate < today;
+  };
+
+  const isAutoDateSelected = (day: number) => {
+    if (!autoFirstDate || !day) return false;
+    return (
+      autoFirstDate.getDate() === day &&
+      autoFirstDate.getMonth() === autoCalendarMonth.getMonth() &&
+      autoFirstDate.getFullYear() === autoCalendarMonth.getFullYear()
+    );
+  };
+
+  // Add visit calendar helpers
+  const isAddVisitPastDate = (day: number) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(addVisitCalendarMonth.getFullYear(), addVisitCalendarMonth.getMonth(), day);
+    return checkDate < today;
+  };
+
+  const isAddVisitDateSelected = (day: number) => {
+    if (!addVisitDate || !day) return false;
+    return (
+      addVisitDate.getDate() === day &&
+      addVisitDate.getMonth() === addVisitCalendarMonth.getMonth() &&
+      addVisitDate.getFullYear() === addVisitCalendarMonth.getFullYear()
+    );
   };
 
   // Load upcoming doctor visits for selected couple
@@ -336,8 +373,21 @@ export default function AdminAppointmentsScreen() {
 
         showMessage('success', 'Success', 'Appointment scheduled on the day of doctor visit!');
       } else {
-        // Automatic scheduling
-        const scheduleDates = generateAutoScheduleDates(new Date(), autoScheduleDay);
+        // Automatic scheduling - new logic
+        if (!autoFirstDate) {
+          showMessage('warning', 'Select First Date', 'Please select the first visit date');
+          setIsSaving(false);
+          return;
+        }
+
+        const numVisits = parseInt(numberOfVisits) || 4;
+        if (numVisits < 1 || numVisits > 12) {
+          showMessage('warning', 'Invalid Number', 'Please enter a number between 1 and 12');
+          setIsSaving(false);
+          return;
+        }
+
+        const scheduleDates = generateAutoScheduleDates(autoFirstDate, numVisits);
         
         let visitNum = 1;
         for (const date of scheduleDates) {
@@ -376,12 +426,101 @@ export default function AdminAppointmentsScreen() {
     setScheduleMode('manual');
     setVisitPurpose('');
     setVisitNotes('');
-    setAutoScheduleDay(1);
+    setAutoFirstDate(null);
+    setNumberOfVisits('4');
     setSelectedHour('10');
     setSelectedMinute('00');
     setSelectedPeriod('AM');
     setCoupleDoctorVisits([]);
     setSelectedDoctorVisit(null);
+  };
+
+  // Handle cancel nursing visit
+  const handleCancelVisit = async () => {
+    if (!selectedNursingVisit) return;
+    
+    setIsSaving(true);
+    try {
+      await nursingVisitService.updateStatus(selectedNursingVisit.coupleId, selectedNursingVisit.id, 'cancelled');
+      showMessage('success', 'Cancelled', 'Visit has been cancelled successfully');
+      setConfirmCancelModal(false);
+      setShowVisitActionModal(false);
+      setSelectedNursingVisit(null);
+      loadData();
+    } catch (error) {
+      console.error('Error cancelling visit:', error);
+      showMessage('error', 'Error', 'Failed to cancel visit. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handle add new visit for couple
+  const handleAddVisit = async () => {
+    if (!selectedNursingVisit || !addVisitDate) {
+      showMessage('warning', 'Select Date', 'Please select a date for the new visit');
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      const timeStr = `${selectedHour}:${selectedMinute} ${selectedPeriod}`;
+      const adminName = user?.name || user?.email || 'Admin';
+      
+      await nursingVisitService.schedule(selectedNursingVisit.coupleId, {
+        coupleName: selectedNursingVisit.coupleName || '',
+        date: formatDateString(addVisitDate),
+        time: timeStr,
+        purpose: 'Nursing Department Visit',
+        scheduledBy: user?.id || 'admin',
+        scheduledByName: adminName,
+      });
+      
+      showMessage('success', 'Success', 'New visit added successfully!');
+      setShowAddVisitModal(false);
+      setShowVisitActionModal(false);
+      setSelectedNursingVisit(null);
+      setAddVisitDate(null);
+      loadData();
+    } catch (error) {
+      console.error('Error adding visit:', error);
+      showMessage('error', 'Error', 'Failed to add visit. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handle postpone visit
+  const handlePostponeVisit = async () => {
+    if (!selectedNursingVisit || !postponeDate) {
+      showMessage('warning', 'Select Date', 'Please select a new date for the visit');
+      return;
+    }
+    
+    const postponeTime = `${postponeHour}:${postponeMinute} ${postponePeriod}`;
+    
+    setIsSaving(true);
+    try {
+      await nursingVisitService.update(selectedNursingVisit.coupleId, selectedNursingVisit.id, {
+        date: formatDateString(postponeDate),
+        time: postponeTime,
+      });
+      
+      showMessage('success', 'Postponed', 'Visit has been postponed successfully!');
+      setShowPostponeModal(false);
+      setShowVisitActionModal(false);
+      setSelectedNursingVisit(null);
+      setPostponeDate(null);
+      setPostponeHour('09');
+      setPostponeMinute('00');
+      setPostponePeriod('AM');
+      loadData();
+    } catch (error) {
+      console.error('Error postponing visit:', error);
+      showMessage('error', 'Error', 'Failed to postpone visit. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Status color helper
@@ -521,7 +660,15 @@ export default function AdminAppointmentsScreen() {
 
   // Render Nursing Visit Card
   const renderNursingVisitCard = (visit: NursingDepartmentVisit) => (
-    <View key={visit.id} style={styles.visitCard}>
+    <TouchableOpacity 
+      key={visit.id} 
+      style={styles.visitCard}
+      onPress={() => {
+        setSelectedNursingVisit(visit);
+        setShowVisitActionModal(true);
+      }}
+      activeOpacity={0.7}
+    >
       <View style={[styles.visitDateBadge, { backgroundColor: COLORS.accent + '20' }]}>
         <Text style={[styles.visitDateDay, { color: COLORS.accentDark }]}>{new Date(visit.date).getDate()}</Text>
         <Text style={[styles.visitDateMonth, { color: COLORS.accentDark }]}>{MONTHS_SHORT[new Date(visit.date).getMonth()]}</Text>
@@ -558,16 +705,16 @@ export default function AdminAppointmentsScreen() {
         )}
       </View>
       
-      <TouchableOpacity style={styles.visitAction}>
-        <Ionicons name="ellipsis-vertical" size={18} color={COLORS.textMuted} />
-      </TouchableOpacity>
-    </View>
+      <View style={styles.visitAction}>
+        <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+      </View>
+    </TouchableOpacity>
   );
 
   // Close all dropdowns
   const closeAllDropdowns = () => {
     setShowCoupleDropdown(false);
-    setShowDayDropdown(false);
+    setShowAutoCalendar(false);
     setShowCalendar(false);
     setShowTimePicker(false);
   };
@@ -633,7 +780,7 @@ export default function AdminAppointmentsScreen() {
                 ]}
                 onPress={(e) => {
                   e.stopPropagation();
-                  setShowDayDropdown(false);
+                  setShowAutoCalendar(false);
                   setShowCalendar(false);
                   setShowTimePicker(false);
                   setShowCoupleDropdown(!showCoupleDropdown);
@@ -879,7 +1026,7 @@ export default function AdminAppointmentsScreen() {
                     onPress={(e) => {
                       e.stopPropagation();
                       setShowCoupleDropdown(false);
-                      setShowDayDropdown(false);
+                      setShowAutoCalendar(false);
                       setShowTimePicker(false);
                       setShowCalendar(!showCalendar);
                     }}
@@ -953,64 +1100,128 @@ export default function AdminAppointmentsScreen() {
                 </>
               ) : (
                 <>
+                  {/* First Date Selection */}
+                  <Text style={styles.autoSectionLabel}>First Visit Date</Text>
                   <TouchableOpacity 
-                    style={[styles.dropdownButton, showDayDropdown && styles.dropdownButtonActive]}
+                    style={[
+                      styles.dateButton,
+                      autoFirstDate && styles.dateButtonSelected,
+                      showAutoCalendar && styles.dateButtonActive
+                    ]}
                     onPress={(e) => {
                       e.stopPropagation();
                       setShowCoupleDropdown(false);
                       setShowCalendar(false);
                       setShowTimePicker(false);
-                      setShowDayDropdown(!showDayDropdown);
+                      setShowAutoCalendar(!showAutoCalendar);
                     }}
                   >
-                    <View style={styles.dropdownButtonContent}>
-                      <Ionicons name="today" size={18} color={COLORS.primary} />
-                      <Text style={styles.dropdownText}>
-                        {SCHEDULE_DAYS.find(d => d.value === autoScheduleDay)?.label || 'Monday'}
-                      </Text>
-                    </View>
-                    <Ionicons name={showDayDropdown ? "chevron-up" : "chevron-down"} size={18} color={COLORS.textMuted} />
+                    <Ionicons name="calendar" size={18} color={autoFirstDate ? COLORS.primary : COLORS.textMuted} />
+                    <Text style={autoFirstDate ? styles.dateButtonText : styles.dateButtonPlaceholder}>
+                      {autoFirstDate 
+                        ? `${autoFirstDate.getDate()} ${MONTHS[autoFirstDate.getMonth()]} ${autoFirstDate.getFullYear()}`
+                        : 'Tap to select first date...'}
+                    </Text>
+                    <Ionicons name={showAutoCalendar ? "chevron-up" : "chevron-down"} size={18} color={COLORS.textMuted} />
                   </TouchableOpacity>
 
-                  {showDayDropdown && (
-                    <View style={styles.dropdownListCompact}>
-                      {SCHEDULE_DAYS.map(day => (
-                        <TouchableOpacity
-                          key={day.value}
-                          style={[styles.dropdownItemCompact, autoScheduleDay === day.value && styles.dropdownItemSelected]}
-                          onPress={() => {
-                            setAutoScheduleDay(day.value);
-                            setShowDayDropdown(false);
-                          }}
+                  {showAutoCalendar && (
+                    <View style={styles.calendarContainer}>
+                      <View style={styles.calendarHeader}>
+                        <TouchableOpacity 
+                          style={styles.calendarNavButton}
+                          onPress={() => setAutoCalendarMonth(new Date(autoCalendarMonth.getFullYear(), autoCalendarMonth.getMonth() - 1))}
                         >
-                          <Text style={[styles.dropdownItemText, autoScheduleDay === day.value && styles.dropdownItemTextSelected]}>
-                            {day.label}
-                          </Text>
-                          {autoScheduleDay === day.value && (
-                            <Ionicons name="checkmark" size={18} color={COLORS.primary} />
-                          )}
+                          <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
                         </TouchableOpacity>
-                      ))}
+                        <Text style={styles.calendarMonthText}>
+                          {MONTHS[autoCalendarMonth.getMonth()]} {autoCalendarMonth.getFullYear()}
+                        </Text>
+                        <TouchableOpacity 
+                          style={styles.calendarNavButton}
+                          onPress={() => setAutoCalendarMonth(new Date(autoCalendarMonth.getFullYear(), autoCalendarMonth.getMonth() + 1))}
+                        >
+                          <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={styles.calendarWeekdays}>
+                        {WEEKDAYS.map(day => (
+                          <Text key={day} style={styles.calendarWeekday}>{day}</Text>
+                        ))}
+                      </View>
+
+                      <View style={styles.calendarDays}>
+                        {getDaysInMonth(autoCalendarMonth).map((day, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            style={[
+                              styles.calendarDay,
+                              day !== null && isAutoDateSelected(day) && styles.calendarDaySelected,
+                              day !== null && isAutoPastDate(day) && styles.calendarDayDisabled,
+                            ]}
+                            onPress={() => {
+                              if (day && !isAutoPastDate(day)) {
+                                setAutoFirstDate(new Date(autoCalendarMonth.getFullYear(), autoCalendarMonth.getMonth(), day));
+                                setShowAutoCalendar(false);
+                              }
+                            }}
+                            disabled={!day || isAutoPastDate(day)}
+                          >
+                            {day && (
+                              <Text style={[
+                                styles.calendarDayText,
+                                isAutoDateSelected(day) && styles.calendarDayTextSelected,
+                                isAutoPastDate(day) && styles.calendarDayTextDisabled,
+                              ]}>
+                                {day}
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
                     </View>
                   )}
 
+                  {/* Number of Visits */}
+                  <Text style={[styles.autoSectionLabel, { marginTop: 16 }]}>Number of Visits</Text>
+                  <View style={styles.numberOfVisitsContainer}>
+                    <TextInput
+                      style={styles.numberOfVisitsInput}
+                      value={numberOfVisits}
+                      onChangeText={(text) => {
+                        const num = text.replace(/[^0-9]/g, '');
+                        setNumberOfVisits(num);
+                      }}
+                      keyboardType="number-pad"
+                      placeholder="4"
+                      placeholderTextColor={COLORS.textMuted}
+                      maxLength={2}
+                    />
+                    <Text style={styles.numberOfVisitsHint}>visits (max 12)</Text>
+                  </View>
+
                   {/* Preview auto-scheduled dates */}
-                  <View style={styles.autoSchedulePreview}>
-                    <View style={styles.autoSchedulePreviewHeader}>
-                      <Ionicons name="eye-outline" size={16} color={COLORS.accent} />
-                      <Text style={styles.autoSchedulePreviewTitle}>Preview: 4 visits scheduled</Text>
-                    </View>
-                    {generateAutoScheduleDates(new Date(), autoScheduleDay).map((date, index) => (
-                      <View key={index} style={styles.autoScheduleDate}>
-                        <View style={styles.autoScheduleDateBadge}>
-                          <Text style={styles.autoScheduleDateBadgeText}>#{index + 1}</Text>
-                        </View>
-                        <Text style={styles.autoScheduleDateText}>
-                          {SCHEDULE_DAYS.find(d => d.value === date.getDay())?.label}, {date.getDate()} {MONTHS[date.getMonth()]} {date.getFullYear()}
+                  {autoFirstDate && parseInt(numberOfVisits) > 0 && (
+                    <View style={styles.autoSchedulePreview}>
+                      <View style={styles.autoSchedulePreviewHeader}>
+                        <Ionicons name="eye-outline" size={16} color={COLORS.accent} />
+                        <Text style={styles.autoSchedulePreviewTitle}>
+                          Preview: {Math.min(parseInt(numberOfVisits) || 0, 12)} visits (every 28 days)
                         </Text>
                       </View>
-                    ))}
-                  </View>
+                      {generateAutoScheduleDates(autoFirstDate, Math.min(parseInt(numberOfVisits) || 4, 12)).map((date, index) => (
+                        <View key={index} style={styles.autoScheduleDate}>
+                          <View style={styles.autoScheduleDateBadge}>
+                            <Text style={styles.autoScheduleDateBadgeText}>#{index + 1}</Text>
+                          </View>
+                          <Text style={styles.autoScheduleDateText}>
+                            {WEEKDAYS[date.getDay()]}, {date.getDate()} {MONTHS[date.getMonth()]} {date.getFullYear()}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </>
               )}
             </View>
@@ -1029,7 +1240,7 @@ export default function AdminAppointmentsScreen() {
                 onPress={(e) => {
                   e.stopPropagation();
                   setShowCoupleDropdown(false);
-                  setShowDayDropdown(false);
+                  setShowAutoCalendar(false);
                   setShowCalendar(false);
                   setShowTimePicker(!showTimePicker);
                 }}
@@ -1103,7 +1314,7 @@ export default function AdminAppointmentsScreen() {
             <View style={styles.formSection}>
               <View style={styles.formSectionHeader}>
                 <View style={[styles.stepBadge, styles.stepBadgeOptional]}>
-                  <Ionicons name="create-outline" size={12} color={COLORS.textMuted} />
+                  <Text style={styles.stepBadgeText}>5</Text>
                 </View>
                 <Text style={styles.formSectionTitle}>Additional Info</Text>
                 <Text style={styles.formSectionOptional}>(Optional)</Text>
@@ -1156,10 +1367,11 @@ export default function AdminAppointmentsScreen() {
                 isSaving && styles.submitButtonDisabled,
                 !selectedCouple && styles.submitButtonDisabled,
                 (scheduleMode === 'doctorVisit' && !selectedDoctorVisit) && styles.submitButtonDisabled,
-                (scheduleMode === 'manual' && !selectedDate) && styles.submitButtonDisabled
+                (scheduleMode === 'manual' && !selectedDate) && styles.submitButtonDisabled,
+                (scheduleMode === 'automatic' && !autoFirstDate) && styles.submitButtonDisabled
               ]}
               onPress={handleScheduleAppointment}
-              disabled={isSaving || !selectedCouple || (scheduleMode === 'doctorVisit' && !selectedDoctorVisit) || (scheduleMode === 'manual' && !selectedDate)}
+              disabled={isSaving || !selectedCouple || (scheduleMode === 'doctorVisit' && !selectedDoctorVisit) || (scheduleMode === 'manual' && !selectedDate) || (scheduleMode === 'automatic' && !autoFirstDate)}
             >
               {isSaving ? (
                 <ActivityIndicator size="small" color="#fff" />
@@ -1168,7 +1380,7 @@ export default function AdminAppointmentsScreen() {
                   <Ionicons name="checkmark-circle" size={18} color="#fff" />
                   <Text style={styles.submitButtonText}>
                     {scheduleMode === 'automatic' 
-                      ? 'Schedule 4 Visits'
+                      ? `Schedule ${Math.min(parseInt(numberOfVisits) || 4, 12)} Visits`
                       : scheduleMode === 'doctorVisit'
                         ? 'Schedule on Doctor Visit Day'
                         : 'Schedule Visit'}
@@ -1267,12 +1479,656 @@ export default function AdminAppointmentsScreen() {
     </Modal>
   );
 
+  // Visit Action Modal
+  const renderVisitActionModal = () => (
+    <Modal
+      visible={showVisitActionModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        setShowVisitActionModal(false);
+        setSelectedNursingVisit(null);
+      }}
+    >
+      <TouchableOpacity 
+        style={styles.messageModalOverlay}
+        activeOpacity={1}
+        onPress={() => {
+          setShowVisitActionModal(false);
+          setSelectedNursingVisit(null);
+        }}
+      >
+        <TouchableOpacity activeOpacity={1} style={styles.actionModalContent}>
+          {selectedNursingVisit && (
+            <>
+              <View style={styles.actionModalHeader}>
+                <View style={[styles.actionModalDateBadge, { backgroundColor: COLORS.accent + '20' }]}>
+                  <Text style={[styles.actionModalDateDay, { color: COLORS.accentDark }]}>
+                    {new Date(selectedNursingVisit.date).getDate()}
+                  </Text>
+                  <Text style={[styles.actionModalDateMonth, { color: COLORS.accentDark }]}>
+                    {MONTHS_SHORT[new Date(selectedNursingVisit.date).getMonth()]}
+                  </Text>
+                </View>
+                <View style={styles.actionModalInfo}>
+                  <Text style={styles.actionModalCouple}>{selectedNursingVisit.coupleName}</Text>
+                  <Text style={styles.actionModalTime}>{selectedNursingVisit.time}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedNursingVisit.status) + '20' }]}>
+                    <Text style={[styles.statusText, { color: getStatusColor(selectedNursingVisit.status) }]}>
+                      {selectedNursingVisit.status}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.actionModalButtons}>
+                <TouchableOpacity 
+                  style={styles.actionModalButton}
+                  onPress={() => {
+                    setShowVisitActionModal(false);
+                    setShowAddVisitModal(true);
+                  }}
+                >
+                  <View style={[styles.actionModalButtonIcon, { backgroundColor: COLORS.accent + '20' }]}>
+                    <Ionicons name="add-circle" size={22} color={COLORS.accent} />
+                  </View>
+                  <Text style={styles.actionModalButtonText}>Add New Visit</Text>
+                  <Text style={styles.actionModalButtonHint}>Schedule another visit for this couple</Text>
+                </TouchableOpacity>
+
+                {selectedNursingVisit.status !== 'cancelled' && selectedNursingVisit.status !== 'completed' && (
+                  <TouchableOpacity 
+                    style={styles.actionModalButton}
+                    onPress={() => {
+                      setShowVisitActionModal(false);
+                      setConfirmCancelModal(true);
+                    }}
+                  >
+                    <View style={[styles.actionModalButtonIcon, { backgroundColor: COLORS.error + '20' }]}>
+                      <Ionicons name="close-circle" size={22} color={COLORS.error} />
+                    </View>
+                    <Text style={styles.actionModalButtonText}>Cancel Visit</Text>
+                    <Text style={styles.actionModalButtonHint}>Cancel this scheduled visit</Text>
+                  </TouchableOpacity>
+                )}
+
+                {selectedNursingVisit.status !== 'cancelled' && selectedNursingVisit.status !== 'completed' && (
+                  <TouchableOpacity 
+                    style={styles.actionModalButton}
+                    onPress={() => {
+                      setShowVisitActionModal(false);
+                      setPostponeDate(null);
+                      setPostponeCalendarMonth(new Date());
+                      setShowPostponeModal(true);
+                    }}
+                  >
+                    <View style={[styles.actionModalButtonIcon, { backgroundColor: COLORS.warning + '20' }]}>
+                      <Ionicons name="calendar-outline" size={22} color={COLORS.warning} />
+                    </View>
+                    <Text style={styles.actionModalButtonText}>Postpone Visit</Text>
+                    <Text style={styles.actionModalButtonHint}>Reschedule to a later date</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <TouchableOpacity 
+                style={styles.actionModalClose}
+                onPress={() => {
+                  setShowVisitActionModal(false);
+                  setSelectedNursingVisit(null);
+                }}
+              >
+                <Text style={styles.actionModalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+  // Confirm Cancel Modal
+  const renderConfirmCancelModal = () => (
+    <Modal
+      visible={confirmCancelModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setConfirmCancelModal(false)}
+    >
+      <TouchableOpacity 
+        style={styles.messageModalOverlay}
+        activeOpacity={1}
+        onPress={() => setConfirmCancelModal(false)}
+      >
+        <TouchableOpacity activeOpacity={1} style={styles.messageModalContent}>
+          <View style={[styles.messageModalIcon, { backgroundColor: COLORS.error }]}>
+            <Ionicons name="alert-circle" size={32} color="#fff" />
+          </View>
+          <Text style={styles.messageModalTitle}>Cancel Visit?</Text>
+          <Text style={styles.messageModalMessage}>
+            Are you sure you want to cancel this visit for {selectedNursingVisit?.coupleName}?
+          </Text>
+          <View style={styles.confirmModalButtons}>
+            <TouchableOpacity 
+              style={[styles.confirmModalButton, styles.confirmModalButtonCancel]}
+              onPress={() => setConfirmCancelModal(false)}
+            >
+              <Text style={styles.confirmModalButtonCancelText}>No, Keep</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.confirmModalButton, styles.confirmModalButtonConfirm]}
+              onPress={handleCancelVisit}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.confirmModalButtonConfirmText}>Yes, Cancel</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+  // Add Visit Modal
+  const renderAddVisitModal = () => (
+    <Modal
+      visible={showAddVisitModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => {
+        setShowAddVisitModal(false);
+        setAddVisitDate(null);
+      }}
+    >
+      <TouchableOpacity 
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowAddVisitCalendar(false)}
+      >
+        <TouchableOpacity 
+          activeOpacity={1} 
+          style={[styles.modalContent, isMobile && styles.modalContentMobile, { maxHeight: '80%' }]}
+          onPress={() => setShowAddVisitCalendar(false)}
+        >
+          <View style={styles.modalHeader}>
+            <View>
+              <Text style={styles.modalTitle}>Add New Visit</Text>
+              <Text style={styles.modalSubtitle}>
+                For {selectedNursingVisit?.coupleName}
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.modalCloseButton}
+              onPress={() => {
+                setShowAddVisitModal(false);
+                setAddVisitDate(null);
+              }}
+            >
+              <Ionicons name="close" size={22} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            {/* Date Selection */}
+            <View style={styles.formSection}>
+              <View style={styles.formSectionHeader}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepBadgeText}>1</Text>
+                </View>
+                <Text style={styles.formSectionTitle}>Select Date</Text>
+              </View>
+
+              <TouchableOpacity 
+                style={[
+                  styles.dateButton,
+                  addVisitDate && styles.dateButtonSelected,
+                  showAddVisitCalendar && styles.dateButtonActive
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setShowAddVisitCalendar(!showAddVisitCalendar);
+                }}
+              >
+                <Ionicons name="calendar" size={18} color={addVisitDate ? COLORS.primary : COLORS.textMuted} />
+                <Text style={addVisitDate ? styles.dateButtonText : styles.dateButtonPlaceholder}>
+                  {addVisitDate 
+                    ? `${addVisitDate.getDate()} ${MONTHS[addVisitDate.getMonth()]} ${addVisitDate.getFullYear()}`
+                    : 'Tap to select date...'}
+                </Text>
+                <Ionicons name={showAddVisitCalendar ? "chevron-up" : "chevron-down"} size={18} color={COLORS.textMuted} />
+              </TouchableOpacity>
+
+              {showAddVisitCalendar && (
+                <View style={styles.calendarContainer}>
+                  <View style={styles.calendarHeader}>
+                    <TouchableOpacity 
+                      style={styles.calendarNavButton}
+                      onPress={() => setAddVisitCalendarMonth(new Date(addVisitCalendarMonth.getFullYear(), addVisitCalendarMonth.getMonth() - 1))}
+                    >
+                      <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
+                    </TouchableOpacity>
+                    <Text style={styles.calendarMonthText}>
+                      {MONTHS[addVisitCalendarMonth.getMonth()]} {addVisitCalendarMonth.getFullYear()}
+                    </Text>
+                    <TouchableOpacity 
+                      style={styles.calendarNavButton}
+                      onPress={() => setAddVisitCalendarMonth(new Date(addVisitCalendarMonth.getFullYear(), addVisitCalendarMonth.getMonth() + 1))}
+                    >
+                      <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.calendarWeekdays}>
+                    {WEEKDAYS.map(day => (
+                      <Text key={day} style={styles.calendarWeekday}>{day}</Text>
+                    ))}
+                  </View>
+
+                  <View style={styles.calendarDays}>
+                    {getDaysInMonth(addVisitCalendarMonth).map((day, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.calendarDay,
+                          day !== null && isAddVisitDateSelected(day) && styles.calendarDaySelected,
+                          day !== null && isAddVisitPastDate(day) && styles.calendarDayDisabled,
+                        ]}
+                        onPress={() => {
+                          if (day && !isAddVisitPastDate(day)) {
+                            setAddVisitDate(new Date(addVisitCalendarMonth.getFullYear(), addVisitCalendarMonth.getMonth(), day));
+                            setShowAddVisitCalendar(false);
+                          }
+                        }}
+                        disabled={!day || isAddVisitPastDate(day)}
+                      >
+                        {day && (
+                          <Text style={[
+                            styles.calendarDayText,
+                            isAddVisitDateSelected(day) && styles.calendarDayTextSelected,
+                            isAddVisitPastDate(day) && styles.calendarDayTextDisabled,
+                          ]}>
+                            {day}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Time Selection */}
+            <View style={styles.formSection}>
+              <View style={styles.formSectionHeader}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepBadgeText}>2</Text>
+                </View>
+                <Text style={styles.formSectionTitle}>Select Time</Text>
+              </View>
+
+              <View style={styles.timePickerInline}>
+                <View style={styles.timePickerInlineGroup}>
+                  <Text style={styles.timePickerInlineLabel}>Hour</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={styles.timePickerInlineRow}>
+                      {HOURS.map(hour => (
+                        <TouchableOpacity
+                          key={hour}
+                          style={[styles.timePickerInlineOption, selectedHour === hour && styles.timePickerInlineOptionSelected]}
+                          onPress={() => setSelectedHour(hour)}
+                        >
+                          <Text style={[styles.timePickerInlineOptionText, selectedHour === hour && styles.timePickerInlineOptionTextSelected]}>
+                            {hour}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
+                </View>
+
+                <View style={styles.timePickerInlineGroup}>
+                  <Text style={styles.timePickerInlineLabel}>Minute</Text>
+                  <View style={styles.timePickerInlineRow}>
+                    {MINUTES.map(minute => (
+                      <TouchableOpacity
+                        key={minute}
+                        style={[styles.timePickerInlineOption, selectedMinute === minute && styles.timePickerInlineOptionSelected]}
+                        onPress={() => setSelectedMinute(minute)}
+                      >
+                        <Text style={[styles.timePickerInlineOptionText, selectedMinute === minute && styles.timePickerInlineOptionTextSelected]}>
+                          {minute}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.timePickerInlineGroup}>
+                  <Text style={styles.timePickerInlineLabel}>AM/PM</Text>
+                  <View style={styles.timePickerInlineRow}>
+                    {(['AM', 'PM'] as const).map(period => (
+                      <TouchableOpacity
+                        key={period}
+                        style={[styles.timePickerInlineOption, selectedPeriod === period && styles.timePickerInlineOptionSelected]}
+                        onPress={() => setSelectedPeriod(period)}
+                      >
+                        <Text style={[styles.timePickerInlineOptionText, selectedPeriod === period && styles.timePickerInlineOptionTextSelected]}>
+                          {period}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity 
+              style={styles.cancelButton}
+              onPress={() => {
+                setShowAddVisitModal(false);
+                setAddVisitDate(null);
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[
+                styles.submitButton, 
+                isSaving && styles.submitButtonDisabled,
+                !addVisitDate && styles.submitButtonDisabled
+              ]}
+              onPress={handleAddVisit}
+              disabled={isSaving || !addVisitDate}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="add-circle" size={18} color="#fff" />
+                  <Text style={styles.submitButtonText}>Add Visit</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+  // Postpone Modal
+  const renderPostponeModal = () => {
+    const isPostponePastDate = (day: number) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const checkDate = new Date(postponeCalendarMonth.getFullYear(), postponeCalendarMonth.getMonth(), day);
+      return checkDate < today;
+    };
+
+    const isPostponeDateSelected = (day: number) => {
+      if (!postponeDate || !day) return false;
+      return (
+        postponeDate.getDate() === day &&
+        postponeDate.getMonth() === postponeCalendarMonth.getMonth() &&
+        postponeDate.getFullYear() === postponeCalendarMonth.getFullYear()
+      );
+    };
+
+    return (
+      <Modal
+        visible={showPostponeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowPostponeModal(false);
+          setPostponeDate(null);
+        }}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPostponeCalendar(false)}
+        >
+          <TouchableOpacity 
+            activeOpacity={1} 
+            style={[styles.modalContent, isMobile && styles.modalContentMobile, { maxHeight: '70%' }]}
+            onPress={() => setShowPostponeCalendar(false)}
+          >
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Postpone Visit</Text>
+                <Text style={styles.modalSubtitle}>
+                  Select new date for {selectedNursingVisit?.coupleName}
+                </Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => {
+                  setShowPostponeModal(false);
+                  setPostponeDate(null);
+                }}
+              >
+                <Ionicons name="close" size={22} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Current Date Info */}
+              {selectedNursingVisit && (
+                <View style={styles.currentDateInfo}>
+                  <Text style={styles.currentDateLabel}>Current Date:</Text>
+                  <Text style={styles.currentDateValue}>
+                    {new Date(selectedNursingVisit.date).getDate()} {MONTHS[new Date(selectedNursingVisit.date).getMonth()]} {new Date(selectedNursingVisit.date).getFullYear()}
+                  </Text>
+                </View>
+              )}
+
+              {/* New Date Selection */}
+              <View style={styles.formSection}>
+                <View style={styles.formSectionHeader}>
+                  <View style={styles.stepBadge}>
+                    <Text style={styles.stepBadgeText}>1</Text>
+                  </View>
+                  <Text style={styles.formSectionTitle}>Select New Date</Text>
+                </View>
+
+                <TouchableOpacity 
+                  style={[
+                    styles.dateButton,
+                    postponeDate && styles.dateButtonSelected,
+                    showPostponeCalendar && styles.dateButtonActive
+                  ]}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setShowPostponeCalendar(!showPostponeCalendar);
+                  }}
+                >
+                  <Ionicons name="calendar" size={18} color={postponeDate ? COLORS.primary : COLORS.textMuted} />
+                  <Text style={postponeDate ? styles.dateButtonText : styles.dateButtonPlaceholder}>
+                    {postponeDate 
+                      ? `${postponeDate.getDate()} ${MONTHS[postponeDate.getMonth()]} ${postponeDate.getFullYear()}`
+                      : 'Tap to select new date...'}
+                  </Text>
+                  <Ionicons name={showPostponeCalendar ? "chevron-up" : "chevron-down"} size={18} color={COLORS.textMuted} />
+                </TouchableOpacity>
+
+                {showPostponeCalendar && (
+                  <View style={styles.calendarContainer}>
+                    <View style={styles.calendarHeader}>
+                      <TouchableOpacity 
+                        style={styles.calendarNavButton}
+                        onPress={() => setPostponeCalendarMonth(new Date(postponeCalendarMonth.getFullYear(), postponeCalendarMonth.getMonth() - 1))}
+                      >
+                        <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
+                      </TouchableOpacity>
+                      <Text style={styles.calendarMonthText}>
+                        {MONTHS[postponeCalendarMonth.getMonth()]} {postponeCalendarMonth.getFullYear()}
+                      </Text>
+                      <TouchableOpacity 
+                        style={styles.calendarNavButton}
+                        onPress={() => setPostponeCalendarMonth(new Date(postponeCalendarMonth.getFullYear(), postponeCalendarMonth.getMonth() + 1))}
+                      >
+                        <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.calendarWeekdays}>
+                      {WEEKDAYS.map(day => (
+                        <Text key={day} style={styles.calendarWeekday}>{day}</Text>
+                      ))}
+                    </View>
+
+                    <View style={styles.calendarDays}>
+                      {getDaysInMonth(postponeCalendarMonth).map((day, index) => (
+                        <TouchableOpacity
+                          key={index}
+                          style={[
+                            styles.calendarDay,
+                            day !== null && isPostponeDateSelected(day) && styles.calendarDaySelected,
+                            day !== null && isPostponePastDate(day) && styles.calendarDayDisabled,
+                          ]}
+                          onPress={() => {
+                            if (day && !isPostponePastDate(day)) {
+                              setPostponeDate(new Date(postponeCalendarMonth.getFullYear(), postponeCalendarMonth.getMonth(), day));
+                              setShowPostponeCalendar(false);
+                            }
+                          }}
+                          disabled={!day || isPostponePastDate(day)}
+                        >
+                          {day && (
+                            <Text style={[
+                              styles.calendarDayText,
+                              isPostponeDateSelected(day) && styles.calendarDayTextSelected,
+                              isPostponePastDate(day) && styles.calendarDayTextDisabled,
+                            ]}>
+                              {day}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Time Selection */}
+              <View style={styles.formSection}>
+                <View style={styles.formSectionHeader}>
+                  <View style={styles.stepBadge}>
+                    <Text style={styles.stepBadgeText}>2</Text>
+                  </View>
+                  <Text style={styles.formSectionTitle}>Select Time</Text>
+                </View>
+
+                <View style={styles.timePickerInline}>
+                  <View style={styles.timePickerInlineGroup}>
+                    <Text style={styles.timePickerInlineLabel}>Hour</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View style={styles.timePickerInlineRow}>
+                        {HOURS.map(hour => (
+                          <TouchableOpacity
+                            key={hour}
+                            style={[styles.timePickerInlineOption, postponeHour === hour && styles.timePickerInlineOptionSelected]}
+                            onPress={() => setPostponeHour(hour)}
+                          >
+                            <Text style={[styles.timePickerInlineOptionText, postponeHour === hour && styles.timePickerInlineOptionTextSelected]}>
+                              {hour}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </ScrollView>
+                  </View>
+
+                  <View style={styles.timePickerInlineGroup}>
+                    <Text style={styles.timePickerInlineLabel}>Minute</Text>
+                    <View style={styles.timePickerInlineRow}>
+                      {MINUTES.map(minute => (
+                        <TouchableOpacity
+                          key={minute}
+                          style={[styles.timePickerInlineOption, postponeMinute === minute && styles.timePickerInlineOptionSelected]}
+                          onPress={() => setPostponeMinute(minute)}
+                        >
+                          <Text style={[styles.timePickerInlineOptionText, postponeMinute === minute && styles.timePickerInlineOptionTextSelected]}>
+                            {minute}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.timePickerInlineGroup}>
+                    <Text style={styles.timePickerInlineLabel}>AM/PM</Text>
+                    <View style={styles.timePickerInlineRow}>
+                      {(['AM', 'PM'] as const).map(period => (
+                        <TouchableOpacity
+                          key={period}
+                          style={[styles.timePickerInlineOption, postponePeriod === period && styles.timePickerInlineOptionSelected]}
+                          onPress={() => setPostponePeriod(period)}
+                        >
+                          <Text style={[styles.timePickerInlineOptionText, postponePeriod === period && styles.timePickerInlineOptionTextSelected]}>
+                            {period}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => {
+                  setShowPostponeModal(false);
+                  setPostponeDate(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.submitButton, 
+                  { backgroundColor: COLORS.warning },
+                  isSaving && styles.submitButtonDisabled,
+                  !postponeDate && styles.submitButtonDisabled
+                ]}
+                onPress={handlePostponeVisit}
+                disabled={isSaving || !postponeDate}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="calendar" size={18} color="#fff" />
+                    <Text style={styles.submitButtonText}>Postpone Visit</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {renderHeader()}
       {renderContent()}
       {renderScheduleModal()}
       {renderMessageModal()}
+      {renderVisitActionModal()}
+      {renderConfirmCancelModal()}
+      {renderAddVisitModal()}
+      {renderPostponeModal()}
     </View>
   );
 }
@@ -2187,5 +3043,201 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Auto scheduling styles
+  autoSectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  numberOfVisitsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  numberOfVisitsInput: {
+    width: 60,
+    height: 44,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    backgroundColor: COLORS.surface,
+  },
+  numberOfVisitsHint: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+  },
+  // Action Modal Styles
+  actionModalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 360,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  actionModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    marginBottom: 16,
+  },
+  actionModalDateBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionModalDateDay: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  actionModalDateMonth: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  actionModalInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  actionModalCouple: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  actionModalTime: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  actionModalButtons: {
+    gap: 10,
+  },
+  actionModalButton: {
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 12,
+    padding: 14,
+  },
+  actionModalButtonIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  actionModalButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  actionModalButtonHint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  actionModalClose: {
+    marginTop: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  actionModalCloseText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  // Confirm Modal Styles
+  confirmModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  confirmModalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmModalButtonCancel: {
+    backgroundColor: COLORS.borderLight,
+  },
+  confirmModalButtonConfirm: {
+    backgroundColor: COLORS.error,
+  },
+  confirmModalButtonCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  confirmModalButtonConfirmText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  // Time Picker Inline Styles
+  timePickerInline: {
+    gap: 16,
+  },
+  timePickerInlineGroup: {
+    gap: 8,
+  },
+  timePickerInlineLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  timePickerInlineRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  timePickerInlineOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.borderLight,
+  },
+  timePickerInlineOptionSelected: {
+    backgroundColor: COLORS.primary,
+  },
+  timePickerInlineOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  timePickerInlineOptionTextSelected: {
+    color: '#fff',
+  },
+  // Postpone Modal Styles
+  currentDateInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.borderLight,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  currentDateLabel: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  currentDateValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
   },
 });

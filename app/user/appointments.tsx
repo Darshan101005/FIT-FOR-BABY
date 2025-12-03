@@ -507,40 +507,44 @@ export default function AppointmentsScreen() {
     </View>
   );
 
-  const renderLoggedAppointments = () => (
-    <View style={styles.loggedSection}>
-      {doctorVisits.length > 0 && (
-        <>
-          <Text style={styles.sectionTitle}>Logged</Text>
-          {doctorVisits.map((apt) => (
-            <View key={apt.id} style={styles.appointmentCard}>
-              <View style={styles.appointmentDateBox}>
-                <Text style={styles.appointmentDayNum}>{new Date(apt.date).getDate()}</Text>
-                <Text style={styles.appointmentMonth}>
-                  {MONTHS[new Date(apt.date).getMonth()]}
-                </Text>
+  const renderLoggedAppointments = () => {
+    const sortedDoctorVisits = [...doctorVisits].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    return (
+      <View style={styles.loggedSection}>
+        {sortedDoctorVisits.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Logged</Text>
+            {sortedDoctorVisits.map((apt) => (
+              <View key={apt.id} style={styles.appointmentCard}>
+                <View style={styles.appointmentDateBox}>
+                  <Text style={styles.appointmentDayNum}>{new Date(apt.date).getDate()}</Text>
+                  <Text style={styles.appointmentMonth}>
+                    {MONTHS[new Date(apt.date).getMonth()]}
+                  </Text>
+                </View>
+                <View style={styles.appointmentCardContent}>
+                  <Text style={styles.appointmentTime}>{apt.time}</Text>
+                  {apt.doctorName && (
+                    <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
+                  )}
+                  {apt.purpose && (
+                    <Text style={styles.appointmentPurpose}>{apt.purpose}</Text>
+                  )}
+                </View>
+                <TouchableOpacity 
+                  style={styles.deleteButton}
+                  onPress={() => handleDeleteAppointment(apt.id)}
+                >
+                  <Ionicons name="close" size={18} color="#94a3b8" />
+                </TouchableOpacity>
               </View>
-              <View style={styles.appointmentCardContent}>
-                <Text style={styles.appointmentTime}>{apt.time}</Text>
-                {apt.doctorName && (
-                  <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
-                )}
-                {apt.purpose && (
-                  <Text style={styles.appointmentPurpose}>{apt.purpose}</Text>
-                )}
-              </View>
-              <TouchableOpacity 
-                style={styles.deleteButton}
-                onPress={() => handleDeleteAppointment(apt.id)}
-              >
-                <Ionicons name="close" size={18} color="#94a3b8" />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </>
-      )}
-    </View>
-  );
+            ))}
+          </>
+        )}
+      </View>
+    );
+  };
 
   const [nurseVisitMonth, setNurseVisitMonth] = useState(new Date());
 
@@ -645,7 +649,9 @@ export default function AppointmentsScreen() {
   };
 
   const renderNurseVisits = () => {
-    const upcomingVisits = nursingVisits.filter((v: NursingDepartmentVisit) => v.status === 'scheduled' || v.status === 'confirmed');
+    const upcomingVisits = nursingVisits
+      .filter((v: NursingDepartmentVisit) => v.status === 'scheduled' || v.status === 'confirmed')
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const pastVisits = nursingVisits.filter((v: NursingDepartmentVisit) => v.status === 'completed').slice(-3);
     const nextVisit = upcomingVisits[0];
 
