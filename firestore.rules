@@ -204,6 +204,13 @@ service cloud.firestore {
         allow read: if true; // Users can view their scheduled visits
         allow create, update, delete: if true; // Admins can schedule/manage
       }
+      
+      // Questionnaire progress subcollection (user answers, admin views)
+      match /questionnaire/{gender} {
+        allow read: if true; // Users can read their own progress, admins can view all
+        allow create, update: if true; // Users can save their progress
+        allow delete: if true; // Allow reset functionality
+      }
     }
   }
 }

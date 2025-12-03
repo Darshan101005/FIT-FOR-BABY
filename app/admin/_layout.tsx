@@ -4,16 +4,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Animated,
-    Image,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Animated,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 // Fit for Baby Color Palette
@@ -61,9 +61,16 @@ const navItems: NavItem[] = [
     route: '/admin/users',
   },
   {
+    id: 'questionnaire',
+    label: 'Questionnaires',
+    icon: 'clipboard-list-outline',
+    iconFamily: 'MaterialCommunityIcons',
+    route: '/admin/questionnaire',
+  },
+  {
     id: 'tasks',
     label: 'Tasks & Goals',
-    icon: 'clipboard-list-outline',
+    icon: 'target',
     iconFamily: 'MaterialCommunityIcons',
     route: '/admin/tasks',
   },
@@ -407,6 +414,7 @@ export default function AdminLayout() {
         >
           <Stack.Screen name="home" />
           <Stack.Screen name="users" />
+          <Stack.Screen name="questionnaire" />
           <Stack.Screen name="tasks" />
           <Stack.Screen name="monitoring" />
           <Stack.Screen name="communication" />

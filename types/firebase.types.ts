@@ -359,10 +359,130 @@ export interface AdminPermissions {
 }
 
 // ============================================
-// QUESTIONNAIRE RESPONSES COLLECTION
-// Path: /questionnaireResponses/{responseId}
+// QUESTIONNAIRE TYPES & RESPONSES
+// Path: /couples/{coupleId}/questionnaire/{gender}
 // ============================================
 
+// Language for questionnaire
+export type QuestionnaireLanguage = 'english' | 'tamil';
+
+// Question types from JSON
+export type QuestionnaireQuestionType = 'fillup' | 'mcq';
+
+// Question structure from JSON
+export interface QuestionnaireQuestion {
+  number: string;
+  question: string;
+  type: QuestionnaireQuestionType;
+  options?: string[];
+  conditional_textfield?: string;
+  sub_questions?: {
+    condition: string;
+    questions: {
+      question: string;
+      type: string;
+      options?: string[];
+    }[];
+  }[];
+}
+
+// Section structure (e.g., section_a_background_variables)
+export interface QuestionnaireSection {
+  id: string;
+  title: string;
+  questions: QuestionnaireQuestion[];
+}
+
+// Part structure (e.g., part_1_background_and_clinical)
+export interface QuestionnairePart {
+  id: string;
+  title: string;
+  sections: QuestionnaireSection[];
+}
+
+// Complete parsed questionnaire structure
+export interface ParsedQuestionnaire {
+  language: QuestionnaireLanguage;
+  gender: 'men' | 'women';
+  parts: QuestionnairePart[];
+  totalQuestions: number;
+}
+
+// Individual question answer
+export interface QuestionnaireAnswer {
+  questionId: string; // Format: partId_sectionId_questionNumber (e.g., part_1_section_a_1)
+  partId: string;
+  sectionId: string;
+  questionNumber: string;
+  questionText: string;
+  answer: string | string[];
+  conditionalAnswer?: string; // For conditional_textfield responses
+  subAnswers?: {
+    question: string;
+    answer: string | string[];
+  }[];
+  answeredAt: Timestamp;
+}
+
+// Section progress tracking
+export interface QuestionnaireSectionProgress {
+  sectionId: string;
+  sectionTitle: string;
+  totalQuestions: number;
+  answeredQuestions: number;
+  isComplete: boolean;
+}
+
+// Part progress tracking
+export interface QuestionnairePartProgress {
+  partId: string;
+  partTitle: string;
+  sections: QuestionnaireSectionProgress[];
+  totalQuestions: number;
+  answeredQuestions: number;
+  isComplete: boolean;
+}
+
+// Complete questionnaire progress for a user
+// Path: /couples/{coupleId}/questionnaire/{gender}
+export interface QuestionnaireProgress {
+  id?: string; // Document ID (same as gender: 'male' | 'female')
+  coupleId: string;
+  gender: 'male' | 'female';
+  
+  // Language selection (cannot change mid-questionnaire without losing progress)
+  language: QuestionnaireLanguage;
+  
+  // All answers keyed by questionId
+  answers: Record<string, QuestionnaireAnswer>;
+  
+  // Progress tracking
+  progress: {
+    parts: QuestionnairePartProgress[];
+    totalQuestions: number;
+    answeredQuestions: number;
+    percentComplete: number;
+  };
+  
+  // Current position (for resume)
+  currentPosition: {
+    partIndex: number;
+    sectionIndex: number;
+    questionIndex: number;
+  };
+  
+  // Status
+  status: 'not-started' | 'in-progress' | 'completed';
+  isComplete: boolean;
+  
+  // Timestamps
+  startedAt?: Timestamp;
+  lastUpdatedAt?: Timestamp;
+  completedAt?: Timestamp;
+  createdAt: Timestamp;
+}
+
+// Legacy interface for backward compatibility
 export interface QuestionnaireResponse {
   id: string;
   userId: string;

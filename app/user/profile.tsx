@@ -1,21 +1,22 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { MobileProfileCardSkeleton, WebProfileCardSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
-import { coupleService } from '@/services/firestore.service';
+import { coupleService, questionnaireService } from '@/services/firestore.service';
+import { QuestionnaireProgress } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import {
-    Animated,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Animated,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -119,6 +120,9 @@ export default function ProfileScreen() {
   // Profile data from Firestore
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   
+  // Questionnaire progress from Firestore
+  const [questionnaireProgress, setQuestionnaireProgress] = useState<QuestionnaireProgress | null>(null);
+  
   // Profile stats
   const [profileStats, setProfileStats] = useState({
     daysActive: 0,
@@ -182,6 +186,14 @@ export default function ProfileScreen() {
                 currentStreak: currentStreak,
                 longestStreak: user.longestStreak || 0,
               });
+              
+              // Fetch questionnaire progress
+              try {
+                const qProgress = await questionnaireService.getProgress(coupleId, userGender as 'male' | 'female');
+                setQuestionnaireProgress(qProgress);
+              } catch (qError) {
+                console.error('Error fetching questionnaire progress:', qError);
+              }
             } else {
               // Fallback if no couple data
               setProfileData({
@@ -415,23 +427,113 @@ export default function ProfileScreen() {
     );
   };
 
-  const renderQuestionnaireStatus = () => (
-    <View style={[styles.questionnaireCard, { backgroundColor: colors.cardBackground }]}>
-      <View style={styles.questionnaireHeader}>
-        <MaterialCommunityIcons name="clipboard-check" size={24} color={colors.success} />
-        <View style={styles.questionnaireInfo}>
-          <Text style={[styles.questionnaireTitle, { color: colors.text }]}>Health Questionnaire</Text>
-          <Text style={[styles.questionnaireStatus, { color: colors.success }]}>Completed on Nov 1, 2024</Text>
+  const renderQuestionnaireStatus = () => {
+    // Helper function to format date
+    const formatDate = (timestamp: any) => {
+      if (!timestamp) return '';
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+    };
+
+    // Determine status and display info
+    const isCompleted = questionnaireProgress?.status === 'completed';
+    const isInProgress = questionnaireProgress?.status === 'in-progress';
+    const notStarted = !questionnaireProgress || questionnaireProgress.status === 'not-started';
+    
+    const progressPercent = questionnaireProgress?.progress?.percentComplete || 0;
+    const completedDate = questionnaireProgress?.completedAt ? formatDate(questionnaireProgress.completedAt) : '';
+    const lastUpdatedDate = questionnaireProgress?.lastUpdatedAt ? formatDate(questionnaireProgress.lastUpdatedAt) : '';
+
+    // Determine icon, color, and status text
+    let statusIcon = 'clipboard-outline';
+    let statusColor = colors.textMuted;
+    let statusText = 'Not started';
+    let actionButtonText = 'Start';
+    
+    if (isCompleted) {
+      statusIcon = 'clipboard-check';
+      statusColor = colors.success;
+      statusText = `Completed on ${completedDate}`;
+      actionButtonText = 'View';
+    } else if (isInProgress) {
+      statusIcon = 'clipboard-edit-outline';
+      statusColor = colors.warning;
+      statusText = `${Math.round(progressPercent)}% complete • Last updated ${lastUpdatedDate}`;
+      actionButtonText = 'Continue';
+    }
+
+    const handlePress = () => {
+      if (notStarted || isInProgress) {
+        // Navigate to questionnaire
+        router.push('/questionnaire' as any);
+      } else if (isCompleted) {
+        // View completed questionnaire (read-only mode)
+        router.push({
+          pathname: '/questionnaire',
+          params: { viewOnly: 'true' }
+        } as any);
+      }
+    };
+
+    return (
+      <View style={[styles.questionnaireCard, { backgroundColor: colors.cardBackground }]}>
+        <View style={styles.questionnaireHeader}>
+          <MaterialCommunityIcons 
+            name={statusIcon as any} 
+            size={24} 
+            color={statusColor} 
+          />
+          <View style={styles.questionnaireInfo}>
+            <Text style={[styles.questionnaireTitle, { color: colors.text }]}>Health Questionnaire</Text>
+            <Text style={[styles.questionnaireStatus, { color: statusColor }]}>{statusText}</Text>
+          </View>
+          <TouchableOpacity 
+            style={[styles.viewButton, { backgroundColor: colors.inputBackground }]}
+            onPress={handlePress}
+          >
+            <Text style={[styles.viewButtonText, { color: isCompleted ? colors.textSecondary : colors.primary }]}>
+              {actionButtonText}
+            </Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={[styles.viewButton, { backgroundColor: colors.inputBackground }]}>
-          <Text style={[styles.viewButtonText, { color: colors.textSecondary }]}>View</Text>
-        </TouchableOpacity>
+        <View style={[styles.questionnaireProgress, { backgroundColor: colors.border }]}>
+          <View 
+            style={[
+              styles.progressBarFull, 
+              { 
+                backgroundColor: statusColor,
+                width: `${progressPercent}%` 
+              }
+            ]} 
+          />
+        </View>
+        {isInProgress && questionnaireProgress?.progress && (
+          <View style={styles.questionnaireDetails}>
+            <Text style={[styles.questionnaireDetailText, { color: colors.textSecondary }]}>
+              {questionnaireProgress.progress.answeredQuestions} of {questionnaireProgress.progress.totalQuestions} questions answered
+            </Text>
+            <Text style={[styles.questionnaireLanguageTag, { backgroundColor: colors.inputBackground, color: colors.textSecondary }]}>
+              {questionnaireProgress.language === 'english' ? '🇬🇧 English' : '🇮🇳 தமிழ்'}
+            </Text>
+          </View>
+        )}
+        {isCompleted && (
+          <View style={styles.questionnaireDetails}>
+            <Text style={[styles.questionnaireDetailText, { color: colors.textSecondary }]}>
+              ✓ All questions answered
+            </Text>
+            <Text style={[styles.questionnaireLanguageTag, { backgroundColor: colors.inputBackground, color: colors.textSecondary }]}>
+              {questionnaireProgress?.language === 'english' ? '🇬🇧 English' : '🇮🇳 தமிழ்'}
+            </Text>
+          </View>
+        )}
       </View>
-      <View style={[styles.questionnaireProgress, { backgroundColor: colors.border }]}>
-        <View style={[styles.progressBarFull, { backgroundColor: colors.success }]} />
-      </View>
-    </View>
-  );
+    );
+  };
 
   const renderSettingsSection = (
     title: string, 
@@ -633,7 +735,6 @@ export default function ProfileScreen() {
               id: 'switch-profile',
               icon: 'swap-horizontal',
               label: 'Switch Profile',
-              labelTamil: 'சுயவிவரத்தை மாற்று',
               type: 'link',
               onPress: () => {
                 if (profileData) {
@@ -1002,8 +1103,23 @@ const styles = StyleSheet.create({
   },
   progressBarFull: {
     height: '100%',
-    width: '100%',
     borderRadius: 2,
+  },
+  questionnaireDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  questionnaireDetailText: {
+    fontSize: 12,
+  },
+  questionnaireLanguageTag: {
+    fontSize: 11,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
   },
   languageSection: { marginBottom: 24 },
   sectionTitle: {

@@ -2,7 +2,8 @@
 // FIRESTORE SERVICE - CRUD OPERATIONS
 // ============================================
 
-import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
+import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
+import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
 import {
     addDoc,
     collection,
@@ -3125,6 +3126,382 @@ export const chatService = {
 };
 
 // ============================================
+// QUESTIONNAIRE SERVICE
+// Path: /couples/{coupleId}/questionnaire/{gender}
+// ============================================
+
+export const questionnaireService = {
+  /**
+   * Get questionnaire progress for a user
+   */
+  async getProgress(
+    coupleId: string,
+    gender: 'male' | 'female'
+  ): Promise<QuestionnaireProgress | null> {
+    try {
+      const docRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'questionnaire', gender);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as QuestionnaireProgress;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting questionnaire progress:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Start a new questionnaire (or reset if changing language)
+   */
+  async startQuestionnaire(
+    coupleId: string,
+    gender: 'male' | 'female',
+    language: QuestionnaireLanguage
+  ): Promise<void> {
+    try {
+      const docRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'questionnaire', gender);
+      const initialProgress = initializeProgress(language, gender);
+
+      const newProgress: Omit<QuestionnaireProgress, 'id'> = {
+        coupleId,
+        gender,
+        language,
+        answers: {},
+        progress: initialProgress,
+        currentPosition: {
+          partIndex: 0,
+          sectionIndex: 0,
+          questionIndex: 0,
+        },
+        status: 'in-progress',
+        isComplete: false,
+        startedAt: now(),
+        lastUpdatedAt: now(),
+        createdAt: now(),
+      };
+
+      await setDoc(docRef, newProgress);
+
+      // Update couple document to track questionnaire status
+      const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+      await updateDoc(coupleRef, {
+        [`${gender}.questionnaireStarted`]: true,
+        [`${gender}.questionnaireLanguage`]: language,
+        updatedAt: now(),
+      });
+    } catch (error) {
+      console.error('Error starting questionnaire:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Save an answer to a question
+   */
+  async saveAnswer(
+    coupleId: string,
+    gender: 'male' | 'female',
+    answer: QuestionnaireAnswer
+  ): Promise<void> {
+    try {
+      const docRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'questionnaire', gender);
+
+      // Get current progress to recalculate
+      const currentProgress = await this.getProgress(coupleId, gender);
+      if (!currentProgress) {
+        throw new Error('Questionnaire not started');
+      }
+
+      // Add the new answer
+      const updatedAnswers = {
+        ...currentProgress.answers,
+        [answer.questionId]: answer,
+      };
+
+      // Recalculate progress
+      const answeredIds = Object.keys(updatedAnswers);
+      const newProgress = calculateProgress(
+        currentProgress.language,
+        gender,
+        answeredIds
+      );
+
+      await updateDoc(docRef, {
+        [`answers.${answer.questionId}`]: answer,
+        progress: newProgress,
+        lastUpdatedAt: now(),
+      });
+    } catch (error) {
+      console.error('Error saving questionnaire answer:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update current position (for resume functionality)
+   */
+  async updatePosition(
+    coupleId: string,
+    gender: 'male' | 'female',
+    position: { partIndex: number; sectionIndex: number; questionIndex: number }
+  ): Promise<void> {
+    try {
+      const docRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'questionnaire', gender);
+      await updateDoc(docRef, {
+        currentPosition: position,
+        lastUpdatedAt: now(),
+      });
+    } catch (error) {
+      console.error('Error updating questionnaire position:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Complete the questionnaire
+   */
+  async completeQuestionnaire(
+    coupleId: string,
+    gender: 'male' | 'female'
+  ): Promise<void> {
+    try {
+      const docRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'questionnaire', gender);
+      await updateDoc(docRef, {
+        status: 'completed',
+        isComplete: true,
+        completedAt: now(),
+        lastUpdatedAt: now(),
+      });
+
+      // Update couple document
+      const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+      await updateDoc(coupleRef, {
+        [`${gender}.questionnaireCompleted`]: true,
+        [`${gender}.questionnaireCompletedAt`]: now(),
+        updatedAt: now(),
+      });
+    } catch (error) {
+      console.error('Error completing questionnaire:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Reset questionnaire (when user wants to change language)
+   */
+  async resetQuestionnaire(
+    coupleId: string,
+    gender: 'male' | 'female'
+  ): Promise<void> {
+    try {
+      const docRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'questionnaire', gender);
+      await deleteDoc(docRef);
+
+      // Update couple document
+      const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+      await updateDoc(coupleRef, {
+        [`${gender}.questionnaireStarted`]: false,
+        [`${gender}.questionnaireCompleted`]: false,
+        [`${gender}.questionnaireLanguage`]: null,
+        [`${gender}.questionnaireCompletedAt`]: null,
+        updatedAt: now(),
+      });
+    } catch (error) {
+      console.error('Error resetting questionnaire:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Subscribe to questionnaire progress changes (real-time)
+   */
+  subscribeProgress(
+    coupleId: string,
+    gender: 'male' | 'female',
+    callback: (progress: QuestionnaireProgress | null) => void
+  ): Unsubscribe {
+    try {
+      const docRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'questionnaire', gender);
+      return onSnapshot(
+        docRef,
+        (docSnap) => {
+          if (docSnap.exists()) {
+            callback({ id: docSnap.id, ...docSnap.data() } as QuestionnaireProgress);
+          } else {
+            callback(null);
+          }
+        },
+        (error) => {
+          console.error('Questionnaire subscription error:', error);
+          callback(null);
+        }
+      );
+    } catch (error) {
+      console.error('Failed to setup questionnaire subscription:', error);
+      callback(null);
+      return () => {};
+    }
+  },
+
+  /**
+   * Get all questionnaire responses for admin view
+   */
+  async getAllResponses(): Promise<
+    Array<{
+      coupleId: string;
+      gender: 'male' | 'female';
+      progress: QuestionnaireProgress;
+      coupleName?: string;
+    }>
+  > {
+    try {
+      const couplesRef = collection(db, COLLECTIONS.COUPLES);
+      const couplesSnap = await getDocs(couplesRef);
+      const responses: Array<any> = [];
+
+      for (const coupleDoc of couplesSnap.docs) {
+        const coupleData = coupleDoc.data();
+        const coupleId = coupleDoc.id;
+
+        // Check male questionnaire
+        const maleProgress = await this.getProgress(coupleId, 'male');
+        if (maleProgress) {
+          responses.push({
+            coupleId,
+            gender: 'male' as const,
+            progress: maleProgress,
+            coupleName: coupleData.male?.name || 'Unknown',
+          });
+        }
+
+        // Check female questionnaire
+        const femaleProgress = await this.getProgress(coupleId, 'female');
+        if (femaleProgress) {
+          responses.push({
+            coupleId,
+            gender: 'female' as const,
+            progress: femaleProgress,
+            coupleName: coupleData.female?.name || 'Unknown',
+          });
+        }
+      }
+
+      // Sort by last updated
+      responses.sort((a, b) => {
+        const aTime = a.progress.lastUpdatedAt?.toDate?.()?.getTime() || 0;
+        const bTime = b.progress.lastUpdatedAt?.toDate?.()?.getTime() || 0;
+        return bTime - aTime;
+      });
+
+      return responses;
+    } catch (error) {
+      console.error('Error getting all questionnaire responses:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get completed questionnaire responses only (for admin filtering)
+   */
+  async getCompletedResponses(): Promise<
+    Array<{
+      coupleId: string;
+      gender: 'male' | 'female';
+      progress: QuestionnaireProgress;
+      coupleName?: string;
+    }>
+  > {
+    const allResponses = await this.getAllResponses();
+    return allResponses.filter((r) => r.progress.isComplete);
+  },
+
+  /**
+   * Get in-progress questionnaire responses only (for admin filtering)
+   */
+  async getInProgressResponses(): Promise<
+    Array<{
+      coupleId: string;
+      gender: 'male' | 'female';
+      progress: QuestionnaireProgress;
+      coupleName?: string;
+    }>
+  > {
+    const allResponses = await this.getAllResponses();
+    return allResponses.filter((r) => !r.progress.isComplete);
+  },
+
+  /**
+   * Get questionnaire summary for a specific user (for profile display)
+   */
+  async getQuestionnaireStatus(
+    coupleId: string,
+    gender: 'male' | 'female'
+  ): Promise<{
+    hasStarted: boolean;
+    isComplete: boolean;
+    percentComplete: number;
+    language?: QuestionnaireLanguage;
+    answeredCount: number;
+    totalCount: number;
+    sectionProgress: Array<{
+      sectionTitle: string;
+      answered: number;
+      total: number;
+      isComplete: boolean;
+    }>;
+  }> {
+    try {
+      const progress = await this.getProgress(coupleId, gender);
+
+      if (!progress) {
+        return {
+          hasStarted: false,
+          isComplete: false,
+          percentComplete: 0,
+          answeredCount: 0,
+          totalCount: 0,
+          sectionProgress: [],
+        };
+      }
+
+      const sectionProgress: Array<any> = [];
+      progress.progress.parts.forEach((part) => {
+        part.sections.forEach((section) => {
+          sectionProgress.push({
+            sectionTitle: section.sectionTitle,
+            answered: section.answeredQuestions,
+            total: section.totalQuestions,
+            isComplete: section.isComplete,
+          });
+        });
+      });
+
+      return {
+        hasStarted: true,
+        isComplete: progress.isComplete,
+        percentComplete: progress.progress.percentComplete,
+        language: progress.language,
+        answeredCount: progress.progress.answeredQuestions,
+        totalCount: progress.progress.totalQuestions,
+        sectionProgress,
+      };
+    } catch (error) {
+      console.error('Error getting questionnaire status:', error);
+      return {
+        hasStarted: false,
+        isComplete: false,
+        percentComplete: 0,
+        answeredCount: 0,
+        totalCount: 0,
+        sectionProgress: [],
+      };
+    }
+  },
+};
+
+// ============================================
 // EXPORT ALL SERVICES
 // ============================================
 
@@ -3148,6 +3525,7 @@ export const firestoreServices = {
   nursingVisit: nursingVisitService,
   broadcast: broadcastService,
   chat: chatService,
+  questionnaire: questionnaireService,
 };
 
 export default firestoreServices;
