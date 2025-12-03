@@ -325,6 +325,29 @@ export const ProfilePageSkeleton: React.FC<{ isMobile?: boolean }> = ({ isMobile
   );
 };
 
+// Questionnaire Card Skeleton for inline use in profile
+export const QuestionnaireCardSkeleton: React.FC = () => {
+  const { colors } = useTheme();
+  
+  return (
+    <View style={[styles.questionnaireCardSkeleton, { backgroundColor: colors.cardBackground }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+        <Skeleton width={24} height={24} borderRadius={6} />
+        <View style={{ flex: 1, marginLeft: 12, gap: 4 }}>
+          <Skeleton width={140} height={15} borderRadius={4} />
+          <Skeleton width={160} height={13} borderRadius={4} />
+        </View>
+        <Skeleton width={60} height={32} borderRadius={8} />
+      </View>
+      <Skeleton width="100%" height={4} borderRadius={2} />
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
+        <Skeleton width={180} height={12} borderRadius={4} />
+        <Skeleton width={70} height={20} borderRadius={10} />
+      </View>
+    </View>
+  );
+};
+
 // Personal Info page skeleton loader
 export const PersonalInfoSkeleton: React.FC<{ isMobile?: boolean }> = ({ isMobile = true }) => {
   const { colors } = useTheme();

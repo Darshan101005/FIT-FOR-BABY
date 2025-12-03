@@ -1,5 +1,5 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
-import { MobileProfileCardSkeleton, WebProfileCardSkeleton } from '@/components/ui/SkeletonLoader';
+import { MobileProfileCardSkeleton, QuestionnaireCardSkeleton, WebProfileCardSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
 import { coupleService, questionnaireService } from '@/services/firestore.service';
 import { QuestionnaireProgress } from '@/types/firebase.types';
@@ -122,6 +122,7 @@ export default function ProfileScreen() {
   
   // Questionnaire progress from Firestore
   const [questionnaireProgress, setQuestionnaireProgress] = useState<QuestionnaireProgress | null>(null);
+  const [questionnaireLoading, setQuestionnaireLoading] = useState(true);
   
   // Profile stats
   const [profileStats, setProfileStats] = useState({
@@ -189,10 +190,13 @@ export default function ProfileScreen() {
               
               // Fetch questionnaire progress
               try {
+                setQuestionnaireLoading(true);
                 const qProgress = await questionnaireService.getProgress(coupleId, userGender as 'male' | 'female');
                 setQuestionnaireProgress(qProgress);
               } catch (qError) {
                 console.error('Error fetching questionnaire progress:', qError);
+              } finally {
+                setQuestionnaireLoading(false);
               }
             } else {
               // Fallback if no couple data
@@ -428,6 +432,11 @@ export default function ProfileScreen() {
   };
 
   const renderQuestionnaireStatus = () => {
+    // Show skeleton while loading questionnaire data
+    if (questionnaireLoading) {
+      return <QuestionnaireCardSkeleton />;
+    }
+
     // Helper function to format date
     const formatDate = (timestamp: any) => {
       if (!timestamp) return '';

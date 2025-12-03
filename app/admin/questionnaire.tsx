@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Modal,
     Platform,
     ScrollView,
@@ -56,6 +57,7 @@ export default function AdminQuestionnaireScreen() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'in-progress' | 'not-started'>('all');
   const [selectedResponse, setSelectedResponse] = useState<QuestionnaireResponse | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Load questionnaire responses
   useEffect(() => {
@@ -329,6 +331,68 @@ export default function AdminQuestionnaireScreen() {
     const { progress, coupleName, coupleId, gender } = selectedResponse;
     const status = getStatusBadge(progress);
 
+    // Handle reset questionnaire
+    const handleResetQuestionnaire = () => {
+      Alert.alert(
+        'Reset Questionnaire',
+        `Are you sure you want to reset ${coupleName}'s questionnaire? This will delete all their answers and they will need to start again.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Reset',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                setResetting(true);
+                await questionnaireService.resetQuestionnaire(coupleId, gender);
+                setShowDetailModal(false);
+                await loadResponses();
+                Alert.alert('Success', `${coupleName}'s questionnaire has been reset. They can now start fresh.`);
+              } catch (error) {
+                console.error('Error resetting questionnaire:', error);
+                Alert.alert('Error', 'Failed to reset questionnaire. Please try again.');
+              } finally {
+                setResetting(false);
+              }
+            },
+          },
+        ]
+      );
+    };
+
+    // Group answers by section for better display
+    const groupAnswersBySection = () => {
+      const answers = progress.answers || {};
+      const grouped: Record<string, { sectionTitle: string; answers: any[] }> = {};
+      
+      Object.entries(answers)
+        .sort((a, b) => {
+          const numA = a[1].questionNumber || '0';
+          const numB = b[1].questionNumber || '0';
+          return numA.localeCompare(numB, undefined, { numeric: true });
+        })
+        .forEach(([questionId, answer]) => {
+          const sectionId = answer.sectionId || 'unknown';
+          if (!grouped[sectionId]) {
+            // Determine section title from progress data or fallback
+            let sectionTitle = 'Questions';
+            progress.progress?.parts?.forEach(part => {
+              part.sections?.forEach(section => {
+                if (section.sectionId === sectionId) {
+                  sectionTitle = section.sectionTitle;
+                }
+              });
+            });
+            grouped[sectionId] = { sectionTitle, answers: [] };
+          }
+          grouped[sectionId].answers.push(answer);
+        });
+      
+      return Object.values(grouped);
+    };
+
+    const groupedAnswers = groupAnswersBySection();
+
     return (
       <Modal
         visible={showDetailModal}
@@ -408,6 +472,22 @@ export default function AdminQuestionnaireScreen() {
                 </View>
               </View>
 
+              {/* Reset Button */}
+              <TouchableOpacity 
+                style={styles.resetButton}
+                onPress={handleResetQuestionnaire}
+                disabled={resetting}
+              >
+                {resetting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="refresh" size={18} color="#fff" />
+                    <Text style={styles.resetButtonText}>Reset Questionnaire</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
               {/* Info Cards */}
               <View style={styles.infoCards}>
                 <View style={styles.infoCard}>
@@ -476,7 +556,7 @@ export default function AdminQuestionnaireScreen() {
                 ))}
               </View>
 
-              {/* Answers Preview (show for all questionnaires with answers) */}
+              {/* Answers Preview - Grouped by Section */}
               {Object.keys(progress.answers || {}).length > 0 && (
                 <View style={styles.answersPreview}>
                   <View style={styles.answersPreviewHeader}>
@@ -490,36 +570,37 @@ export default function AdminQuestionnaireScreen() {
                     </View>
                   </View>
                   
-                  {/* Show all answers grouped by section */}
-                  {Object.entries(progress.answers)
-                    .sort((a, b) => {
-                      // Sort by questionNumber if available
-                      const numA = a[1].questionNumber || '0';
-                      const numB = b[1].questionNumber || '0';
-                      return numA.localeCompare(numB, undefined, { numeric: true });
-                    })
-                    .map(([questionId, answer]) => (
-                    <View key={questionId} style={styles.answerItem}>
-                      <View style={styles.answerHeader}>
-                        <View style={styles.answerNumberBadge}>
-                          <Text style={styles.answerNumberText}>Q{answer.questionNumber || '?'}</Text>
-                        </View>
-                        <Text style={styles.answerQuestion} numberOfLines={2}>
-                          {answer.questionText || questionId}
-                        </Text>
+                  {/* Show answers grouped by section */}
+                  {groupedAnswers.map((section, sectionIdx) => (
+                    <View key={sectionIdx} style={styles.answerSectionGroup}>
+                      <View style={styles.answerSectionHeader}>
+                        <Text style={styles.answerSectionTitle}>{section.sectionTitle}</Text>
+                        <Text style={styles.answerSectionCount}>{section.answers.length} answers</Text>
                       </View>
-                      <View style={styles.answerValueContainer}>
-                        <Ionicons name="arrow-forward" size={14} color={COLORS.primary} style={{ marginRight: 8 }} />
-                        <Text style={styles.answerValue}>
-                          {Array.isArray(answer.answer) ? answer.answer.join(', ') : String(answer.answer)}
-                        </Text>
-                      </View>
-                      {answer.conditionalAnswer && (
-                        <View style={styles.conditionalAnswerContainer}>
-                          <Ionicons name="add-circle-outline" size={14} color={COLORS.textSecondary} style={{ marginRight: 6 }} />
-                          <Text style={styles.conditionalAnswerText}>{answer.conditionalAnswer}</Text>
+                      {section.answers.map((answer, answerIdx) => (
+                        <View key={answer.questionId || answerIdx} style={styles.answerItem}>
+                          <View style={styles.answerHeader}>
+                            <View style={styles.answerNumberBadge}>
+                              <Text style={styles.answerNumberText}>Q{answer.questionNumber || '?'}</Text>
+                            </View>
+                            <Text style={styles.answerQuestion} numberOfLines={3}>
+                              {answer.questionText || answer.questionId}
+                            </Text>
+                          </View>
+                          <View style={styles.answerValueContainer}>
+                            <Ionicons name="arrow-forward" size={14} color={COLORS.primary} style={{ marginRight: 8 }} />
+                            <Text style={styles.answerValue}>
+                              {Array.isArray(answer.answer) ? answer.answer.join(', ') : String(answer.answer)}
+                            </Text>
+                          </View>
+                          {answer.conditionalAnswer && (
+                            <View style={styles.conditionalAnswerContainer}>
+                              <Ionicons name="add-circle-outline" size={14} color={COLORS.textSecondary} style={{ marginRight: 6 }} />
+                              <Text style={styles.conditionalAnswerText}>{answer.conditionalAnswer}</Text>
+                            </View>
+                          )}
                         </View>
-                      )}
+                      ))}
                     </View>
                   ))}
                 </View>
@@ -1155,5 +1236,44 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     marginTop: 10,
     textAlign: 'center',
+  },
+  // Reset Button
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.error,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    gap: 8,
+    marginBottom: 16,
+  },
+  resetButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  // Answer Section Group
+  answerSectionGroup: {
+    marginBottom: 16,
+  },
+  answerSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 10,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  answerSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  answerSectionCount: {
+    fontSize: 12,
+    color: COLORS.textMuted,
   },
 });

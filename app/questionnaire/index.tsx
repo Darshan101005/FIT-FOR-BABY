@@ -1,38 +1,40 @@
 import {
-  getNextPosition,
-  getPreviousPosition,
-  getQuestionByPosition,
-  getSectionSummary,
-  parseQuestionnaire
+    generateQuestionId,
+    getNextPosition,
+    getPreviousPosition,
+    getQuestionByPosition,
+    parseQuestionnaire
 } from '@/data/questionnaireParser';
 import { questionnaireService } from '@/services/firestore.service';
-import { QuestionnaireProgress as FirestoreQuestionnaireProgress, QuestionnaireAnswer, QuestionnaireLanguage } from '@/types/firebase.types';
+import { QuestionnaireProgress as FirestoreQuestionnaireProgress, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireQuestion } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
 export default function QuestionnaireScreen() {
   const router = useRouter();
+  const { viewOnly } = useLocalSearchParams<{ viewOnly?: string }>();
+  const isViewOnly = viewOnly === 'true';
   const { width: screenWidth } = useWindowDimensions();
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -46,8 +48,8 @@ export default function QuestionnaireScreen() {
   const [currentAnswer, setCurrentAnswer] = useState<string | string[]>('');
   const [conditionalAnswer, setConditionalAnswer] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
-  const [showSectionOverview, setShowSectionOverview] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'scroll'>('card');
+  const [sectionFormState, setSectionFormState] = useState<Record<string, { answer: string | string[]; conditional?: string }>>({});
   const [showLangSwitchModal, setShowLangSwitchModal] = useState(false);
   const [showLangConfirmModal, setShowLangConfirmModal] = useState(false);
   const [pendingLanguage, setPendingLanguage] = useState<QuestionnaireLanguage | null>(null);
@@ -62,6 +64,61 @@ export default function QuestionnaireScreen() {
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   const isMobile = screenWidth < 768;
+
+  const isQuestionMultiSelect = (question?: QuestionnaireQuestion | null) => {
+    if (!question?.question) return false;
+    const text = question.question.toLowerCase();
+    const keywords = [
+      'type of physical exercises',
+      'type of exercise',
+      'psychological complaints',
+      'exposed to any of the following',
+      'choose which are suitable',
+      'எந்த வகையான உடற்பயிற்சி',
+      'மன உபாதைகள்',
+      'பொருந்தும் அனைத்தையும்',
+    ];
+    return keywords.some((keyword) => text.includes(keyword));
+  };
+
+  // Helper function to determine if conditional textfield should be shown
+  // This checks if the selected answer triggers the need for additional input
+  const shouldShowConditionalField = (
+    question: QuestionnaireQuestion | null,
+    answer: string | string[]
+  ): boolean => {
+    if (!question?.conditional_textfield) return false;
+    if (!answer || (Array.isArray(answer) && answer.length === 0)) return false;
+
+    const qText = question.question?.toLowerCase() || '';
+    const conditionalText = question.conditional_textfield.toLowerCase();
+    const answerStr = Array.isArray(answer) ? answer.join(', ').toLowerCase() : answer.toLowerCase();
+
+    // For Yes/No questions with "If yes" conditional
+    if (conditionalText.includes('if yes') || conditionalText.includes('ஆம் எனில்')) {
+      return answerStr === 'yes' || answerStr === 'ஆம்' || answerStr.includes('yes') || answerStr.includes('ஆம்');
+    }
+
+    // For food habits question - show if processed/junk food selected
+    if (qText.includes('food habits') || qText.includes('உணவு பழக்க') || qText.includes('உணவுப் பழக்க')) {
+      return answerStr.includes('processed') || answerStr.includes('junk') || 
+             answerStr.includes('செயலாக்கப்பட்ட') || answerStr.includes('சுகாதாரமற்ற');
+    }
+
+    // For consanguinity question
+    if (qText.includes('consanguinity') || qText.includes('உறவு முறைத் திருமணம்')) {
+      // Check if user selected the "Yes" option which has the conditional text embedded
+      return answerStr.includes('yes') || answerStr.includes('ஆம்') || answerStr.includes('degree');
+    }
+
+    // For co-morbidities 
+    if (qText.includes('co-morbidities') || qText.includes('comorbidities') || qText.includes('பிற நோய்கள்')) {
+      return answerStr === 'yes' || answerStr === 'ஆம்' || answerStr.includes('yes') || answerStr.includes('ஆம்');
+    }
+
+    // Default: don't show conditional for other cases unless it matches common "if" patterns
+    return false;
+  };
 
   // Load user data from AsyncStorage on mount
   useEffect(() => {
@@ -102,8 +159,18 @@ export default function QuestionnaireScreen() {
       if (progress) {
         setExistingProgress(progress);
         
-        // If completed, redirect to profile
-        if (progress.isComplete) {
+        // If in viewOnly mode, load and display the completed questionnaire
+        if (isViewOnly && progress.isComplete) {
+          setSelectedLanguage(progress.language);
+          setCurrentPosition({ partIndex: 0, sectionIndex: 0, questionIndex: 0 });
+          setAnswers(progress.answers);
+          setShowLanguageSelector(false);
+          setIsLoading(false);
+          return;
+        }
+        
+        // If completed and not viewOnly mode, redirect to profile
+        if (progress.isComplete && !isViewOnly) {
           showToast('Questionnaire already completed!', 'success');
           setTimeout(() => router.replace('/user/profile'), 1500);
           return;
@@ -134,24 +201,54 @@ export default function QuestionnaireScreen() {
     );
   }, [selectedLanguage, gender, currentPosition]);
 
-  // Get section summary
-  const sectionSummary = useMemo(() => {
-    if (!selectedLanguage) return [];
-    return getSectionSummary(selectedLanguage, gender);
-  }, [selectedLanguage, gender]);
-
   // Calculate overall progress
   const progressStats = useMemo(() => {
     if (!selectedLanguage) return { answered: 0, total: 0, percent: 0 };
     const parsed = parseQuestionnaire(selectedLanguage, gender);
     const answered = Object.keys(answers).length;
     const total = parsed.totalQuestions;
+    const rawPercent = total === 0 ? 0 : Math.round((answered / total) * 100);
+    const percent = Math.max(0, Math.min(100, rawPercent));
     return {
       answered,
       total,
-      percent: Math.round((answered / total) * 100),
+      percent,
     };
   }, [selectedLanguage, gender, answers]);
+
+  const sectionQuestions = useMemo(() => {
+    if (!selectedLanguage) return [];
+    const parsed = parseQuestionnaire(selectedLanguage, gender);
+    const part = parsed.parts[currentPosition.partIndex];
+    if (!part) return [];
+    const section = part.sections[currentPosition.sectionIndex];
+    if (!section) return [];
+    return section.questions.map((question, index) => ({
+      question,
+      questionIndex: index,
+      questionId: generateQuestionId(part.id, section.id, question.number),
+      partId: part.id,
+      sectionId: section.id,
+      sectionTitle: section.title,
+    }));
+  }, [selectedLanguage, gender, currentPosition]);
+
+  useEffect(() => {
+    if (viewMode !== 'scroll') return;
+    setSectionFormState((prev) => {
+      const nextState: Record<string, { answer: string | string[]; conditional?: string }> = {};
+      sectionQuestions.forEach(({ question, questionId }) => {
+        const stored = answers[questionId];
+        const isMulti = isQuestionMultiSelect(question);
+        const fallback = isMulti ? [] : '';
+        nextState[questionId] = {
+          answer: prev[questionId]?.answer ?? stored?.answer ?? fallback,
+          conditional: prev[questionId]?.conditional ?? stored?.conditionalAnswer ?? '',
+        };
+      });
+      return nextState;
+    });
+  }, [viewMode, sectionQuestions, answers]);
 
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
@@ -269,32 +366,129 @@ export default function QuestionnaireScreen() {
       setCurrentAnswer([...current, option]);
     }
   };
-  
-  // Detect if current question is multi-select
-  // Multi-select questions: exposure at work, food habits (with processed food option), 
-  // psychological symptoms, type of exercise
-  const isMultiSelectQuestion = useMemo(() => {
-    if (!currentQuestionData?.question) return false;
-    const q = currentQuestionData.question.question?.toLowerCase() || '';
-    const qNum = currentQuestionData.question.number;
-    
-    // Men Q8 (work exposure), Men Q9 (exercise type)
-    // Women Q5 (psychological symptoms), Women Q18 (exercise type)
-    const multiSelectKeywords = [
-      'exposed to any of the following',
-      'psychological complaints',
-      'type of physical exercises',
-      'type of exercise performed',
-      'which are suitable',
-    ];
-    
-    return multiSelectKeywords.some(keyword => q.includes(keyword)) ||
-           // Tamil equivalents
-           q.includes('எந்த வகையான உடற்பயிற்சி') ||
-           q.includes('கீழ்க்காணும்') ||
-           q.includes('மன உபாதைகள்');
-  }, [currentQuestionData]);
 
+  const updateSectionAnswer = (
+    questionId: string,
+    payload: Partial<{ answer: string | string[]; conditional: string }>
+  ) => {
+    setSectionFormState((prev) => ({
+      ...prev,
+      [questionId]: {
+        answer: payload.answer !== undefined ? payload.answer : prev[questionId]?.answer ?? '',
+        conditional: payload.conditional !== undefined ? payload.conditional : prev[questionId]?.conditional ?? '',
+      },
+    }));
+  };
+
+  const toggleSectionMulti = (questionId: string, option: string) => {
+    const current = sectionFormState[questionId]?.answer;
+    const list = Array.isArray(current) ? current : [];
+    if (list.includes(option)) {
+      updateSectionAnswer(questionId, { answer: list.filter((item) => item !== option) });
+    } else {
+      updateSectionAnswer(questionId, { answer: [...list, option] });
+    }
+  };
+
+  const validateAnswerForQuestion = (
+    question: QuestionnaireQuestion | null,
+    answer: string | string[],
+    conditional?: string
+  ): { valid: boolean; message?: string } => {
+    if (!question) {
+      return { valid: false, message: 'Question unavailable' };
+    }
+
+    const qText = question.question?.toLowerCase() || '';
+
+    if (question.type === 'fillup') {
+      if (typeof answer !== 'string') {
+        return { valid: false, message: 'Please provide a text response.' };
+      }
+      const trimmed = answer.trim();
+      
+      // Basic validation - just check it's not empty
+      if (trimmed.length === 0) {
+        return { valid: false, message: 'Please enter an answer.' };
+      }
+
+      // Smart validation based on question content
+      // Age questions - allow reasonable adult ages (no strict limits)
+      if (qText.includes('age') && !qText.includes('menarche') && !qText.includes('marriage')) {
+        const ageValue = Number(trimmed);
+        if (Number.isNaN(ageValue) || ageValue < 1 || ageValue > 120) {
+          return { valid: false, message: 'Please enter a valid age.' };
+        }
+      }
+      
+      // Age at menarche - typically 8-18
+      if (qText.includes('menarche') || qText.includes('முதல் மாதவிடாய')) {
+        const ageValue = Number(trimmed);
+        if (Number.isNaN(ageValue) || ageValue < 8 || ageValue > 20) {
+          return { valid: false, message: 'Please enter a valid age at menarche (typically 8-20 years).' };
+        }
+      }
+
+      // Coitus frequency - just needs to be a small positive number (1-20 per week is reasonable)
+      if (qText.includes('coitus') || qText.includes('உடலுறவ')) {
+        const freqValue = Number(trimmed);
+        if (Number.isNaN(freqValue) || freqValue < 0 || freqValue > 50) {
+          return { valid: false, message: 'Please enter a valid frequency.' };
+        }
+      }
+
+      // Duration questions (menstruation, infertility, marriage) - allow reasonable ranges
+      if ((qText.includes('duration') || qText.includes('காலம்')) && !qText.includes('exercise')) {
+        const durationValue = Number(trimmed);
+        // Just check it's a positive number, no strict upper limit
+        if (!Number.isNaN(durationValue) && durationValue < 0) {
+          return { valid: false, message: 'Please enter a valid duration.' };
+        }
+      }
+
+      // Interval between cycles - typically 21-45 days
+      if (qText.includes('interval') && qText.includes('cycle')) {
+        const intervalValue = Number(trimmed);
+        if (!Number.isNaN(intervalValue) && (intervalValue < 15 || intervalValue > 60)) {
+          return { valid: false, message: 'Please enter a valid cycle interval (typically 15-60 days).' };
+        }
+      }
+
+      // Distance questions - any positive number
+      if (qText.includes('distance') || qText.includes('தொலைவு') || qText.includes('kms')) {
+        const distValue = Number(trimmed);
+        if (!Number.isNaN(distValue) && distValue < 0) {
+          return { valid: false, message: 'Please enter a valid distance.' };
+        }
+      }
+
+      // Income - any positive number
+      if (qText.includes('income') || qText.includes('வருமானம்')) {
+        const incomeValue = Number(trimmed);
+        if (!Number.isNaN(incomeValue) && incomeValue < 0) {
+          return { valid: false, message: 'Please enter a valid income amount.' };
+        }
+      }
+    }
+
+    if (question.type === 'mcq') {
+      if (isQuestionMultiSelect(question)) {
+        if (!Array.isArray(answer) || answer.length === 0) {
+          return { valid: false, message: 'Select at least one option.' };
+        }
+      } else if (typeof answer !== 'string' || !answer) {
+        return { valid: false, message: 'Select an option to continue.' };
+      }
+    }
+
+    // Only require conditional answer if the answer triggers the conditional field
+    if (shouldShowConditionalField(question, answer) && !conditional?.trim()) {
+      return { valid: false, message: question.conditional_textfield || 'Please provide additional details.' };
+    }
+
+    return { valid: true };
+  };
+  
   // Handle text input change
   const handleTextInput = (text: string) => {
     setCurrentAnswer(text);
@@ -312,6 +506,12 @@ export default function QuestionnaireScreen() {
           : 'தயவுசெய்து இந்த கேள்விக்கு பதிலளிக்கவும்',
         'error'
       );
+      return;
+    }
+
+    const validation = validateAnswerForQuestion(currentQuestionData.question, currentAnswer, conditionalAnswer);
+    if (!validation.valid) {
+      showToast(validation.message || 'Please verify your answer', 'error');
       return;
     }
 
@@ -375,6 +575,81 @@ export default function QuestionnaireScreen() {
     }
   };
 
+  const handleSectionSubmit = async () => {
+    if (viewMode !== 'scroll' || !selectedLanguage) return;
+    if (!sectionQuestions.length) return;
+
+    const answersToSave: Record<string, QuestionnaireAnswer> = {};
+
+    for (const item of sectionQuestions) {
+      const stored = sectionFormState[item.questionId] || {
+        answer: answers[item.questionId]?.answer,
+        conditional: answers[item.questionId]?.conditionalAnswer,
+      };
+      const answerValue = stored?.answer ?? (isQuestionMultiSelect(item.question) ? [] : '');
+      const validation = validateAnswerForQuestion(item.question, answerValue, stored?.conditional);
+      if (!validation.valid) {
+        showToast(validation.message || 'Please complete all questions in this section.', 'error');
+        return;
+      }
+
+      answersToSave[item.questionId] = {
+        questionId: item.questionId,
+        partId: item.partId,
+        sectionId: item.sectionId,
+        questionNumber: item.question.number || '',
+        questionText: item.question.question || '',
+        answer: answerValue,
+        answeredAt: Timestamp.now(),
+        ...(stored?.conditional ? { conditionalAnswer: stored.conditional } : {}),
+      };
+    }
+
+    setIsSaving(true);
+    try {
+      for (const answer of Object.values(answersToSave)) {
+        await questionnaireService.saveAnswer(coupleId, gender, answer);
+      }
+
+      setAnswers((prev) => ({ ...prev, ...answersToSave }));
+
+      const lastQuestionIndex = sectionQuestions[sectionQuestions.length - 1].questionIndex;
+      const nextPos = getNextPosition(
+        selectedLanguage,
+        gender,
+        currentPosition.partIndex,
+        currentPosition.sectionIndex,
+        lastQuestionIndex
+      );
+
+      if (nextPos) {
+        await questionnaireService.updatePosition(coupleId, gender, nextPos);
+        setCurrentPosition(nextPos);
+        showToast(
+          selectedLanguage === 'english' ? 'Section saved!' : 'பிரிவு சேமிக்கப்பட்டது!',
+          'success'
+        );
+      } else {
+        await questionnaireService.completeQuestionnaire(coupleId, gender);
+        showToast(
+          selectedLanguage === 'english' ? 'Questionnaire completed!' : 'கேள்வித்தாள் முடிந்தது!',
+          'success'
+        );
+        setTimeout(() => router.replace('/user/home'), 1500);
+      }
+    } catch (error) {
+      console.error('Error saving section answers:', error);
+      showToast(
+        selectedLanguage === 'english'
+          ? 'Unable to save section. Please try again.'
+          : 'பிரிவை சேமிக்க முடியவில்லை. தயவுசெய்து மீண்டும் முயற்சிக்கவும்.',
+        'error'
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Go to previous question
   const handlePrevious = () => {
     if (!selectedLanguage) return;
@@ -410,24 +685,42 @@ export default function QuestionnaireScreen() {
     }
   };
 
-  // Save and exit
+  // Save and exit - auto saves progress and navigates back
   const handleSaveAndExit = async () => {
-    await questionnaireService.updatePosition(coupleId, gender, currentPosition);
-    showToast(
-      selectedLanguage === 'english'
-        ? 'Progress saved! You can resume later.'
-        : 'முன்னேற்றம் சேமிக்கப்பட்டது! பின்னர் தொடரலாம்.',
-      'success'
-    );
-    setTimeout(() => router.replace('/user/home'), 1500);
+    try {
+      await questionnaireService.updatePosition(coupleId, gender, currentPosition);
+      showToast(
+        selectedLanguage === 'english'
+          ? 'Progress saved!'
+          : 'முன்னேற்றம் சேமிக்கப்பட்டது!',
+        'success'
+      );
+      setTimeout(() => router.replace('/user/home'), 1000);
+    } catch (error) {
+      console.error('Error saving progress:', error);
+      router.replace('/user/home');
+    }
   };
 
-  // Jump to section
-  const handleJumpToSection = (startPosition: { partIndex: number; sectionIndex: number; questionIndex: number }) => {
-    setCurrentPosition(startPosition);
-    setShowSectionOverview(false);
-    setCurrentAnswer('');
-    setConditionalAnswer('');
+  // Save progress without exiting
+  const handleSaveProgress = async () => {
+    try {
+      await questionnaireService.updatePosition(coupleId, gender, currentPosition);
+      showToast(
+        selectedLanguage === 'english'
+          ? 'Progress saved!'
+          : 'முன்னேற்றம் சேமிக்கப்பட்டது!',
+        'success'
+      );
+    } catch (error) {
+      console.error('Error saving progress:', error);
+      showToast(
+        selectedLanguage === 'english'
+          ? 'Failed to save progress'
+          : 'சேமிக்க முடியவில்லை',
+        'error'
+      );
+    }
   };
 
   // Load answer when question changes
@@ -601,96 +894,6 @@ export default function QuestionnaireScreen() {
     </Modal>
   );
 
-  // Render section overview - showing questions and progress
-  if (showSectionOverview) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.overviewHeader}>
-          <TouchableOpacity onPress={() => setShowSectionOverview(false)} style={styles.overviewBackBtn}>
-            <Ionicons name="close" size={24} color="#0f172a" />
-          </TouchableOpacity>
-          <View style={styles.overviewTitleContainer}>
-            <Text style={styles.overviewTitle}>
-              {selectedLanguage === 'english' ? 'Your Progress' : 'உங்கள் முன்னேற்றம்'}
-            </Text>
-            <Text style={styles.overviewSubtitle}>
-              {progressStats.answered} / {progressStats.total} {selectedLanguage === 'english' ? 'answered' : 'பதில்'}
-            </Text>
-          </View>
-          <View style={styles.overviewProgressCircle}>
-            <Text style={styles.overviewProgressPercent}>{progressStats.percent}%</Text>
-          </View>
-        </View>
-
-        <ScrollView 
-          style={styles.overviewContent}
-          contentContainerStyle={styles.overviewContentContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          {sectionSummary.map((section, sectionIndex) => {
-            // Count answered questions in this section
-            const sectionAnswerKeys = Object.keys(answers).filter((id) =>
-              id.includes(section.sectionId)
-            );
-            const answeredCount = sectionAnswerKeys.length;
-            const isComplete = answeredCount === section.questionCount;
-            const progress = section.questionCount > 0 ? (answeredCount / section.questionCount) * 100 : 0;
-
-            return (
-              <View key={`${section.partId}_${section.sectionId}`} style={styles.overviewSectionCard}>
-                <View style={styles.overviewSectionHeader}>
-                  <View style={[styles.overviewSectionIcon, isComplete && styles.overviewSectionIconComplete]}>
-                    {isComplete ? (
-                      <Ionicons name="checkmark" size={18} color="#fff" />
-                    ) : (
-                      <Text style={styles.overviewSectionNum}>{sectionIndex + 1}</Text>
-                    )}
-                  </View>
-                  <View style={styles.overviewSectionInfo}>
-                    <Text style={styles.overviewSectionTitle}>{section.sectionTitle}</Text>
-                    <View style={styles.overviewSectionProgressBar}>
-                      <View style={[styles.overviewSectionProgressFill, { width: `${progress}%` }]} />
-                    </View>
-                  </View>
-                  <Text style={[styles.overviewSectionCount, isComplete && { color: '#98be4e' }]}>
-                    {answeredCount}/{section.questionCount}
-                  </Text>
-                </View>
-                
-                <TouchableOpacity
-                  style={styles.overviewSectionButton}
-                  onPress={() => handleJumpToSection(section.startPosition)}
-                >
-                  <Text style={styles.overviewSectionButtonText}>
-                    {isComplete 
-                      ? (selectedLanguage === 'english' ? 'Review Answers' : 'பதில்களை மதிப்பாய்வு செய்') 
-                      : answeredCount > 0 
-                        ? (selectedLanguage === 'english' ? 'Continue' : 'தொடர்')
-                        : (selectedLanguage === 'english' ? 'Start Section' : 'பிரிவைத் தொடங்கு')}
-                  </Text>
-                  <Ionicons name="arrow-forward" size={16} color="#006dab" />
-                </TouchableOpacity>
-              </View>
-            );
-          })}
-        </ScrollView>
-        
-        {/* Continue button at bottom */}
-        <View style={styles.overviewFooter}>
-          <TouchableOpacity 
-            style={styles.overviewContinueBtn}
-            onPress={() => setShowSectionOverview(false)}
-          >
-            <Text style={styles.overviewContinueBtnText}>
-              {selectedLanguage === 'english' ? 'Continue Questionnaire' : 'கேள்வித்தாளைத் தொடரவும்'}
-            </Text>
-            <Ionicons name="arrow-forward" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
   if (!currentQuestionData) {
     return (
       <View style={styles.loadingContainer}>
@@ -704,6 +907,7 @@ export default function QuestionnaireScreen() {
 
   const { question, partTitle, sectionTitle, isFirstQuestion, isLastQuestion, currentInSection, totalInSection } =
     currentQuestionData;
+  const isCurrentMultiSelect = isQuestionMultiSelect(question);
 
   return (
     <View style={styles.container}>
@@ -726,27 +930,50 @@ export default function QuestionnaireScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <TouchableOpacity onPress={handleSaveAndExit} style={styles.saveExitButton}>
-            <Ionicons name="close" size={20} color="#64748b" />
+          <TouchableOpacity onPress={isViewOnly ? () => router.back() : handleSaveAndExit} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={22} color="#0f172a" />
           </TouchableOpacity>
-          
+
           <View style={styles.headerCenter}>
             <View style={styles.progressContainer}>
+              <Text style={styles.headerTitle}>
+                {isViewOnly 
+                  ? (selectedLanguage === 'english' ? 'Your Responses' : 'உங்கள் பதில்கள்')
+                  : partTitle}
+              </Text>
               <View style={styles.progressBar}>
                 <View style={[styles.progressFill, { width: `${progressStats.percent}%` }]} />
               </View>
+              <Text style={styles.progressText}>
+                {progressStats.answered}/{progressStats.total}{' '}
+                {selectedLanguage === 'english' ? 'answered' : 'பதில்கள்'}
+              </Text>
             </View>
-            <Text style={styles.progressText}>
-              {progressStats.answered}/{progressStats.total}
-            </Text>
           </View>
 
-          <TouchableOpacity onPress={() => setShowSectionOverview(true)} style={styles.overviewButton}>
-            <Ionicons name="menu" size={22} color="#006dab" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowLangSwitchModal(true)} style={styles.languageSwitchButton}>
-            <Ionicons name="language" size={22} color="#006dab" />
-          </TouchableOpacity>
+          {!isViewOnly && (
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={handleSaveProgress} style={styles.saveButton}>
+                <Ionicons name="save-outline" size={20} color="#006dab" />
+                <Text style={styles.saveButtonText}>
+                  {selectedLanguage === 'english' ? 'Save' : 'சேமி'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowLangSwitchModal(true)} style={styles.languageSwitchBtn}>
+                <Ionicons name="language" size={22} color="#006dab" />
+              </TouchableOpacity>
+            </View>
+          )}
+          {isViewOnly && (
+            <View style={styles.headerActions}>
+              <View style={[styles.viewOnlyBadge]}>
+                <Ionicons name="eye-outline" size={16} color="#006dab" />
+                <Text style={styles.viewOnlyBadgeText}>
+                  {selectedLanguage === 'english' ? 'View Only' : 'படிக்க மட்டும்'}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
       </View>
       {renderLangSwitchModal()}
@@ -763,6 +990,30 @@ export default function QuestionnaireScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={[styles.contentWrapper, isMobile && styles.mobileContentWrapper]}>
+            <View style={styles.viewToggleContainer}>
+              <TouchableOpacity
+                style={[styles.viewToggleButton, viewMode === 'card' && styles.viewToggleButtonActive]}
+                onPress={() => setViewMode('card')}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="albums-outline" size={16} color={viewMode === 'card' ? '#fff' : '#006dab'} />
+                <Text style={[styles.viewToggleText, viewMode === 'card' && styles.viewToggleTextActive]}>
+                  {selectedLanguage === 'english' ? 'Cards Mode' : 'கார்டு முறை'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.viewToggleButton, viewMode === 'scroll' && styles.viewToggleButtonActive]}
+                onPress={() => setViewMode('scroll')}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="document-text-outline" size={16} color={viewMode === 'scroll' ? '#fff' : '#006dab'} />
+                <Text style={[styles.viewToggleText, viewMode === 'scroll' && styles.viewToggleTextActive]}>
+                  {selectedLanguage === 'english' ? 'Form Mode' : 'படிவ முறை'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Section Header */}
             <Animated.View style={[styles.sectionHeader, { opacity: fadeAnim }]}>
               <View style={styles.sectionBadge}>
@@ -770,157 +1021,317 @@ export default function QuestionnaireScreen() {
               </View>
               <View style={styles.questionCounter}>
                 <Text style={styles.questionCounterText}>
-                  {selectedLanguage === 'english'
-                    ? `Question ${currentInSection} of ${totalInSection}`
-                    : `கேள்வி ${currentInSection} / ${totalInSection}`}
+                  {viewMode === 'card'
+                    ? selectedLanguage === 'english'
+                      ? `Question ${currentInSection} of ${totalInSection}`
+                      : `கேள்வி ${currentInSection} / ${totalInSection}`
+                    : `${totalInSection} ${selectedLanguage === 'english' ? 'questions in this section' : 'கேள்விகள்'}`}
                 </Text>
               </View>
             </Animated.View>
 
-            {/* Question */}
-            {question && (
-            <Animated.View style={[styles.questionContainer, { opacity: fadeAnim }]}>
-              <View style={styles.questionNumberBadge}>
-                <Text style={styles.questionNumber}>{question.number}</Text>
-              </View>
-              <Text style={styles.questionText}>{question.question}</Text>
-
-              <View style={styles.answerContainer}>
-                {question.type === 'fillup' ? (
-                  <View style={styles.inputWrapper}>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder={
-                        selectedLanguage === 'english' ? 'Enter your answer' : 'உங்கள் பதிலை உள்ளிடவும்'
-                      }
-                      placeholderTextColor="#94a3b8"
-                      value={typeof currentAnswer === 'string' ? currentAnswer : ''}
-                      onChangeText={handleTextInput}
-                      multiline
-                    />
-                  </View>
-                ) : question.type === 'mcq' && question.options ? (
-                  <View style={styles.optionsContainer}>
-                    {/* Multi-select hint */}
-                    {isMultiSelectQuestion && (
-                      <View style={styles.multiSelectHint}>
-                        <Ionicons name="checkbox-outline" size={16} color="#006dab" />
-                        <Text style={styles.multiSelectHintText}>
-                          {selectedLanguage === 'english' 
-                            ? 'Select all that apply' 
-                            : 'பொருந்தும் அனைத்தையும் தேர்ந்தெடுக்கவும்'}
-                        </Text>
+            {viewMode === 'card' ? (
+              <>
+                <Animated.View style={[styles.questionWrapper, { opacity: fadeAnim }]}>
+                  <LinearGradient colors={['#eef2ff', '#fefefe']} style={styles.questionGradient}>
+                    <View style={styles.questionContainer}>
+                      <View style={styles.questionNumberBadge}>
+                        <Text style={styles.questionNumber}>{question?.number}</Text>
                       </View>
-                    )}
-                    {question.options.map((option, index) => {
-                      const isSelected = isMultiSelectQuestion 
-                        ? (Array.isArray(currentAnswer) && currentAnswer.includes(option))
-                        : currentAnswer === option;
-                      
-                      return (
-                        <TouchableOpacity
-                          key={index}
-                          style={[
-                            styles.optionCard,
-                            isSelected && styles.optionCardSelected,
-                          ]}
-                          onPress={() => isMultiSelectQuestion ? handleMultiSelect(option) : handleMCQSelect(option)}
-                          activeOpacity={0.7}
-                        >
-                          {isMultiSelectQuestion ? (
-                            // Checkbox for multi-select
-                            <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                              {isSelected && <Ionicons name="checkmark" size={16} color="#fff" />}
+                      <Text style={styles.questionText}>{question?.question}</Text>
+
+                      <View style={styles.answerContainer}>
+                        {question?.type === 'fillup' ? (
+                          <View style={styles.inputWrapper}>
+                            <TextInput
+                              style={[styles.textInput, isViewOnly && styles.textInputDisabled]}
+                              placeholder={
+                                selectedLanguage === 'english' ? 'Enter your answer' : 'உங்கள் பதிலை உள்ளிடவும்'
+                              }
+                              placeholderTextColor="#94a3b8"
+                              value={typeof currentAnswer === 'string' ? currentAnswer : ''}
+                              onChangeText={handleTextInput}
+                              multiline
+                              editable={!isViewOnly}
+                            />
+                          </View>
+                        ) : question?.type === 'mcq' && question?.options ? (
+                          <View style={styles.optionsContainer}>
+                            {isCurrentMultiSelect && !isViewOnly && (
+                              <View style={styles.multiSelectHint}>
+                                <Ionicons name="checkbox-outline" size={16} color="#006dab" />
+                                <Text style={styles.multiSelectHintText}>
+                                  {selectedLanguage === 'english'
+                                    ? 'Select all that apply'
+                                    : 'பொருந்தும் அனைத்தையும் தேர்ந்தெடுக்கவும்'}
+                                </Text>
+                              </View>
+                            )}
+                            {question.options.map((option, index) => {
+                              const isSelected = isCurrentMultiSelect
+                                ? Array.isArray(currentAnswer) && currentAnswer.includes(option)
+                                : currentAnswer === option;
+                              return (
+                                <TouchableOpacity
+                                  key={`${option}-${index}`}
+                                  style={[styles.optionCard, isSelected && styles.optionCardSelected, isViewOnly && styles.optionCardViewOnly]}
+                                  onPress={() =>
+                                    !isViewOnly && (isCurrentMultiSelect ? handleMultiSelect(option) : handleMCQSelect(option))
+                                  }
+                                  activeOpacity={isViewOnly ? 1 : 0.8}
+                                  disabled={isViewOnly}
+                                >
+                                  {isCurrentMultiSelect ? (
+                                    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                                      {isSelected && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                    </View>
+                                  ) : (
+                                    <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
+                                      {isSelected && <View style={styles.radioInner} />}
+                                    </View>
+                                  )}
+                                  <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
+                                    {option}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        ) : null}
+
+                        {shouldShowConditionalField(question, currentAnswer) && (
+                          <View style={styles.conditionalContainer}>
+                            <Text style={styles.conditionalLabel}>{question?.conditional_textfield}</Text>
+                            <View style={styles.inputWrapper}>
+                              <TextInput
+                                style={[styles.textInput, isViewOnly && styles.textInputDisabled]}
+                                placeholder={selectedLanguage === 'english' ? 'Please specify' : 'குறிப்பிடவும்'}
+                                placeholderTextColor="#94a3b8"
+                                value={conditionalAnswer}
+                                onChangeText={setConditionalAnswer}
+                                editable={!isViewOnly}
+                              />
                             </View>
-                          ) : (
-                            // Radio for single select
-                            <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
-                              {isSelected && <View style={styles.radioInner} />}
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </LinearGradient>
+                </Animated.View>
+
+                <View style={styles.navigationContainer}>
+                  <TouchableOpacity
+                    style={[styles.navButton, styles.prevButton, isFirstQuestion && styles.navButtonDisabled]}
+                    onPress={handlePrevious}
+                    disabled={isFirstQuestion}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-back" size={20} color={isFirstQuestion ? '#94a3b8' : '#006dab'} />
+                    <Text style={[styles.prevButtonText, isFirstQuestion && styles.navButtonTextDisabled]}>
+                      {selectedLanguage === 'english' ? 'Previous' : 'முந்தைய'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {isViewOnly ? (
+                    // View-only navigation - just Previous/Next without saving
+                    <TouchableOpacity
+                      style={[styles.navButton, isLastQuestion && styles.navButtonDisabled]}
+                      onPress={() => {
+                        if (!isLastQuestion && selectedLanguage) {
+                          const nextPos = getNextPosition(
+                            selectedLanguage,
+                            gender,
+                            currentPosition.partIndex,
+                            currentPosition.sectionIndex,
+                            currentPosition.questionIndex
+                          );
+                          if (nextPos) {
+                            animateTransition(() => {
+                              setCurrentPosition(nextPos);
+                              // Load the answer for next question
+                              const nextQuestionData = getQuestionByPosition(
+                                selectedLanguage,
+                                gender,
+                                nextPos.partIndex,
+                                nextPos.sectionIndex,
+                                nextPos.questionIndex
+                              );
+                              if (nextQuestionData && answers[nextQuestionData.questionId]) {
+                                setCurrentAnswer(answers[nextQuestionData.questionId].answer);
+                                setConditionalAnswer(answers[nextQuestionData.questionId].conditionalAnswer || '');
+                              } else {
+                                setCurrentAnswer('');
+                                setConditionalAnswer('');
+                              }
+                            });
+                          }
+                        }
+                      }}
+                      disabled={isLastQuestion}
+                      activeOpacity={0.85}
+                    >
+                      <LinearGradient 
+                        colors={isLastQuestion ? ['#94a3b8', '#94a3b8'] : ['#006dab', '#005a8f']} 
+                        start={{ x: 0, y: 0 }} 
+                        end={{ x: 1, y: 0 }} 
+                        style={styles.nextButtonGradient}
+                      >
+                        <Text style={styles.nextButtonText}>
+                          {selectedLanguage === 'english' ? 'Next' : 'அடுத்து'}
+                        </Text>
+                        <Ionicons name="arrow-forward" size={20} color="#ffffff" />
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  ) : (
+                    // Normal edit mode navigation
+                    <TouchableOpacity
+                      style={styles.navButton}
+                      onPress={handleNext}
+                      disabled={isSaving}
+                      activeOpacity={0.85}
+                    >
+                      <LinearGradient colors={['#006dab', '#005a8f']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.nextButtonGradient}>
+                        {isSaving ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <>
+                            <Text style={styles.nextButtonText}>
+                              {isLastQuestion
+                                ? selectedLanguage === 'english'
+                                  ? 'Complete'
+                                  : 'முடி'
+                                : selectedLanguage === 'english'
+                                ? 'Next'
+                                : 'அடுத்து'}
+                            </Text>
+                            <Ionicons name={isLastQuestion ? 'checkmark' : 'arrow-forward'} size={20} color="#ffffff" />
+                          </>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </>
+            ) : (
+              <Animated.View style={[styles.sectionFormContainer, { opacity: fadeAnim }]}>
+                <Text style={styles.sectionFormTitle}>{sectionTitle}</Text>
+                <Text style={styles.sectionFormSubtitle}>
+                  {sectionQuestions.length} {selectedLanguage === 'english' ? 'questions' : 'கேள்விகள்'}
+                </Text>
+
+                {sectionQuestions.map(({ question: sectionQuestion, questionId }) => {
+                  const isMulti = isQuestionMultiSelect(sectionQuestion);
+                  const entry = sectionFormState[questionId] || {
+                    answer: answers[questionId]?.answer ?? (isMulti ? [] : ''),
+                    conditional: answers[questionId]?.conditionalAnswer ?? '',
+                  };
+                  const value = isMulti
+                    ? Array.isArray(entry.answer)
+                      ? entry.answer
+                      : entry.answer
+                      ? [String(entry.answer)]
+                      : []
+                    : typeof entry.answer === 'string'
+                    ? entry.answer
+                    : '';
+                  return (
+                    <View key={questionId} style={styles.sectionQuestionCard}>
+                      <Text style={styles.sectionQuestionLabel}>
+                        {sectionQuestion.number}. {sectionQuestion.question}
+                      </Text>
+
+                      {sectionQuestion.type === 'fillup' ? (
+                        <View style={styles.inputWrapper}>
+                          <TextInput
+                            style={styles.textInput}
+                            placeholder={selectedLanguage === 'english' ? 'Enter your answer' : 'உங்கள் பதிலை உள்ளிடவும்'}
+                            placeholderTextColor="#94a3b8"
+                            value={typeof value === 'string' ? value : ''}
+                            onChangeText={(text) => updateSectionAnswer(questionId, { answer: text })}
+                            multiline
+                          />
+                        </View>
+                      ) : sectionQuestion.type === 'mcq' && sectionQuestion.options ? (
+                        <View style={styles.optionsContainer}>
+                          {isMulti && (
+                            <View style={styles.multiSelectHint}>
+                              <Ionicons name="checkbox-outline" size={16} color="#006dab" />
+                              <Text style={styles.multiSelectHintText}>
+                                {selectedLanguage === 'english'
+                                  ? 'Select all that apply'
+                                  : 'பொருந்தும் அனைத்தையும் தேர்ந்தெடுக்கவும்'}
+                              </Text>
                             </View>
                           )}
-                          <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
-                            {option}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                ) : null}
+                          {sectionQuestion.options.map((option) => {
+                            const isSelected = isMulti
+                              ? Array.isArray(value) && value.includes(option)
+                              : value === option;
+                            return (
+                              <TouchableOpacity
+                                key={`${questionId}-${option}`}
+                                style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                                onPress={() =>
+                                  isMulti
+                                    ? toggleSectionMulti(questionId, option)
+                                    : updateSectionAnswer(questionId, { answer: option })
+                                }
+                                activeOpacity={0.85}
+                              >
+                                {isMulti ? (
+                                  <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                                    {isSelected && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                  </View>
+                                ) : (
+                                  <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
+                                    {isSelected && <View style={styles.radioInner} />}
+                                  </View>
+                                )}
+                                <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
+                                  {option}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      ) : null}
 
-                {/* Conditional text field */}
-                {question.conditional_textfield && currentAnswer && (
-                  <View style={styles.conditionalContainer}>
-                    <Text style={styles.conditionalLabel}>{question.conditional_textfield}</Text>
-                    <View style={styles.inputWrapper}>
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder={
-                          selectedLanguage === 'english' ? 'Please specify' : 'குறிப்பிடவும்'
-                        }
-                        placeholderTextColor="#94a3b8"
-                        value={conditionalAnswer}
-                        onChangeText={setConditionalAnswer}
-                      />
+                      {shouldShowConditionalField(sectionQuestion, value) && (
+                        <View style={styles.conditionalContainer}>
+                          <Text style={styles.conditionalLabel}>{sectionQuestion.conditional_textfield}</Text>
+                          <View style={styles.inputWrapper}>
+                            <TextInput
+                              style={styles.textInput}
+                              placeholder={selectedLanguage === 'english' ? 'Please specify' : 'குறிப்பிடவும்'}
+                              placeholderTextColor="#94a3b8"
+                              value={entry.conditional || ''}
+                              onChangeText={(text) => updateSectionAnswer(questionId, { conditional: text })}
+                            />
+                          </View>
+                        </View>
+                      )}
                     </View>
-                  </View>
-                )}
-              </View>
-            </Animated.View>
-            )}
+                  );
+                })}
 
-            {/* Navigation Buttons */}
-            <View style={styles.navigationContainer}>
-              <TouchableOpacity
-                style={[styles.navButton, styles.prevButton, isFirstQuestion && styles.navButtonDisabled]}
-                onPress={handlePrevious}
-                disabled={isFirstQuestion}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="arrow-back"
-                  size={20}
-                  color={isFirstQuestion ? '#94a3b8' : '#006dab'}
-                />
-                <Text style={[styles.prevButtonText, isFirstQuestion && styles.navButtonTextDisabled]}>
-                  {selectedLanguage === 'english' ? 'Previous' : 'முந்தைய'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.navButton}
-                onPress={handleNext}
-                disabled={isSaving}
-                activeOpacity={0.85}
-              >
-                <LinearGradient
-                  colors={['#006dab', '#005a8f']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.nextButtonGradient}
+                <TouchableOpacity
+                  style={[styles.sectionSubmitButton, isSaving && styles.sectionSubmitButtonDisabled]}
+                  onPress={handleSectionSubmit}
+                  disabled={isSaving}
                 >
                   {isSaving ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <>
-                      <Text style={styles.nextButtonText}>
-                        {isLastQuestion
-                          ? selectedLanguage === 'english'
-                            ? 'Complete'
-                            : 'முடி'
-                          : selectedLanguage === 'english'
-                          ? 'Next'
-                          : 'அடுத்து'}
+                      <Text style={styles.sectionSubmitText}>
+                        {selectedLanguage === 'english' ? 'Save Section & Continue' : 'பிரிவை சேமித்து தொடரவும்'}
                       </Text>
-                      <Ionicons
-                        name={isLastQuestion ? 'checkmark' : 'arrow-forward'}
-                        size={20}
-                        color="#ffffff"
-                      />
+                      <Ionicons name="arrow-forward" size={18} color="#fff" />
                     </>
                   )}
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
+                </TouchableOpacity>
+              </Animated.View>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1111,7 +1522,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
   },
-  saveExitButton: {
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewToggleContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  viewToggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cbd5f5',
+    backgroundColor: '#fff',
+  },
+  viewToggleButtonActive: {
+    backgroundColor: '#006dab',
+    borderColor: '#006dab',
+  },
+  viewToggleText: {
+    color: '#006dab',
+    fontWeight: '600',
+  },
+  viewToggleTextActive: {
+    color: '#fff',
+  },
+  backButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
@@ -1119,22 +1565,48 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#f1f5f9',
   },
-  saveExitText: {
-    color: '#98be4e',
-    fontSize: 13,
-    fontWeight: '600',
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#eff6ff',
+    borderRadius: 10,
   },
-  overviewButton: {
+  saveButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#006dab',
+  },
+  viewOnlyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#dbeafe',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#93c5fd',
+  },
+  viewOnlyBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#006dab',
+  },
+  languageSwitchBtn: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 20,
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#f1f5f9',
   },
   progressContainer: {
     flex: 1,
-    maxWidth: 200,
+    maxWidth: 260,
+    gap: 8,
   },
   progressBar: {
     height: 6,
@@ -1152,217 +1624,11 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontWeight: '600',
   },
-  backButton: {
-    padding: 8,
-  },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0f172a',
-    flex: 1,
-    marginLeft: 12,
-  },
-
-  // Section Overview (new improved)
-  overviewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingTop: isWeb ? 20 : 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    gap: 16,
-  },
-  overviewBackBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: '#f1f5f9',
-  },
-  overviewTitleContainer: {
-    flex: 1,
-  },
-  overviewTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  overviewSubtitle: {
-    fontSize: 13,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  overviewProgressCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#006dab',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  overviewProgressPercent: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  overviewContent: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  overviewContentContainer: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  overviewSectionCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  overviewSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  overviewSectionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  overviewSectionIconComplete: {
-    backgroundColor: '#98be4e',
-  },
-  overviewSectionNum: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  overviewSectionInfo: {
-    flex: 1,
-  },
-  overviewSectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#0f172a',
-    marginBottom: 6,
-  },
-  overviewSectionProgressBar: {
-    height: 4,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  overviewSectionProgressFill: {
-    height: '100%',
-    backgroundColor: '#98be4e',
-    borderRadius: 2,
-  },
-  overviewSectionCount: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  overviewSectionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    backgroundColor: '#eff6ff',
-    borderRadius: 10,
-    gap: 6,
-  },
-  overviewSectionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#006dab',
-  },
-  overviewFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-  },
-  overviewContinueBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#006dab',
-    paddingVertical: 16,
-    borderRadius: 14,
-    gap: 8,
-  },
-  overviewContinueBtnText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
-  },
-
-  // Section List (old - keeping for compatibility)
-  sectionListContainer: {
-    flex: 1,
-    padding: 20,
-  },
-  sectionCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  sectionCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  sectionStatusIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#e2e8f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sectionStatusIconComplete: {
-    backgroundColor: '#98be4e',
-  },
-  sectionStatusNumber: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  sectionCardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
     color: '#0f172a',
-  },
-  sectionCardSubtitle: {
-    fontSize: 13,
-    color: '#64748b',
-    marginTop: 2,
+    marginBottom: 4,
   },
 
   // Content
@@ -1413,6 +1679,13 @@ const styles = StyleSheet.create({
   },
 
   // Question
+  questionWrapper: {
+    width: '100%',
+  },
+  questionGradient: {
+    borderRadius: 24,
+    padding: 1,
+  },
   questionContainer: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
@@ -1465,6 +1738,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     minHeight: 56,
   },
+  textInputDisabled: {
+    backgroundColor: '#f1f5f9',
+    color: '#475569',
+  },
 
   // Options
   optionsContainer: {
@@ -1483,6 +1760,9 @@ const styles = StyleSheet.create({
   optionCardSelected: {
     borderColor: '#006dab',
     backgroundColor: '#eff6ff',
+  },
+  optionCardViewOnly: {
+    opacity: 0.9,
   },
   radioOuter: {
     width: 24,
@@ -1511,6 +1791,55 @@ const styles = StyleSheet.create({
   optionTextSelected: {
     color: '#006dab',
     fontWeight: '600',
+  },
+  sectionFormContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 24,
+    gap: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  sectionFormTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  sectionFormSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  sectionQuestionCard: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  sectionQuestionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  sectionSubmitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: '#006dab',
+  },
+  sectionSubmitButtonDisabled: {
+    opacity: 0.6,
+  },
+  sectionSubmitText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   
   // Multi-select styles
@@ -1604,12 +1933,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   // Language switch / modal styles
-  languageSwitchButton: {
-    marginLeft: 12,
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
