@@ -3,6 +3,9 @@
 // Free tier: 25GB storage, 25GB bandwidth/month
 // ============================================
 
+import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
+
 // Cloudinary Configuration
 const CLOUDINARY_CONFIG = {
   cloudName: 'dkkfzzwzn',
@@ -29,47 +32,56 @@ export const cloudinaryService = {
     onProgress?: (progress: number) => void
   ): Promise<string> {
     try {
-      // Fetch the image and get as blob
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      
-      // Create form data
-      const formData = new FormData();
-      
-      // Append blob directly - works for both web and mobile
-      formData.append('file', blob, `upload_${Date.now()}.jpg`);
-      formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
-      formData.append('folder', `fit_for_baby/${folder}`);
-
-      // Upload using XMLHttpRequest for progress tracking
-      return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
+      if (Platform.OS === 'web') {
+        // Web: Use blob approach
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
         
-        // Track upload progress
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable && onProgress) {
-            const progress = (event.loaded / event.total) * 100;
-            onProgress(progress);
+        const formData = new FormData();
+        formData.append('file', blob, `upload_${Date.now()}.jpg`);
+        formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
+        formData.append('folder', `fit_for_baby/${folder}`);
+
+        const uploadResponse = await fetch(CLOUDINARY_UPLOAD_URL, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error(`Upload failed with status ${uploadResponse.status}`);
+        }
+
+        const result = await uploadResponse.json();
+        return result.secure_url;
+      } else {
+        // Mobile (iOS/Android): Use expo-file-system uploadAsync
+        // This is the most reliable way for React Native
+        onProgress?.(10); // Start progress
+        
+        const uploadResult = await FileSystem.uploadAsync(
+          CLOUDINARY_UPLOAD_URL,
+          imageUri,
+          {
+            httpMethod: 'POST',
+            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+            fieldName: 'file',
+            parameters: {
+              upload_preset: CLOUDINARY_CONFIG.uploadPreset,
+              folder: `fit_for_baby/${folder}`,
+            },
           }
-        };
+        );
 
-        xhr.onload = () => {
-          if (xhr.status === 200) {
-            const result = JSON.parse(xhr.responseText);
-            resolve(result.secure_url);
-          } else {
-            console.error('Cloudinary upload failed:', xhr.responseText);
-            reject(new Error(`Upload failed with status ${xhr.status}`));
-          }
-        };
+        onProgress?.(100); // Complete
 
-        xhr.onerror = () => {
-          reject(new Error('Network error during upload'));
-        };
+        if (uploadResult.status !== 200) {
+          console.error('Cloudinary upload failed:', uploadResult.body);
+          throw new Error(`Upload failed with status ${uploadResult.status}`);
+        }
 
-        xhr.open('POST', CLOUDINARY_UPLOAD_URL);
-        xhr.send(formData);
-      });
+        const result = JSON.parse(uploadResult.body);
+        return result.secure_url;
+      }
     } catch (error) {
       console.error('Error uploading to Cloudinary:', error);
       throw error;
