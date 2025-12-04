@@ -1,5 +1,6 @@
 import { cloudinaryService } from '@/services/cloudinary.service';
 import { coupleService, coupleStepsService, formatDateString } from '@/services/firestore.service';
+import { geminiService, StepValidationResult } from '@/services/gemini.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -16,8 +17,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
   useWindowDimensions,
+  View,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -60,6 +61,8 @@ export default function LogStepsScreen() {
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState<StepValidationResult | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [coupleId, setCoupleId] = useState<string | null>(null);
   const [userGender, setUserGender] = useState<'male' | 'female'>('male');
@@ -184,25 +187,46 @@ export default function LogStepsScreen() {
 
     setIsSaving(true);
     setUploadProgress(0);
+    setValidationResult(null);
+    
     try {
       const stepsToAdd = parseInt(stepCount);
-      let proofImageUrl: string;
       
-      // Upload image to Cloudinary (mandatory)
+      if (geminiService.isConfigured()) {
+        setIsValidating(true);
+        showToast('Verifying your step count...', 'success');
+        
+        const validation = await geminiService.validateStepCountImage(imageUri, stepsToAdd);
+        setValidationResult(validation);
+        setIsValidating(false);
+        
+        if (!validation.isValid) {
+          setIsSaving(false);
+          return;
+        }
+        
+        if (validation.extractedStepCount) {
+          showToast(`Verified: ${validation.extractedStepCount.toLocaleString()} steps`, 'success');
+        }
+      }
+      
       showToast('Uploading proof image...', 'success');
       const userId = `${coupleId}_${userGender === 'male' ? 'M' : 'F'}`;
-      proofImageUrl = await cloudinaryService.uploadStepProof(
+      const proofImageUrl = await cloudinaryService.uploadStepProof(
         userId,
         imageUri,
         (progress) => setUploadProgress(progress)
       );
       
-      // Save to Firestore with the Cloudinary URL
       const entryId = await coupleStepsService.add(coupleId, userGender, {
         stepCount: stepsToAdd,
         proofImageUrl: proofImageUrl,
         proofType: 'gallery',
         source: 'manual',
+        // Save AI validation info
+        aiValidated: geminiService.isConfigured(),
+        aiExtractedCount: validationResult?.extractedStepCount || null,
+        aiConfidence: validationResult?.confidence || null,
       });
       
       // Update streak for logging activity
@@ -420,16 +444,21 @@ export default function LogStepsScreen() {
 
             {/* Submit Button - Requires both step count and proof image */}
             <TouchableOpacity
-              style={[styles.submitButton, (!stepCount || !imageUri || isSaving) && styles.submitButtonDisabled]}
+              style={[styles.submitButton, (!stepCount || !imageUri || isSaving || isValidating) && styles.submitButtonDisabled]}
               onPress={handleAddSteps}
               activeOpacity={0.85}
-              disabled={!stepCount || !imageUri || isSaving}
+              disabled={!stepCount || !imageUri || isSaving || isValidating}
             >
               <LinearGradient
-                colors={(!stepCount || !imageUri || isSaving) ? ['#94a3b8', '#64748b'] : [COLORS.accent, COLORS.accentDark]}
+                colors={(!stepCount || !imageUri || isSaving || isValidating) ? ['#94a3b8', '#64748b'] : [COLORS.accent, COLORS.accentDark]}
                 style={styles.submitButtonGradient}
               >
-                {isSaving ? (
+                {isValidating ? (
+                  <>
+                    <Ionicons name="shield-checkmark" size={20} color="#ffffff" />
+                    <Text style={styles.submitButtonText}>Verifying...</Text>
+                  </>
+                ) : isSaving ? (
                   <Text style={styles.submitButtonText}>
                     {uploadProgress > 0 && uploadProgress < 100 
                       ? `Uploading... ${Math.round(uploadProgress)}%` 
@@ -443,6 +472,19 @@ export default function LogStepsScreen() {
                 )}
               </LinearGradient>
             </TouchableOpacity>
+
+            {/* AI Validation Error */}
+            {validationResult && !validationResult.isValid && (
+              <View style={styles.validationError}>
+                <Ionicons name="close-circle" size={22} color={COLORS.error} />
+                <View style={styles.validationErrorContent}>
+                  <Text style={styles.validationErrorTitle}>{validationResult.message}</Text>
+                  {validationResult.aiReason && (
+                    <Text style={styles.validationErrorReason}>{validationResult.aiReason}</Text>
+                  )}
+                </View>
+              </View>
+            )}
             
             {/* Helper text when image not selected */}
             {!imageUri && stepCount && (
@@ -850,5 +892,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.error,
     fontWeight: '500',
+  },
+  validationError: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 20,
+    marginBottom: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.errorLight,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.error + '40',
+  },
+  validationErrorContent: {
+    flex: 1,
+  },
+  validationErrorTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.error,
+  },
+  validationErrorReason: {
+    fontSize: 13,
+    color: COLORS.error + 'CC',
+    marginTop: 4,
+    lineHeight: 18,
   },
 });

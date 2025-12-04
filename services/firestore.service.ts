@@ -5,23 +5,23 @@
 import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
 import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  increment,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  setDoc,
-  Timestamp,
-  Unsubscribe,
-  updateDoc,
-  where,
-  writeBatch
+    addDoc,
+    collection,
+    deleteDoc,
+    doc,
+    getDoc,
+    getDocs,
+    increment,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    setDoc,
+    Timestamp,
+    Unsubscribe,
+    updateDoc,
+    where,
+    writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -1286,6 +1286,9 @@ export interface CoupleStepEntry {
   proofImageUrl?: string;
   proofType?: 'camera' | 'gallery';
   source: 'manual' | 'device';
+  aiValidated?: boolean;
+  aiExtractedCount?: number | null;
+  aiConfidence?: 'high' | 'medium' | 'low' | null;
   loggedAt?: Timestamp;
   createdAt?: Timestamp;
 }
@@ -1298,6 +1301,9 @@ export const coupleStepsService = {
     proofType?: 'camera' | 'gallery';
     source?: 'manual' | 'device';
     date?: string;
+    aiValidated?: boolean;
+    aiExtractedCount?: number | null;
+    aiConfidence?: 'high' | 'medium' | 'low' | null;
   }): Promise<string> {
     try {
       // Verify the couple exists
@@ -1319,6 +1325,9 @@ export const coupleStepsService = {
         proofImageUrl: data.proofImageUrl || null,
         proofType: data.proofType || null,
         source: data.source || 'manual',
+        aiValidated: data.aiValidated || false,
+        aiExtractedCount: data.aiExtractedCount || null,
+        aiConfidence: data.aiConfidence || null,
         loggedAt: now(),
         createdAt: now(),
       });
