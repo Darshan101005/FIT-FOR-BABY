@@ -1,3 +1,4 @@
+import { cloudinaryService } from '@/services/cloudinary.service';
 import { coupleService, coupleStepsService, formatDateString } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -5,18 +6,18 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
-    Animated,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -59,6 +60,7 @@ export default function LogStepsScreen() {
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [coupleId, setCoupleId] = useState<string | null>(null);
   const [userGender, setUserGender] = useState<'male' | 'female'>('male');
   const toastAnim = useRef(new Animated.Value(-100)).current;
@@ -169,20 +171,37 @@ export default function LogStepsScreen() {
       return;
     }
 
+    // Image is mandatory for proof
+    if (!imageUri) {
+      showToast('Please capture or select a photo as proof of your steps', 'error');
+      return;
+    }
+
     if (!coupleId) {
       showToast('User session not found. Please login again.', 'error');
       return;
     }
 
     setIsSaving(true);
+    setUploadProgress(0);
     try {
       const stepsToAdd = parseInt(stepCount);
+      let proofImageUrl: string;
       
-      // Save to Firestore
+      // Upload image to Cloudinary (mandatory)
+      showToast('Uploading proof image...', 'success');
+      const userId = `${coupleId}_${userGender === 'male' ? 'M' : 'F'}`;
+      proofImageUrl = await cloudinaryService.uploadStepProof(
+        userId,
+        imageUri,
+        (progress) => setUploadProgress(progress)
+      );
+      
+      // Save to Firestore with the Cloudinary URL
       const entryId = await coupleStepsService.add(coupleId, userGender, {
         stepCount: stepsToAdd,
-        proofImageUrl: imageUri || undefined,
-        proofType: imageUri ? 'gallery' : undefined,
+        proofImageUrl: proofImageUrl,
+        proofType: 'gallery',
         source: 'manual',
       });
       
@@ -194,7 +213,7 @@ export default function LogStepsScreen() {
         id: entryId,
         stepCount: stepsToAdd,
         loggedAt: new Date(),
-        proofImageUrl: imageUri || undefined,
+        proofImageUrl: proofImageUrl,
       };
 
       const updatedEntries = [newEntry, ...stepEntries];
@@ -209,12 +228,14 @@ export default function LogStepsScreen() {
       
       setStepCount('');
       setImageUri(null);
+      setUploadProgress(0);
       showToast(`${stepsToAdd.toLocaleString()} steps added! Total: ${totalSteps.toLocaleString()}`, 'success');
     } catch (error) {
       console.error('Error adding steps:', error);
       showToast('Failed to save steps. Please try again.', 'error');
     } finally {
       setIsSaving(false);
+      setUploadProgress(0);
     }
   };
 
@@ -326,12 +347,12 @@ export default function LogStepsScreen() {
 
             <Text style={styles.stepTitle}>Log Your Steps</Text>
             <Text style={styles.stepDescription}>
-              Enter your step count and optionally upload proof
+              Enter your step count and upload proof photo
             </Text>
 
-            {/* Image Upload Section - Optional */}
+            {/* Image Upload Section - Required */}
             <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Step Counter Image (Optional)</Text>
+              <Text style={styles.inputLabel}>Step Counter Image <Text style={{ color: COLORS.error }}>*</Text></Text>
               
               {imageUri ? (
                 <View style={styles.imagePreviewContainer}>
@@ -397,19 +418,23 @@ export default function LogStepsScreen() {
               </View>
             </View>
 
-            {/* Submit Button - Now works without image */}
+            {/* Submit Button - Requires both step count and proof image */}
             <TouchableOpacity
-              style={[styles.submitButton, (!stepCount || isSaving) && styles.submitButtonDisabled]}
+              style={[styles.submitButton, (!stepCount || !imageUri || isSaving) && styles.submitButtonDisabled]}
               onPress={handleAddSteps}
               activeOpacity={0.85}
-              disabled={!stepCount || isSaving}
+              disabled={!stepCount || !imageUri || isSaving}
             >
               <LinearGradient
-                colors={(!stepCount || isSaving) ? ['#94a3b8', '#64748b'] : [COLORS.accent, COLORS.accentDark]}
+                colors={(!stepCount || !imageUri || isSaving) ? ['#94a3b8', '#64748b'] : [COLORS.accent, COLORS.accentDark]}
                 style={styles.submitButtonGradient}
               >
                 {isSaving ? (
-                  <Text style={styles.submitButtonText}>Saving...</Text>
+                  <Text style={styles.submitButtonText}>
+                    {uploadProgress > 0 && uploadProgress < 100 
+                      ? `Uploading... ${Math.round(uploadProgress)}%` 
+                      : 'Saving...'}
+                  </Text>
                 ) : (
                   <>
                     <Ionicons name="add-circle" size={20} color="#ffffff" />
@@ -418,6 +443,16 @@ export default function LogStepsScreen() {
                 )}
               </LinearGradient>
             </TouchableOpacity>
+            
+            {/* Helper text when image not selected */}
+            {!imageUri && stepCount && (
+              <View style={styles.proofRequiredMessage}>
+                <Ionicons name="camera-outline" size={16} color={COLORS.error} />
+                <Text style={styles.proofRequiredText}>
+                  Please capture or select a photo as proof
+                </Text>
+              </View>
+            )}
 
             {/* Step Entries List */}
             {stepEntries.length > 0 && (
@@ -465,7 +500,7 @@ export default function LogStepsScreen() {
             <View style={styles.infoCard}>
               <Ionicons name="information-circle" size={24} color={COLORS.primary} />
               <Text style={styles.infoText}>
-                Enter your step count from your fitness tracker or phone. Optionally, you can upload a screenshot as proof.
+                Enter your step count from your fitness tracker or phone. Upload a screenshot as proof for verification.
               </Text>
             </View>
           </View>
@@ -797,5 +832,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.primaryDark,
     lineHeight: 20,
+  },
+  proofRequiredMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.errorLight,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.error + '30',
+  },
+  proofRequiredText: {
+    fontSize: 13,
+    color: COLORS.error,
+    fontWeight: '500',
   },
 });

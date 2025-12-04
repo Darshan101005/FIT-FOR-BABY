@@ -1,16 +1,17 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 import { CoupleExerciseLog, CoupleFoodLog, CoupleStepEntry, CoupleWeightLog, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService, formatDateString } from '../../services/firestore.service';
 
@@ -85,6 +86,8 @@ export default function UserDashboardScreen() {
   const [showDatePickerModal, setShowDatePickerModal] = useState(false);
   const [showMealDatePickerModal, setShowMealDatePickerModal] = useState(false);
   const [tempSelectedDate, setTempSelectedDate] = useState({ year: new Date().getFullYear(), month: new Date().getMonth(), day: new Date().getDate() });
+  const [showStepProofs, setShowStepProofs] = useState(false);
+  const [selectedProofImage, setSelectedProofImage] = useState<string | null>(null);
 
   // Format timestamp to 12-hour AM/PM format in IST (Indian Standard Time)
   const formatTimestamp = (timestamp: any): string => {
@@ -308,6 +311,7 @@ export default function UserDashboardScreen() {
   // Calculate totals for today - Male
   const todayMaleExerciseLogs = maleExerciseLogs.filter(log => log.date === selectedDate);
   const todayMaleFoodLogs = maleFoodLogs.filter(log => log.date === selectedDate);
+  const todayMaleStepLogs = maleStepLogs.filter(log => log.date === selectedDate);
   const maleTotalExerciseDuration = todayMaleExerciseLogs.reduce((sum, log) => sum + log.duration, 0);
   const maleTotalExerciseCalories = todayMaleExerciseLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
   const maleTotalMealCalories = todayMaleFoodLogs.reduce((sum, log) => sum + log.totalCalories, 0);
@@ -315,6 +319,7 @@ export default function UserDashboardScreen() {
   // Calculate totals for today - Female
   const todayFemaleExerciseLogs = femaleExerciseLogs.filter(log => log.date === selectedDate);
   const todayFemaleFoodLogs = femaleFoodLogs.filter(log => log.date === selectedDate);
+  const todayFemaleStepLogs = femaleStepLogs.filter(log => log.date === selectedDate);
   const femaleTotalExerciseDuration = todayFemaleExerciseLogs.reduce((sum, log) => sum + log.duration, 0);
   const femaleTotalExerciseCalories = todayFemaleExerciseLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
   const femaleTotalMealCalories = todayFemaleFoodLogs.reduce((sum, log) => sum + log.totalCalories, 0);
@@ -637,6 +642,114 @@ export default function UserDashboardScreen() {
             </View>
           </View>
         </View>
+      </View>
+
+      {/* Step Log Proofs Section */}
+      <View style={styles.recentSection}>
+        <TouchableOpacity 
+          style={styles.recentHeader} 
+          onPress={() => setShowStepProofs(!showStepProofs)}
+          activeOpacity={0.7}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="camera" size={20} color={COLORS.primary} />
+            <Text style={styles.sectionTitle}>Step Log Proofs</Text>
+            <View style={{ backgroundColor: COLORS.accent + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+              <Text style={{ color: COLORS.accent, fontSize: 12, fontWeight: '600' }}>
+                {todayMaleStepLogs.filter(s => s.proofImageUrl).length + todayFemaleStepLogs.filter(s => s.proofImageUrl).length}
+              </Text>
+            </View>
+          </View>
+          <Ionicons 
+            name={showStepProofs ? 'chevron-up' : 'chevron-down'} 
+            size={20} 
+            color={COLORS.textSecondary} 
+          />
+        </TouchableOpacity>
+        
+        {showStepProofs && (
+          <View style={{ marginTop: 12 }}>
+            {/* Male Step Proofs */}
+            {todayMaleStepLogs.filter(s => s.proofImageUrl).length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <Ionicons name="male" size={16} color={COLORS.primary} />
+                  <Text style={{ color: COLORS.primary, fontWeight: '600', fontSize: 14 }}>
+                    {maleUser?.name.split(' ')[0] || 'Male'}
+                  </Text>
+                </View>
+                {todayMaleStepLogs.filter(s => s.proofImageUrl).map((entry) => (
+                  <TouchableOpacity 
+                    key={entry.id} 
+                    style={styles.stepProofCard}
+                    onPress={() => setSelectedProofImage(entry.proofImageUrl || null)}
+                    activeOpacity={0.8}
+                  >
+                    <Image
+                      source={{ uri: entry.proofImageUrl }}
+                      style={styles.stepProofImage}
+                      contentFit="cover"
+                    />
+                    <View style={styles.stepProofInfo}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="footsteps" size={18} color={COLORS.accent} />
+                        <Text style={styles.stepProofCount}>{entry.stepCount.toLocaleString()} steps</Text>
+                      </View>
+                      <Text style={styles.stepProofTime}>
+                        {entry.loggedAt?.toDate ? 
+                          entry.loggedAt.toDate().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) 
+                          : ''}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            
+            {/* Female Step Proofs */}
+            {todayFemaleStepLogs.filter(s => s.proofImageUrl).length > 0 && (
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <Ionicons name="female" size={16} color="#e91e8c" />
+                  <Text style={{ color: '#e91e8c', fontWeight: '600', fontSize: 14 }}>
+                    {femaleUser?.name.split(' ')[0] || 'Female'}
+                  </Text>
+                </View>
+                {todayFemaleStepLogs.filter(s => s.proofImageUrl).map((entry) => (
+                  <TouchableOpacity 
+                    key={entry.id} 
+                    style={[styles.stepProofCard, { borderLeftColor: '#e91e8c' }]}
+                    onPress={() => setSelectedProofImage(entry.proofImageUrl || null)}
+                    activeOpacity={0.8}
+                  >
+                    <Image
+                      source={{ uri: entry.proofImageUrl }}
+                      style={styles.stepProofImage}
+                      contentFit="cover"
+                    />
+                    <View style={styles.stepProofInfo}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="footsteps" size={18} color={COLORS.accent} />
+                        <Text style={styles.stepProofCount}>{entry.stepCount.toLocaleString()} steps</Text>
+                      </View>
+                      <Text style={styles.stepProofTime}>
+                        {entry.loggedAt?.toDate ? 
+                          entry.loggedAt.toDate().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) 
+                          : ''}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            
+            {/* No proofs message */}
+            {todayMaleStepLogs.filter(s => s.proofImageUrl).length === 0 && 
+             todayFemaleStepLogs.filter(s => s.proofImageUrl).length === 0 && (
+              <Text style={styles.noDataText}>No step proofs uploaded today</Text>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Recent Exercises - Both Users (Top 3) */}
@@ -2040,6 +2153,36 @@ export default function UserDashboardScreen() {
       {renderDatePickerModal()}
       {renderMealDatePickerModal()}
       
+      {/* Step Proof Image Viewer Modal */}
+      <Modal
+        visible={!!selectedProofImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedProofImage(null)}
+      >
+        <TouchableOpacity 
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}
+          activeOpacity={1}
+          onPress={() => setSelectedProofImage(null)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            {selectedProofImage && (
+              <Image
+                source={{ uri: selectedProofImage }}
+                style={{ width: isMobile ? screenWidth - 40 : 500, height: isMobile ? screenWidth - 40 : 500, borderRadius: 12 }}
+                contentFit="contain"
+              />
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={{ position: 'absolute', top: 50, right: 20, padding: 10 }}
+            onPress={() => setSelectedProofImage(null)}
+          >
+            <Ionicons name="close-circle" size={36} color="#fff" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+      
       <ScrollView
         contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
         showsVerticalScrollIndicator={false}
@@ -3029,5 +3172,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  // Step Proof Styles
+  stepProofCard: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+    alignItems: 'center',
+    gap: 12,
+  },
+  stepProofImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: COLORS.borderLight,
+  },
+  stepProofInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  stepProofCount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  stepProofTime: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 4,
   },
 });
