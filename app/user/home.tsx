@@ -639,20 +639,20 @@ export default function UserHomeScreen() {
             {/* Exercise Minutes */}
             <View style={[styles.activityCard, { backgroundColor: colors.cardBackground }]}>
               <View style={[styles.activityIconContainer, { backgroundColor: isDarkMode ? '#1a2d3d' : '#e0f2fe' }]}>
-                <Ionicons name="fitness" size={24} color="#006dab" />
+                <Ionicons name="fitness" size={22} color="#006dab" />
               </View>
               <View style={styles.activityInfo}>
-                <Text style={[styles.activityValue, { color: colors.text }]}>
+                <Text style={[styles.activityValue, { color: colors.text }]} numberOfLines={1}>
                   {todayProgress.exerciseMinutes}
                   <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> min</Text>
                 </Text>
-                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>
+                <Text style={[styles.activityLabel, { color: colors.textSecondary }]} numberOfLines={1}>
                   Exercise {!todayProgress.exerciseGoalMet && `/ ${todayProgress.exerciseGoal}m`}
                 </Text>
               </View>
               {todayProgress.exerciseGoalMet && (
                 <View style={styles.goalMetBadge}>
-                  <Ionicons name="checkmark-circle" size={20} color="#98be4e" />
+                  <Ionicons name="checkmark-circle" size={18} color="#98be4e" />
                 </View>
               )}
             </View>
@@ -660,34 +660,34 @@ export default function UserHomeScreen() {
             {/* Food Logged */}
             <View style={[styles.activityCard, { backgroundColor: colors.cardBackground }]}>
               <View style={[styles.activityIconContainer, { backgroundColor: isDarkMode ? '#1a3329' : '#e8f5d6' }]}>
-                <Ionicons name="restaurant" size={24} color="#98be4e" />
+                <Ionicons name="restaurant" size={22} color="#98be4e" />
               </View>
               <View style={styles.activityInfo}>
-                <Text style={[styles.activityValue, { color: colors.text }]}>
+                <Text style={[styles.activityValue, { color: colors.text }]} numberOfLines={1}>
                   {todayProgress.foodLogged}
                   <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> meals</Text>
                 </Text>
-                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>Food Logged</Text>
+                <Text style={[styles.activityLabel, { color: colors.textSecondary }]} numberOfLines={1}>Food Logged</Text>
               </View>
             </View>
 
             {/* Calories Burnt */}
             <View style={[styles.activityCard, { backgroundColor: colors.cardBackground }]}>
               <View style={[styles.activityIconContainer, { backgroundColor: isDarkMode ? '#2d1f1f' : '#fee2e2' }]}>
-                <Ionicons name="flame" size={24} color="#ef4444" />
+                <Ionicons name="flame" size={22} color="#ef4444" />
               </View>
               <View style={styles.activityInfo}>
-                <Text style={[styles.activityValue, { color: colors.text }]}>
+                <Text style={[styles.activityValue, { color: colors.text }]} numberOfLines={1}>
                   {todayProgress.caloriesBurnt}
                   <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> kcal</Text>
                 </Text>
-                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>
+                <Text style={[styles.activityLabel, { color: colors.textSecondary }]} numberOfLines={1}>
                   Calories Burnt {!todayProgress.caloriesGoalMet && `/ ${todayProgress.caloriesGoal}`}
                 </Text>
               </View>
               {todayProgress.caloriesGoalMet && (
                 <View style={styles.goalMetBadge}>
-                  <Ionicons name="checkmark-circle" size={20} color="#98be4e" />
+                  <Ionicons name="checkmark-circle" size={18} color="#98be4e" />
                 </View>
               )}
             </View>
@@ -699,13 +699,13 @@ export default function UserHomeScreen() {
               activeOpacity={0.7}
             >
               <View style={[styles.activityIconContainer, { backgroundColor: isDarkMode ? '#2d2a1a' : '#fef3c7' }]}>
-                <MaterialCommunityIcons name="food-variant" size={24} color="#f59e0b" />
+                <MaterialCommunityIcons name="food-variant" size={22} color="#f59e0b" />
               </View>
               <View style={styles.activityInfo}>
-                <Text style={[styles.activityValue, { color: colors.text }]}>Diet Plan</Text>
+                <Text style={[styles.activityValue, { color: colors.text }]} numberOfLines={1}>Diet Plan</Text>
                 <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>View</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} style={styles.activityArrow} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} style={styles.activityArrow} />
             </TouchableOpacity>
           </View>
 
@@ -1216,12 +1216,13 @@ const styles = StyleSheet.create({
   },
   activityCard: {
     flex: 1,
-    minWidth: 140,
+    minWidth: '47%',
+    maxWidth: '49%',
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 14,
     borderRadius: 16,
-    gap: 12,
+    gap: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -1232,25 +1233,27 @@ const styles = StyleSheet.create({
     flexBasis: '100%',
   },
   activityIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   activityInfo: {
     flex: 1,
+    minWidth: 0,
   },
   activityValue: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
   },
   activityUnit: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
   },
   activityLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     marginTop: 2,
   },

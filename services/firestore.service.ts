@@ -5,23 +5,23 @@
 import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
 import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    getDoc,
-    getDocs,
-    increment,
-    limit,
-    onSnapshot,
-    orderBy,
-    query,
-    setDoc,
-    Timestamp,
-    Unsubscribe,
-    updateDoc,
-    where,
-    writeBatch
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  increment,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  Timestamp,
+  Unsubscribe,
+  updateDoc,
+  where,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -2288,48 +2288,34 @@ export const doctorVisitService = {
   },
 
   // Get all doctor visits for a couple member
+  // Uses simple query without composite index requirement
   async getAll(coupleId: string, gender: 'male' | 'female'): Promise<DoctorVisit[]> {
     try {
       const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS);
-      const q = query(visitsRef, where('gender', '==', gender), orderBy('date', 'desc'));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DoctorVisit));
+      // Simple query - fetch all, then filter and sort client-side to avoid index requirement
+      const snapshot = await getDocs(visitsRef);
+      return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as DoctorVisit))
+        .filter(v => v.gender === gender)
+        .sort((a, b) => b.date.localeCompare(a.date));
     } catch (error) {
       console.error('Error getting doctor visits:', error);
-      // Fallback without ordering if index doesn't exist
-      try {
-        const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS);
-        const snapshot = await getDocs(visitsRef);
-        return snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as DoctorVisit))
-          .filter(v => v.gender === gender)
-          .sort((a, b) => b.date.localeCompare(a.date));
-      } catch (err) {
-        console.error('Fallback also failed:', err);
-        return [];
-      }
+      return [];
     }
   },
 
   // Get all doctor visits for a couple (both members) - for admin
+  // Uses simple query to avoid index requirement
   async getAllForCouple(coupleId: string): Promise<DoctorVisit[]> {
     try {
       const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS);
-      const q = query(visitsRef, orderBy('date', 'desc'));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DoctorVisit));
+      const snapshot = await getDocs(visitsRef);
+      return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as DoctorVisit))
+        .sort((a, b) => b.date.localeCompare(a.date));
     } catch (error) {
       console.error('Error getting all doctor visits for couple:', error);
-      // Fallback without ordering
-      try {
-        const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS);
-        const snapshot = await getDocs(visitsRef);
-        return snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as DoctorVisit))
-          .sort((a, b) => b.date.localeCompare(a.date));
-      } catch (err) {
-        return [];
-      }
+      return [];
     }
   },
 
@@ -2625,7 +2611,10 @@ export const broadcastService = {
       // Filter client-side for sent status and recent date
       return broadcasts.filter(b => {
         if (b.status !== 'sent') return false;
-        const sentAt = b.sentAt?.toDate ? b.sentAt.toDate() : new Date(b.sentAt);
+        // Use sentAt if available, otherwise fallback to createdAt
+        const timestamp = b.sentAt || b.createdAt;
+        if (!timestamp) return false;
+        const sentAt = timestamp.toDate ? timestamp.toDate() : new Date(timestamp as any);
         return sentAt >= cutoffDate;
       }).slice(0, 20);
     } catch (error) {
@@ -2744,7 +2733,10 @@ export const broadcastService = {
       // Filter client-side
       const filtered = broadcasts.filter(b => {
         if (b.status !== 'sent') return false;
-        const sentAt = b.sentAt?.toDate ? b.sentAt.toDate() : new Date(b.sentAt);
+        // Use sentAt if available, otherwise fallback to createdAt
+        const timestamp = b.sentAt || b.createdAt;
+        if (!timestamp) return false;
+        const sentAt = timestamp.toDate ? timestamp.toDate() : new Date(timestamp as any);
         return sentAt >= cutoffDate;
       }).slice(0, 20);
       

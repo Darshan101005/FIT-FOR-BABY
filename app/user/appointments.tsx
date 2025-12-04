@@ -6,19 +6,19 @@ import { DoctorVisit, NursingDepartmentVisit } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -581,25 +581,26 @@ export default function AppointmentsScreen() {
       const isPast = visit && visit.status === 'completed';
 
       days.push(
-        <View
-          key={day}
-          style={[
-            styles.nvCalendarDay,
-            hasVisit && styles.nvCalendarDayWithVisit,
-            isPast && styles.nvCalendarDayPast,
-            isToday && styles.nvCalendarDayToday,
-          ]}
-        >
-          <Text
+        <View key={day} style={styles.nvCalendarDay}>
+          <View
             style={[
-              styles.nvCalendarDayText,
-              hasVisit && styles.nvCalendarDayTextVisit,
-              isPast && styles.nvCalendarDayTextPast,
-              isToday && styles.nvCalendarDayTextToday,
+              styles.nvCalendarDayInner,
+              hasVisit && styles.nvCalendarDayWithVisit,
+              isPast && styles.nvCalendarDayPast,
+              isToday && styles.nvCalendarDayToday,
             ]}
           >
-            {day}
-          </Text>
+            <Text
+              style={[
+                styles.nvCalendarDayText,
+                hasVisit && styles.nvCalendarDayTextVisit,
+                isPast && styles.nvCalendarDayTextPast,
+                isToday && styles.nvCalendarDayTextToday,
+              ]}
+            >
+              {day}
+            </Text>
+          </View>
           {hasVisit && (
             <View style={[styles.nvVisitDot, isPast && styles.nvVisitDotPast]} />
           )}
@@ -1756,17 +1757,24 @@ const styles = StyleSheet.create({
   nvDaysGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'flex-start',
   },
   nvCalendarDay: {
     width: '14.28%',
-    aspectRatio: 1,
+    paddingVertical: 4,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
+  nvCalendarDayInner: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 17,
+  },
   nvCalendarDayWithVisit: {
     backgroundColor: '#e0f2fe',
-    borderRadius: 20,
   },
   nvCalendarDayPast: {
     backgroundColor: '#f1f5f9',
@@ -1774,12 +1782,12 @@ const styles = StyleSheet.create({
   nvCalendarDayToday: {
     borderWidth: 2,
     borderColor: '#006dab',
-    borderRadius: 20,
   },
   nvCalendarDayText: {
     fontSize: 13,
     fontWeight: '500',
     color: '#64748b',
+    textAlign: 'center',
   },
   nvCalendarDayTextVisit: {
     color: '#006dab',
