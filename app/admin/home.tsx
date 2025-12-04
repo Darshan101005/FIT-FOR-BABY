@@ -111,6 +111,7 @@ interface CoupleWithMissingLogs {
   femaleName: string;
   lastLog: string;
   reason: string;
+  missingLogs: string[]; // Array of missing log types: 'steps', 'diet', 'exercise'
 }
 
 // Quick Action Cards Data
@@ -269,21 +270,28 @@ export default function AdminHomeScreen() {
           }
         }
 
-        // Add to missing logs list if any logs are missing
-        if (coupleMissingLogs.length > 0) {
+        // Add to missing logs list if any logs are missing (only track steps, diet, exercise)
+        const trackableLogs = coupleMissingLogs.filter(log => ['steps', 'diet', 'exercise'].includes(log));
+        if (trackableLogs.length > 0) {
           const reasonMap: Record<string, string> = {
-            'steps': 'Missing steps',
-            'diet': 'No diet log',
-            'exercise': 'No exercise',
-            'weight': 'No weight update',
+            'steps': 'Steps',
+            'diet': 'Food',
+            'exercise': 'Exercise',
           };
+          // Create a combined reason showing all missing items
+          const missingReasons = trackableLogs.map(log => reasonMap[log]).filter(Boolean);
+          const reason = missingReasons.length === 1 
+            ? `Missing ${missingReasons[0].toLowerCase()}` 
+            : `Missing ${missingReasons.length} logs`;
+          
           couplesWithMissingLogs.push({
             id: couple.coupleId,
             coupleId: couple.coupleId,
             maleName: couple.male?.name || 'N/A',
             femaleName: couple.female?.name || 'N/A',
             lastLog: 'Today',
-            reason: reasonMap[coupleMissingLogs[0]] || 'Missing logs',
+            reason: reason,
+            missingLogs: trackableLogs,
           });
         }
       }
@@ -572,6 +580,32 @@ export default function AdminHomeScreen() {
     </View>
   );
 
+  // Skeleton Quick Action Card
+  const renderSkeletonQuickAction = () => (
+    <View style={[styles.skeletonQuickActionCard, isMobile && styles.skeletonQuickActionCardMobile]}>
+      <View style={styles.skeletonQuickActionInner}>
+        <SkeletonBox width={isMobile ? 44 : 52} height={isMobile ? 44 : 52} borderRadius={14} />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <SkeletonBox width="80%" height={16} />
+          <SkeletonBox width="60%" height={12} style={{ marginTop: 6 }} />
+        </View>
+        <SkeletonBox width={20} height={20} borderRadius={10} />
+      </View>
+    </View>
+  );
+
+  // Skeleton Quick Actions Section
+  const renderSkeletonQuickActions = () => (
+    <View style={styles.section}>
+      <SkeletonBox width={120} height={20} style={{ marginBottom: 16 }} />
+      <View style={[styles.quickActionsGrid, isMobile && styles.quickActionsGridMobile]}>
+        {[1, 2, 3, 4].map((i) => (
+          <React.Fragment key={i}>{renderSkeletonQuickAction()}</React.Fragment>
+        ))}
+      </View>
+    </View>
+  );
+
   // Skeleton Stat Card
   const renderSkeletonStatCard = () => (
     <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
@@ -677,7 +711,75 @@ export default function AdminHomeScreen() {
   );
 
   // Today's Compliance Snapshot
-  const renderComplianceSnapshot = () => (
+  const renderComplianceSnapshot = () => {
+    // Calculate the progress for each quadrant (0-100%)
+    const progress = dashboardStats.todayCompliance;
+    
+    // Get color based on percentage range
+    // 0-25: Red, 25-50: Orange, 50-75: Yellow, 75-100: Green
+    const getProgressColor = (percent: number) => {
+      if (percent <= 0) return COLORS.error; // Red for 0%
+      if (percent < 25) return COLORS.error; // Red
+      if (percent < 50) return '#f97316'; // Orange
+      if (percent < 75) return '#eab308'; // Yellow
+      return COLORS.success; // Green
+    };
+    
+    const progressColor = getProgressColor(progress);
+    const baseColor = COLORS.borderLight;
+    
+    // Determine which borders should be colored based on percentage
+    // Progress fills clockwise from top: top -> right -> bottom -> left
+    const getProgressColors = () => {
+      if (progress >= 100) {
+        return {
+          top: progressColor,
+          right: progressColor,
+          bottom: progressColor,
+          left: progressColor,
+        };
+      } else if (progress >= 75) {
+        return {
+          top: progressColor,
+          right: progressColor,
+          bottom: progressColor,
+          left: progress >= 87.5 ? progressColor : baseColor,
+        };
+      } else if (progress >= 50) {
+        return {
+          top: progressColor,
+          right: progressColor,
+          bottom: progress >= 62.5 ? progressColor : baseColor,
+          left: baseColor,
+        };
+      } else if (progress >= 25) {
+        return {
+          top: progressColor,
+          right: progress >= 37.5 ? progressColor : baseColor,
+          bottom: baseColor,
+          left: baseColor,
+        };
+      } else if (progress > 0) {
+        return {
+          top: progress >= 12.5 ? progressColor : baseColor,
+          right: baseColor,
+          bottom: baseColor,
+          left: baseColor,
+        };
+      } else {
+        // 0% - show all red as indicator
+        return {
+          top: baseColor,
+          right: baseColor,
+          bottom: baseColor,
+          left: baseColor,
+        };
+      }
+    };
+    
+    const colors = getProgressColors();
+    
+    return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Today's Compliance Snapshot</Text>
@@ -691,22 +793,28 @@ export default function AdminHomeScreen() {
       ) : (
         <View style={[styles.complianceCard, isMobile && styles.complianceCardMobile]}>
           <View style={styles.complianceChart}>
-            {/* Simple Donut Chart Representation */}
+            {/* Donut Chart with full circle */}
             <View style={styles.donutContainer}>
               <View style={[styles.donutOuter, isMobile && styles.donutOuterMobile]}>
+                {/* Background circle (always full) */}
+                <View style={[
+                  styles.donutBackground,
+                  isMobile && styles.donutBackgroundMobile,
+                ]} />
+                {/* Progress overlay */}
                 <View style={[
                   styles.donutProgress,
                   isMobile && styles.donutProgressMobile,
                   { 
-                    borderTopColor: COLORS.success,
-                    borderRightColor: COLORS.success,
-                    borderBottomColor: dashboardStats.todayCompliance > 75 ? COLORS.success : COLORS.borderLight,
-                    borderLeftColor: dashboardStats.todayCompliance > 50 ? COLORS.success : COLORS.borderLight,
-                    transform: [{ rotate: '45deg' }],
+                    borderTopColor: colors.top,
+                    borderRightColor: colors.right,
+                    borderBottomColor: colors.bottom,
+                    borderLeftColor: colors.left,
+                    transform: [{ rotate: '-45deg' }],
                   }
                 ]} />
                 <View style={[styles.donutInner, isMobile && styles.donutInnerMobile]}>
-                  <Text style={[styles.donutValue, isMobile && styles.donutValueMobile]}>{dashboardStats.todayCompliance}%</Text>
+                  <Text style={[styles.donutValue, isMobile && styles.donutValueMobile, { color: progressColor }]}>{dashboardStats.todayCompliance}%</Text>
                   <Text style={styles.donutLabel}>Complete</Text>
                 </View>
               </View>
@@ -735,6 +843,7 @@ export default function AdminHomeScreen() {
       )}
     </View>
   );
+  };
 
   // Logs Not Completed Section
   const renderLogsNotCompleted = () => (
@@ -766,7 +875,15 @@ export default function AdminHomeScreen() {
                 <Text style={styles.emptyAlertText}>All couples have completed their logs today!</Text>
               </View>
             ) : (
-              logsNotCompletedCouples.map((couple, index) => (
+              logsNotCompletedCouples.map((couple, index) => {
+                // Map log types to icons and colors
+                const logTypeConfig: Record<string, { icon: string; color: string; label: string }> = {
+                  'steps': { icon: 'footsteps', color: COLORS.warning, label: 'Steps' },
+                  'diet': { icon: 'restaurant', color: COLORS.info, label: 'Food' },
+                  'exercise': { icon: 'fitness', color: COLORS.success, label: 'Exercise' },
+                };
+                
+                return (
                 <TouchableOpacity
                   key={couple.id}
                   style={[
@@ -793,14 +910,28 @@ export default function AdminHomeScreen() {
                     </View>
                   </View>
                   <View style={[styles.alertRight, isMobile && styles.alertRightMobile]}>
-                    <View style={[styles.alertReasonBadge, isMobile && styles.alertReasonBadgeMobile]}>
-                      <Text style={[styles.alertReasonText, isMobile && styles.alertReasonTextMobile]}>{couple.reason}</Text>
+                    {/* Show individual missing log badges */}
+                    <View style={styles.missingLogsBadges}>
+                      {(couple.missingLogs || []).map((logType) => {
+                        const config = logTypeConfig[logType];
+                        if (!config) return null;
+                        return (
+                          <View 
+                            key={logType} 
+                            style={[styles.missingLogBadge, { backgroundColor: config.color + '18', borderColor: config.color + '40' }]}
+                          >
+                            <Ionicons name={config.icon as any} size={isMobile ? 10 : 12} color={config.color} />
+                            {!isMobile && <Text style={[styles.missingLogText, { color: config.color }]}>{config.label}</Text>}
+                          </View>
+                        );
+                      })}
                     </View>
                     <Text style={styles.alertTime}>{couple.lastLog}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={isMobile ? 16 : 18} color={COLORS.textMuted} />
                 </TouchableOpacity>
-              ))
+              );
+              })
             )}
           </View>
           
@@ -961,7 +1092,7 @@ export default function AdminHomeScreen() {
       >
         <View style={[styles.content, !isMobile && styles.contentDesktop]}>
           {renderHeader()}
-          {!isLoading && renderQuickActions()}
+          {isLoading ? renderSkeletonQuickActions() : renderQuickActions()}
           {renderStatsOverview()}
           
           <View style={[styles.twoColumnSection, isMobile && styles.twoColumnSectionMobile]}>
@@ -1382,13 +1513,26 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
   },
-  donutProgress: {
+  donutBackground: {
     position: 'absolute',
     width: 140,
     height: 140,
     borderRadius: 70,
     borderWidth: 12,
     borderColor: COLORS.borderLight,
+  },
+  donutBackgroundMobile: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 10,
+  },
+  donutProgress: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 12,
   },
   donutProgressMobile: {
     width: 120,
@@ -1565,6 +1709,53 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 4,
+  },
+  // Missing Logs Badges
+  missingLogsBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    justifyContent: 'flex-end',
+  },
+  missingLogBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    gap: 4,
+  },
+  missingLogText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  // Skeleton Quick Actions
+  skeletonQuickActionCard: {
+    flex: 0,
+    flexBasis: 280,
+    minWidth: 220,
+    maxWidth: 320,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: COLORS.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  skeletonQuickActionCardMobile: {
+    minWidth: '100%',
+    maxWidth: '100%',
+    flex: 0,
+    width: '100%',
+  },
+  skeletonQuickActionInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    minHeight: 80,
   },
   sendReminderButton: {
     flexDirection: 'row',
