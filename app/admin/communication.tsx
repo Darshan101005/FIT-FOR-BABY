@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
@@ -329,10 +329,12 @@ export default function AdminCommunicationScreen() {
             setAdminData({ id: adminUid, name: adminName });
           }
 
-          // Load broadcasts
+          // Load broadcasts (only type='broadcast', not reminders)
           setIsLoadingBroadcasts(true);
-          const broadcastList = await broadcastService.getAll(20);
-          setBroadcasts(broadcastList);
+          const allBroadcasts = await broadcastService.getAll(20);
+          // Filter out reminders - they are managed from admin home, not here
+          const broadcastsOnly = allBroadcasts.filter(b => b.type === 'broadcast');
+          setBroadcasts(broadcastsOnly);
 
           // Subscribe to support chats (real-time)
           setIsLoadingChats(true);
@@ -612,6 +614,7 @@ export default function AdminCommunicationScreen() {
         message: broadcastForm.message.trim(),
         priority: 'normal',
         status: 'sent',
+        type: 'broadcast', // Mark as broadcast (not reminder) - shows in Messages, not home
         sentBy: adminData!.id,
         sentByName: adminData!.name,
         totalRecipients,
@@ -619,9 +622,9 @@ export default function AdminCommunicationScreen() {
         ...(expiresAt && { expiresAt }),
       });
 
-      // Refresh broadcasts list
-      const updatedBroadcasts = await broadcastService.getAll(20);
-      setBroadcasts(updatedBroadcasts);
+      // Refresh broadcasts list (only broadcasts, not reminders)
+      const allBroadcasts = await broadcastService.getAll(20);
+      setBroadcasts(allBroadcasts.filter(b => b.type === 'broadcast'));
 
       showToast('Broadcast sent to all users!', 'success');
       setShowBroadcastModal(false);
@@ -701,9 +704,9 @@ export default function AdminCommunicationScreen() {
         ...(expiresAt && { expiresAt }),
       });
 
-      // Refresh broadcasts list
-      const updatedBroadcasts = await broadcastService.getAll(20);
-      setBroadcasts(updatedBroadcasts);
+      // Refresh broadcasts list (only broadcasts, not reminders)
+      const allBroadcasts = await broadcastService.getAll(20);
+      setBroadcasts(allBroadcasts.filter(b => b.type === 'broadcast'));
 
       showToast('Broadcast updated successfully', 'success');
       setShowEditModal(false);

@@ -3,7 +3,7 @@ import { broadcastService, chatService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePathname, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Platform,
     StyleSheet,
@@ -74,18 +74,21 @@ export default function BottomNavBar() {
   const [unreadBroadcastCount, setUnreadBroadcastCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
-  // Fetch unread broadcast count for badge
+  // Fetch unread broadcast count for badge (only broadcasts, not reminders)
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
-        const broadcasts = await broadcastService.getActive();
+        const allBroadcasts = await broadcastService.getActive();
+        
+        // Filter to only count broadcasts (not reminders) - reminders show on home page
+        const broadcastsOnly = allBroadcasts.filter(b => b.type === 'broadcast');
         
         // Check last read timestamp to determine unread count
         const lastReadStr = await AsyncStorage.getItem(BROADCASTS_READ_KEY);
         const lastReadTime = lastReadStr ? parseInt(lastReadStr) : 0;
         
         // Count broadcasts created after last read time
-        const unreadCount = broadcasts.filter(b => {
+        const unreadCount = broadcastsOnly.filter(b => {
           const createdAt = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt as any);
           return createdAt.getTime() > lastReadTime;
         }).length;
