@@ -6,21 +6,21 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Linking,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Animated,
+    Linking,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -1275,7 +1275,9 @@ const styles = StyleSheet.create({
   confirmModalContent: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 24,
+    paddingTop: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 42,
     width: '100%',
     maxWidth: 340,
     shadowColor: '#000',
@@ -1316,10 +1318,13 @@ const styles = StyleSheet.create({
   },
   confirmModalConfirmBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 14,
+    minHeight: 48,
     borderRadius: 10,
     backgroundColor: '#dc2626',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
   },
   confirmModalConfirmBtnText: {
     fontSize: 15,

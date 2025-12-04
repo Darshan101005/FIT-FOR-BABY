@@ -8,17 +8,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -581,10 +581,11 @@ export default function AppointmentsScreen() {
       const isPast = visit && visit.status === 'completed';
 
       days.push(
-        <View key={day} style={styles.nvCalendarDay}>
+        <View key={day} style={[styles.nvCalendarDay, isMobile && styles.nvCalendarDayMobile]}>
           <View
             style={[
               styles.nvCalendarDayInner,
+              isMobile && styles.nvCalendarDayInnerMobile,
               hasVisit && styles.nvCalendarDayWithVisit,
               isPast && styles.nvCalendarDayPast,
               isToday && styles.nvCalendarDayToday,
@@ -602,7 +603,7 @@ export default function AppointmentsScreen() {
             </Text>
           </View>
           {hasVisit && (
-            <View style={[styles.nvVisitDot, isPast && styles.nvVisitDotPast]} />
+            <View style={[styles.nvVisitDot, isPast && styles.nvVisitDotPast, isMobile && styles.nvVisitDotMobile]} />
           )}
         </View>
       );
@@ -1766,12 +1767,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
   },
+  nvCalendarDayMobile: {
+    paddingVertical: 6,
+  },
   nvCalendarDayInner: {
     width: 34,
     height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 17,
+    borderRadius: 10,
+  },
+  nvCalendarDayInnerMobile: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
   },
   nvCalendarDayWithVisit: {
     backgroundColor: '#e0f2fe',
@@ -1807,6 +1816,9 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 3,
     backgroundColor: '#006dab',
+  },
+  nvVisitDotMobile: {
+    bottom: 6,
   },
   nvVisitDotPast: {
     backgroundColor: '#94a3b8',

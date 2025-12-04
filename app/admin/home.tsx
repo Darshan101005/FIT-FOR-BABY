@@ -1010,6 +1010,9 @@ export default function AdminHomeScreen() {
                     ? 'Send Reminder' 
                     : 'Send Reminder to All Pending'}
               </Text>
+              {!isSendingReminder && (
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
+              )}
             </TouchableOpacity>
           )}
         </>
@@ -1196,7 +1199,7 @@ export default function AdminHomeScreen() {
             {/* Icon based on status */}
             <View style={[
               styles.reminderModalIconContainer,
-              reminderStatus === 'success' && { backgroundColor: COLORS.success + '15' },
+              reminderStatus === 'success' && { backgroundColor: COLORS.accent + '15' },
               reminderStatus === 'error' && { backgroundColor: COLORS.error + '15' },
               reminderStatus === 'sending' && { backgroundColor: COLORS.primary + '15' },
               reminderStatus === 'confirm' && { backgroundColor: COLORS.warning + '15' },
@@ -1204,7 +1207,7 @@ export default function AdminHomeScreen() {
               {reminderStatus === 'sending' ? (
                 <ActivityIndicator size="large" color={COLORS.primary} />
               ) : reminderStatus === 'success' ? (
-                <Ionicons name="checkmark-circle" size={48} color={COLORS.success} />
+                <Ionicons name="checkmark-circle" size={48} color={COLORS.accent} />
               ) : reminderStatus === 'error' ? (
                 <Ionicons name="alert-circle" size={48} color={COLORS.error} />
               ) : (
@@ -1243,15 +1246,15 @@ export default function AdminHomeScreen() {
                     onPress={executeSendReminder}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="send" size={18} color="#fff" />
                     <Text style={styles.reminderModalSendText}>Send Now</Text>
+                    <Ionicons name="arrow-forward" size={18} color="#fff" />
                   </TouchableOpacity>
                 </>
               ) : reminderStatus === 'sending' ? null : (
                 <TouchableOpacity
                   style={[
                     styles.reminderModalDoneButton,
-                    reminderStatus === 'success' && { backgroundColor: COLORS.success },
+                    reminderStatus === 'success' && { backgroundColor: COLORS.accent },
                     reminderStatus === 'error' && { backgroundColor: COLORS.error },
                   ]}
                   onPress={closeReminderModal}

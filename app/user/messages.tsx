@@ -417,9 +417,9 @@ export default function MessagesScreen() {
             )}
           </View>
           <View style={styles.threadContent}>
-            <View style={styles.threadHeader}>
-              <Text style={styles.threadTitle}>Chat with Nursing Department</Text>
-              <Text style={styles.threadTime}>
+            <View style={[styles.threadHeader, isMobile && styles.threadHeaderMobile]}>
+              <Text style={[styles.threadTitle, isMobile && styles.threadTitleMobile]} numberOfLines={1}>Chat with Nursing Department</Text>
+              <Text style={[styles.threadTime, isMobile && styles.threadTimeMobile]}>
                 {nursingChat?.lastMessageAt ? formatChatTime(nursingChat.lastMessageAt) : ''}
               </Text>
             </View>
@@ -914,11 +914,19 @@ const styles = StyleSheet.create({
   threadHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 4,
+    gap: 8,
   },
-  threadTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
-  threadTime: { fontSize: 12, color: '#94a3b8' },
+  threadHeaderMobile: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 2,
+  },
+  threadTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a', flex: 1 },
+  threadTitleMobile: { flex: 0 },
+  threadTime: { fontSize: 12, color: '#94a3b8', flexShrink: 0 },
+  threadTimeMobile: { fontSize: 11 },
   threadPreview: { fontSize: 14, color: '#64748b', lineHeight: 20 },
   threadPreviewUnread: { color: '#0f172a', fontWeight: '500' },
   helpOptions: {

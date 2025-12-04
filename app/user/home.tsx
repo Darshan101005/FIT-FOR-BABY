@@ -3,10 +3,10 @@ import { HomePageSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
 import { broadcastService, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, formatDateString, globalSettingsService, nursingVisitService } from '@/services/firestore.service';
 import {
-    addNotificationReceivedListener,
-    addNotificationResponseListener,
-    registerForPushNotificationsAsync,
-    savePushTokenForUser
+  addNotificationReceivedListener,
+  addNotificationResponseListener,
+  registerForPushNotificationsAsync,
+  savePushTokenForUser
 } from '@/services/notification.service';
 import { Broadcast, GlobalSettings, NursingDepartmentVisit } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -15,14 +15,14 @@ import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Animated,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
@@ -97,6 +97,9 @@ export default function UserHomeScreen() {
   
   // Broadcasts/Reminders from admin
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
+  
+  // Dismissed reminders (stored locally)
+  const [dismissedReminderIds, setDismissedReminderIds] = useState<string[]>([]);
   
   // Streak data
   const [streakData, setStreakData] = useState<{ currentStreak: number; longestStreak: number }>({ 
@@ -177,6 +180,47 @@ export default function UserHomeScreen() {
   const calculateCaloriesFromSteps = (steps: number, weight: number): number => {
     return Math.round(0.0004 * weight * steps);
   };
+
+  // Dismiss a single reminder (store locally)
+  const dismissReminder = async (reminderId: string) => {
+    try {
+      const updatedDismissed = [...dismissedReminderIds, reminderId];
+      setDismissedReminderIds(updatedDismissed);
+      await AsyncStorage.setItem('@fitforbaby_dismissed_reminders', JSON.stringify(updatedDismissed));
+      // Update broadcasts to remove dismissed one
+      setBroadcasts(prev => prev.filter(b => b.id !== reminderId));
+    } catch (error) {
+      console.log('Error dismissing reminder:', error);
+    }
+  };
+
+  // Clear all reminders (store all as dismissed)
+  const clearAllReminders = async () => {
+    try {
+      const allIds = broadcasts.map(b => b.id).filter(Boolean) as string[];
+      const updatedDismissed = [...new Set([...dismissedReminderIds, ...allIds])];
+      setDismissedReminderIds(updatedDismissed);
+      await AsyncStorage.setItem('@fitforbaby_dismissed_reminders', JSON.stringify(updatedDismissed));
+      setBroadcasts([]);
+    } catch (error) {
+      console.log('Error clearing reminders:', error);
+    }
+  };
+
+  // Load dismissed reminder IDs on mount
+  useEffect(() => {
+    const loadDismissedReminders = async () => {
+      try {
+        const dismissed = await AsyncStorage.getItem('@fitforbaby_dismissed_reminders');
+        if (dismissed) {
+          setDismissedReminderIds(JSON.parse(dismissed));
+        }
+      } catch (error) {
+        console.log('Error loading dismissed reminders:', error);
+      }
+    };
+    loadDismissedReminders();
+  }, []);
 
   // Progress data for the selected date - uses preloaded data
   const getProgressDataForDate = () => {
@@ -294,10 +338,15 @@ export default function UserHomeScreen() {
             const nursingVisits = await nursingVisitService.getUpcoming(coupleId);
             setUpcomingNursingVisits(nursingVisits);
             
-            // Fetch recent reminders (last 7 days) - filter out broadcasts
+            // Fetch recent reminders (last 7 days) - filter out broadcasts and dismissed ones
             const recentBroadcasts = await broadcastService.getRecent(7);
+            // Load dismissed IDs
+            const dismissedJson = await AsyncStorage.getItem('@fitforbaby_dismissed_reminders');
+            const dismissedIds = dismissedJson ? JSON.parse(dismissedJson) : [];
             // Reminders show on home page, broadcasts show in messages Announcements
-            const remindersOnly = recentBroadcasts.filter(b => b.type === 'reminder' || b.type === undefined);
+            const remindersOnly = recentBroadcasts.filter(b => 
+              (b.type === 'reminder' || b.type === undefined) && !dismissedIds.includes(b.id)
+            );
             setBroadcasts(remindersOnly);
             
             // Initialize streak from historical logs
@@ -769,6 +818,15 @@ export default function UserHomeScreen() {
                 <View style={styles.reminderBadgeCount}>
                   <Text style={styles.reminderBadgeCountText}>{broadcasts.length}</Text>
                 </View>
+                {/* Clear All Button */}
+                <TouchableOpacity
+                  style={styles.clearAllRemindersHeaderButton}
+                  onPress={clearAllReminders}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                  <Text style={styles.clearAllRemindersHeaderText}>Clear All</Text>
+                </TouchableOpacity>
               </View>
               <View style={styles.remindersContainer}>
                 {broadcasts.slice(0, 3).map((broadcast, index) => {
@@ -796,6 +854,14 @@ export default function UserHomeScreen() {
                               <Text style={[styles.priorityTagText, { color: '#f59e0b' }]}>Important</Text>
                             </View>
                           )}
+                          {/* Dismiss single reminder button */}
+                          <TouchableOpacity
+                            style={styles.dismissReminderButton}
+                            onPress={() => broadcast.id && dismissReminder(broadcast.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="close" size={16} color={colors.textSecondary} />
+                          </TouchableOpacity>
                         </View>
                         <Text style={[styles.reminderMessage, { color: colors.textSecondary }]} numberOfLines={2}>
                           {broadcast.message}
@@ -940,6 +1006,14 @@ export default function UserHomeScreen() {
                       <Text style={[styles.notificationTitle, { color: colors.text }]} numberOfLines={1}>
                         {notification.title}
                       </Text>
+                      {/* Dismiss single notification */}
+                      <TouchableOpacity
+                        style={styles.dismissReminderButton}
+                        onPress={() => dismissReminder(notification.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="close" size={16} color={colors.textSecondary} />
+                      </TouchableOpacity>
                     </View>
                     <Text style={[styles.notificationMessage, { color: colors.textSecondary }]} numberOfLines={3}>
                       {notification.message}
@@ -950,6 +1024,15 @@ export default function UserHomeScreen() {
                   </View>
                 </View>
               ))}
+              {/* Clear All Button in sidebar */}
+              <TouchableOpacity
+                style={styles.clearAllButton}
+                onPress={clearAllReminders}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                <Text style={styles.clearAllText}>Clear All Reminders</Text>
+              </TouchableOpacity>
             </>
           )}
         </ScrollView>
@@ -1216,8 +1299,8 @@ const styles = StyleSheet.create({
   },
   activityCard: {
     flex: 1,
-    minWidth: '47%',
-    maxWidth: '49%',
+    minWidth: isWeb ? '47%' : '100%',
+    maxWidth: isWeb ? '49%' : '100%',
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
@@ -1572,6 +1655,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  clearAllRemindersHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 'auto',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+  },
+  clearAllRemindersHeaderText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ef4444',
+  },
   remindersContainer: {
     gap: 12,
     marginBottom: 24,
@@ -1613,6 +1711,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
+  },
+  dismissReminderButton: {
+    padding: 4,
+    marginLeft: 4,
   },
   reminderMessage: {
     fontSize: 13,
