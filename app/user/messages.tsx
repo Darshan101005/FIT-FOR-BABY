@@ -8,18 +8,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Linking,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    KeyboardAvoidingView,
+    Linking,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -150,20 +150,23 @@ export default function MessagesScreen() {
   // Total unread = broadcasts + chat messages
   const totalUnreadCount = unreadBroadcastCount + chatUnreadCount;
 
-  // Fetch broadcasts and check which are unread
+  // Fetch broadcasts and check which are unread (filter out reminders - only show broadcasts)
   useEffect(() => {
     const fetchBroadcasts = async () => {
       setIsLoadingBroadcasts(true);
       try {
         const activeBroadcasts = await broadcastService.getActive();
-        setBroadcasts(activeBroadcasts);
+        // Filter to only show broadcasts (not reminders) in Announcements section
+        // Reminders are shown on the home page bell icon instead
+        const broadcastsOnly = activeBroadcasts.filter(b => b.type !== 'reminder');
+        setBroadcasts(broadcastsOnly);
 
         // Check last read timestamp to determine unread count
         const lastReadStr = await AsyncStorage.getItem(BROADCASTS_READ_KEY);
         const lastReadTime = lastReadStr ? parseInt(lastReadStr) : 0;
         
         // Count broadcasts created after last read time
-        const unreadCount = activeBroadcasts.filter(b => {
+        const unreadCount = broadcastsOnly.filter(b => {
           const createdAt = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt as any);
           return createdAt.getTime() > lastReadTime;
         }).length;

@@ -2,12 +2,18 @@ import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { HomePageSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
 import { broadcastService, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, formatDateString, globalSettingsService, nursingVisitService } from '@/services/firestore.service';
+import {
+    addNotificationReceivedListener,
+    addNotificationResponseListener,
+    registerForPushNotificationsAsync,
+    savePushTokenForUser
+} from '@/services/notification.service';
 import { Broadcast, GlobalSettings, NursingDepartmentVisit } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Animated,
     Platform,
@@ -97,12 +103,70 @@ export default function UserHomeScreen() {
     currentStreak: 0, 
     longestStreak: 0 
   });
+
+  // Push notification token
+  const [pushToken, setPushToken] = useState<string | null>(null);
   
   const dates = generateDates(isMobile);
   const todayIndex = isMobile ? 3 : 3; // Today is always at index 3
   
   // Check if selected date is today (only allow logging for today)
   const isSelectedDateToday = dates[selectedDateIndex]?.isToday || false;
+
+  // Register for push notifications on mount
+  useEffect(() => {
+    const setupPushNotifications = async () => {
+      try {
+        // Register for push notifications
+        const token = await registerForPushNotificationsAsync();
+        if (token) {
+          setPushToken(token);
+          
+          // Save token to Firestore for this user
+          const coupleId = await AsyncStorage.getItem('coupleId');
+          const userGender = await AsyncStorage.getItem('userGender');
+          
+          if (coupleId && userGender) {
+            await savePushTokenForUser(coupleId, userGender as 'male' | 'female', token);
+            console.log('Push token saved successfully');
+          }
+        }
+      } catch (error) {
+        console.log('Error setting up push notifications:', error);
+      }
+    };
+
+    setupPushNotifications();
+
+    // Set up notification listeners
+    const notificationReceivedListener = addNotificationReceivedListener(async notification => {
+      console.log('Notification received:', notification);
+      // Refresh reminders when a new notification is received
+      try {
+        const recentBroadcasts = await broadcastService.getRecent(7);
+        // Filter to only show reminders on home page (not broadcasts)
+        const remindersOnly = recentBroadcasts.filter(b => b.type === 'reminder' || b.type === undefined);
+        setBroadcasts(remindersOnly);
+      } catch (error) {
+        console.log('Error refreshing reminders:', error);
+      }
+    });
+
+    const notificationResponseListener = addNotificationResponseListener(response => {
+      console.log('Notification response:', response);
+      // Handle notification tap - navigate to appropriate screen
+      const data = response.notification.request.content.data;
+      if (data?.screen) {
+        router.push(data.screen as any);
+      }
+    });
+
+    // Cleanup listeners on unmount
+    return () => {
+      notificationReceivedListener.remove();
+      notificationResponseListener.remove();
+    };
+  }, []);
 
   // Calculate time from steps (100 steps per minute for normal walking)
   const calculateTimeFromSteps = (steps: number): number => {
@@ -230,9 +294,11 @@ export default function UserHomeScreen() {
             const nursingVisits = await nursingVisitService.getUpcoming(coupleId);
             setUpcomingNursingVisits(nursingVisits);
             
-            // Fetch recent broadcasts (last 7 days)
+            // Fetch recent reminders (last 7 days) - filter out broadcasts
             const recentBroadcasts = await broadcastService.getRecent(7);
-            setBroadcasts(recentBroadcasts);
+            // Reminders show on home page, broadcasts show in messages Announcements
+            const remindersOnly = recentBroadcasts.filter(b => b.type === 'reminder' || b.type === undefined);
+            setBroadcasts(remindersOnly);
             
             // Initialize streak from historical logs
             const streak = await coupleService.initializeStreak(coupleId, userGender as 'male' | 'female');
@@ -694,6 +760,66 @@ export default function UserHomeScreen() {
               <Ionicons name="bulb" size={16} color="#f59e0b" />
             </View>
           </View>
+
+          {/* Reminders Section - Shows broadcasts from admin */}
+          {broadcasts.length > 0 && (
+            <>
+              <View style={styles.remindersSectionHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Reminders</Text>
+                <View style={styles.reminderBadgeCount}>
+                  <Text style={styles.reminderBadgeCountText}>{broadcasts.length}</Text>
+                </View>
+              </View>
+              <View style={styles.remindersContainer}>
+                {broadcasts.slice(0, 3).map((broadcast, index) => {
+                  const priorityColor = broadcast.priority === 'urgent' ? '#ef4444' : 
+                                       broadcast.priority === 'important' ? '#f59e0b' : '#006dab';
+                  return (
+                    <View 
+                      key={broadcast.id || index} 
+                      style={[styles.reminderCard, { backgroundColor: colors.cardBackground }]}
+                    >
+                      <View style={[styles.reminderPriorityBar, { backgroundColor: priorityColor }]} />
+                      <View style={styles.reminderContent}>
+                        <View style={styles.reminderHeader}>
+                          <Ionicons name="megaphone" size={16} color={priorityColor} />
+                          <Text style={[styles.reminderTitle, { color: colors.text }]} numberOfLines={1}>
+                            {broadcast.title}
+                          </Text>
+                          {broadcast.priority === 'urgent' && (
+                            <View style={[styles.priorityTag, { backgroundColor: '#fee2e2' }]}>
+                              <Text style={[styles.priorityTagText, { color: '#ef4444' }]}>Urgent</Text>
+                            </View>
+                          )}
+                          {broadcast.priority === 'important' && (
+                            <View style={[styles.priorityTag, { backgroundColor: '#fef3c7' }]}>
+                              <Text style={[styles.priorityTagText, { color: '#f59e0b' }]}>Important</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.reminderMessage, { color: colors.textSecondary }]} numberOfLines={2}>
+                          {broadcast.message}
+                        </Text>
+                        <Text style={[styles.reminderTime, { color: colors.textSecondary }]}>
+                          {formatTimeAgo(broadcast.sentAt)}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+                {broadcasts.length > 3 && (
+                  <TouchableOpacity
+                    style={styles.viewAllRemindersButton}
+                    onPress={openNotificationSidebar}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.viewAllRemindersText}>View all {broadcasts.length} reminders</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#006dab" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+          )}
 
           {/* Upcoming Nursing Department Visits */}
           {upcomingNursingVisits.length > 0 && (
@@ -1418,6 +1544,91 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   viewAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#006dab',
+  },
+  
+  // Reminders Section Styles
+  remindersSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 10,
+  },
+  reminderBadgeCount: {
+    backgroundColor: '#ef4444',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  reminderBadgeCountText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  remindersContainer: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  reminderCard: {
+    flexDirection: 'row',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  reminderPriorityBar: {
+    width: 4,
+  },
+  reminderContent: {
+    flex: 1,
+    padding: 14,
+  },
+  reminderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  reminderTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+  },
+  priorityTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  priorityTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  reminderMessage: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 6,
+  },
+  reminderTime: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  viewAllRemindersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  viewAllRemindersText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#006dab',

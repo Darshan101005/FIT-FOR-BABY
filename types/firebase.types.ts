@@ -866,6 +866,7 @@ export const COLLECTIONS = {
 
 export type BroadcastStatus = 'draft' | 'sent' | 'scheduled';
 export type BroadcastPriority = 'normal' | 'important' | 'urgent';
+export type BroadcastType = 'reminder' | 'broadcast'; // reminder = from Send Reminder, broadcast = from Message Broadcast
 
 export interface Broadcast {
   id: string;
@@ -875,6 +876,7 @@ export interface Broadcast {
   message: string; // Max 178 chars (standard push notification limit)
   
   // Metadata
+  type?: BroadcastType; // 'reminder' for daily logs, 'broadcast' for custom announcements
   priority: BroadcastPriority;
   status: BroadcastStatus;
   

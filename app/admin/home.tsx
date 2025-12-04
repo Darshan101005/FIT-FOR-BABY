@@ -1,4 +1,5 @@
 import { adminService, chatService, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService } from '@/services/firestore.service';
+import { sendMissingLogsReminder } from '@/services/notification.service';
 import { Admin, Chat, Couple } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -6,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Modal,
   Platform,
@@ -189,6 +191,12 @@ export default function AdminHomeScreen() {
   const [recentChats, setRecentChats] = useState<Chat[]>([]);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
+
+  // Reminder sending state
+  const [isSendingReminder, setIsSendingReminder] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminderStatus, setReminderStatus] = useState<'confirm' | 'sending' | 'success' | 'error'>('confirm');
+  const [reminderMessage, setReminderMessage] = useState('');
 
   // Format date as YYYY-MM-DD
   const formatDate = (date: Date): string => {
@@ -506,6 +514,54 @@ export default function AdminHomeScreen() {
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+  };
+
+  // Open reminder confirmation modal
+  const handleSendReminder = () => {
+    if (logsNotCompletedCouples.length === 0) {
+      setReminderStatus('error');
+      setReminderMessage('All couples have completed their logs today!');
+      setShowReminderModal(true);
+      return;
+    }
+    setReminderStatus('confirm');
+    setReminderMessage(`Send reminder to ${logsNotCompletedCouples.length} couple(s) with pending logs?`);
+    setShowReminderModal(true);
+  };
+
+  // Execute sending reminder
+  const executeSendReminder = async () => {
+    setReminderStatus('sending');
+    setIsSendingReminder(true);
+    try {
+      const coupleIds = logsNotCompletedCouples.map(c => c.coupleId);
+      const result = await sendMissingLogsReminder(coupleIds, adminName);
+      
+      if (result.success) {
+        setReminderStatus('success');
+        setReminderMessage(
+          result.error 
+            ? result.error 
+            : `Reminder sent to ${result.sentCount} couple(s). Users will see it in their app.`
+        );
+      } else {
+        setReminderStatus('error');
+        setReminderMessage(result.error || 'Could not send reminders. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Error sending reminder:', error);
+      setReminderStatus('error');
+      setReminderMessage('Failed to send reminders. Please try again.');
+    } finally {
+      setIsSendingReminder(false);
+    }
+  };
+
+  // Close reminder modal
+  const closeReminderModal = () => {
+    setShowReminderModal(false);
+    setReminderStatus('confirm');
+    setReminderMessage('');
   };
 
   // Load notifications on mount
@@ -936,9 +992,24 @@ export default function AdminHomeScreen() {
           </View>
           
           {logsNotCompletedCouples.length > 0 && (
-            <TouchableOpacity style={styles.sendReminderButton}>
-              <Ionicons name="notifications" size={18} color="#fff" />
-              <Text style={styles.sendReminderText}>{isMobile ? 'Send Reminder' : 'Send Reminder to All Pending'}</Text>
+            <TouchableOpacity 
+              style={[styles.sendReminderButton, isSendingReminder && styles.sendReminderButtonDisabled]}
+              onPress={handleSendReminder}
+              disabled={isSendingReminder}
+              activeOpacity={0.8}
+            >
+              {isSendingReminder ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="notifications" size={18} color="#fff" />
+              )}
+              <Text style={styles.sendReminderText}>
+                {isSendingReminder 
+                  ? 'Sending...' 
+                  : isMobile 
+                    ? 'Send Reminder' 
+                    : 'Send Reminder to All Pending'}
+              </Text>
             </TouchableOpacity>
           )}
         </>
@@ -1107,8 +1178,96 @@ export default function AdminHomeScreen() {
       </ScrollView>
       {renderSearchModal()}
       {renderNotificationModal()}
+      {renderReminderModal()}
     </View>
   );
+
+  // Reminder Modal - Styled confirmation and status
+  function renderReminderModal() {
+    return (
+      <Modal
+        visible={showReminderModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeReminderModal}
+      >
+        <View style={styles.reminderModalOverlay}>
+          <View style={[styles.reminderModalContent, isMobile && styles.reminderModalContentMobile]}>
+            {/* Icon based on status */}
+            <View style={[
+              styles.reminderModalIconContainer,
+              reminderStatus === 'success' && { backgroundColor: COLORS.success + '15' },
+              reminderStatus === 'error' && { backgroundColor: COLORS.error + '15' },
+              reminderStatus === 'sending' && { backgroundColor: COLORS.primary + '15' },
+              reminderStatus === 'confirm' && { backgroundColor: COLORS.warning + '15' },
+            ]}>
+              {reminderStatus === 'sending' ? (
+                <ActivityIndicator size="large" color={COLORS.primary} />
+              ) : reminderStatus === 'success' ? (
+                <Ionicons name="checkmark-circle" size={48} color={COLORS.success} />
+              ) : reminderStatus === 'error' ? (
+                <Ionicons name="alert-circle" size={48} color={COLORS.error} />
+              ) : (
+                <Ionicons name="notifications" size={48} color={COLORS.warning} />
+              )}
+            </View>
+
+            {/* Title */}
+            <Text style={styles.reminderModalTitle}>
+              {reminderStatus === 'sending' ? 'Sending Reminder...' :
+               reminderStatus === 'success' ? 'Reminder Sent! 🔔' :
+               reminderStatus === 'error' ? 'Oops!' :
+               'Send Reminder'}
+            </Text>
+
+            {/* Message */}
+            <Text style={styles.reminderModalMessage}>
+              {reminderStatus === 'sending' 
+                ? 'Please wait while we send reminders to all pending couples...'
+                : reminderMessage}
+            </Text>
+
+            {/* Buttons */}
+            <View style={styles.reminderModalButtons}>
+              {reminderStatus === 'confirm' ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.reminderModalCancelButton}
+                    onPress={closeReminderModal}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.reminderModalCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.reminderModalSendButton}
+                    onPress={executeSendReminder}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="send" size={18} color="#fff" />
+                    <Text style={styles.reminderModalSendText}>Send Now</Text>
+                  </TouchableOpacity>
+                </>
+              ) : reminderStatus === 'sending' ? null : (
+                <TouchableOpacity
+                  style={[
+                    styles.reminderModalDoneButton,
+                    reminderStatus === 'success' && { backgroundColor: COLORS.success },
+                    reminderStatus === 'error' && { backgroundColor: COLORS.error },
+                  ]}
+                  onPress={closeReminderModal}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.reminderModalDoneText}>
+                    {reminderStatus === 'success' ? 'Great!' : 'Close'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   // Notification Modal
   function renderNotificationModal() {
@@ -1767,8 +1926,108 @@ const styles = StyleSheet.create({
     marginTop: 16,
     gap: 8,
   },
+  sendReminderButtonDisabled: {
+    opacity: 0.7,
+  },
   sendReminderText: {
     fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+
+  // Reminder Modal Styles
+  reminderModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  reminderModalContent: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  reminderModalContentMobile: {
+    maxWidth: '100%',
+    padding: 24,
+  },
+  reminderModalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  reminderModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  reminderModalMessage: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+  reminderModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  reminderModalCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reminderModalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  reminderModalSendButton: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  reminderModalSendText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  reminderModalDoneButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reminderModalDoneText: {
+    fontSize: 15,
     fontWeight: '600',
     color: '#fff',
   },
