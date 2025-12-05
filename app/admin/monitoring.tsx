@@ -17,6 +17,7 @@ import {
   View,
   useWindowDimensions
 } from 'react-native';
+import { FIT_FOR_BABY_LOGO } from '../../constants/logo';
 import { CoupleStepEntry, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
@@ -446,50 +447,123 @@ export default function AdminMonitoringScreen() {
     }
   };
 
-  // Generate export data
-  const generateExportData = () => {
+  // Helper to generate all dates between start and end
+  const getDatesBetween = (startDate: string, endDate: string): string[] => {
+    const dates: string[] = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dates.push(d.toISOString().split('T')[0]);
+    }
+    return dates;
+  };
+
+  // Generate export data - fetches data for the entire date range
+  const generateExportData = async () => {
     const dateRange = getExportDateRange();
     const exportData: any[] = [];
+    const dates = getDatesBetween(dateRange.start, dateRange.end);
+    const stepGoal = 7000;
+    const exerciseGoal = 60;
     
-    filteredLogs.forEach(log => {
-      const details = coupleDetails[log.coupleId];
+    // Get all couple IDs from the current logs
+    const coupleIds = logs.map(log => log.coupleId);
+    
+    // Fetch data for each couple for each date in the range
+    for (const coupleId of coupleIds) {
+      const details = coupleDetails[coupleId];
       
       // Get actual names with proper fallback
       const maleName = details?.maleName && details.maleName !== 'Male Partner' 
         ? details.maleName 
-        : (details?.maleEmail?.split('@')[0] || log.coupleId + '_M');
+        : (details?.maleEmail?.split('@')[0] || coupleId + '_M');
       const femaleName = details?.femaleName && details.femaleName !== 'Female Partner' 
         ? details.femaleName 
-        : (details?.femaleEmail?.split('@')[0] || log.coupleId + '_F');
+        : (details?.femaleEmail?.split('@')[0] || coupleId + '_F');
       
-      exportData.push({
-        coupleId: log.coupleId,
-        maleName: maleName,
-        femaleName: femaleName,
-        maleEmail: details?.maleEmail || 'N/A',
-        femaleEmail: details?.femaleEmail || 'N/A',
-        malePhone: details?.malePhone || 'N/A',
-        femalePhone: details?.femalePhone || 'N/A',
-        enrollmentDate: details?.enrollmentDate || 'N/A',
-        reportDate: log.date || selectedDate,
-        maleSteps: log.steps.maleCount || 0,
-        femaleSteps: log.steps.femaleCount || 0,
-        maleStepsStatus: log.steps.male || 'pending',
-        femaleStepsStatus: log.steps.female || 'pending',
-        maleExerciseDuration: log.exercise.maleDuration || 0,
-        maleExerciseCalories: log.exercise.maleCalories || 0,
-        femaleExerciseDuration: log.exercise.femaleDuration || 0,
-        femaleExerciseCalories: log.exercise.femaleCalories || 0,
-        maleExerciseStatus: log.exercise.male || 'pending',
-        femaleExerciseStatus: log.exercise.female || 'pending',
-        maleDietStatus: log.diet.male || 'pending',
-        femaleDietStatus: log.diet.female || 'pending',
-        maleWeight: details?.maleWeight || 'N/A',
-        femaleWeight: details?.femaleWeight || 'N/A',
-        maleWeightStatus: log.weight.male || 'pending',
-        femaleWeightStatus: log.weight.female || 'pending',
-        coupleWalkingStatus: log.coupleWalking || 'pending',
-      });
+      for (const date of dates) {
+        try {
+          // Fetch step data for this date
+          const [maleSteps, femaleSteps] = await Promise.all([
+            coupleStepsService.getByDate(coupleId, 'male', date),
+            coupleStepsService.getByDate(coupleId, 'female', date)
+          ]);
+          
+          // Fetch exercise data for this date
+          const [maleExercise, femaleExercise] = await Promise.all([
+            coupleExerciseService.getTotalsForDate(coupleId, 'male', date),
+            coupleExerciseService.getTotalsForDate(coupleId, 'female', date)
+          ]);
+          
+          const maleStepCount = maleSteps.reduce((sum: number, entry: CoupleStepEntry) => sum + entry.stepCount, 0);
+          const femaleStepCount = femaleSteps.reduce((sum: number, entry: CoupleStepEntry) => sum + entry.stepCount, 0);
+          
+          // Determine statuses
+          const getMaleStepStatus = (): LogStatus => {
+            if (maleStepCount >= stepGoal) return 'complete';
+            if (maleStepCount > 0) return 'partial';
+            return 'pending';
+          };
+          
+          const getFemaleStepStatus = (): LogStatus => {
+            if (femaleStepCount >= stepGoal) return 'complete';
+            if (femaleStepCount > 0) return 'partial';
+            return 'pending';
+          };
+          
+          const getMaleExerciseStatus = (): LogStatus => {
+            if (maleExercise.duration >= exerciseGoal) return 'complete';
+            if (maleExercise.duration > 0) return 'partial';
+            return 'pending';
+          };
+          
+          const getFemaleExerciseStatus = (): LogStatus => {
+            if (femaleExercise.duration >= exerciseGoal) return 'complete';
+            if (femaleExercise.duration > 0) return 'partial';
+            return 'pending';
+          };
+          
+          exportData.push({
+            coupleId: coupleId,
+            maleName: maleName,
+            femaleName: femaleName,
+            maleEmail: details?.maleEmail || 'N/A',
+            femaleEmail: details?.femaleEmail || 'N/A',
+            malePhone: details?.malePhone || 'N/A',
+            femalePhone: details?.femalePhone || 'N/A',
+            enrollmentDate: details?.enrollmentDate || 'N/A',
+            reportDate: date,
+            maleSteps: maleStepCount,
+            femaleSteps: femaleStepCount,
+            maleStepsStatus: getMaleStepStatus(),
+            femaleStepsStatus: getFemaleStepStatus(),
+            maleExerciseDuration: maleExercise.duration || 0,
+            maleExerciseCalories: maleExercise.calories || 0,
+            femaleExerciseDuration: femaleExercise.duration || 0,
+            femaleExerciseCalories: femaleExercise.calories || 0,
+            maleExerciseStatus: getMaleExerciseStatus(),
+            femaleExerciseStatus: getFemaleExerciseStatus(),
+            maleDietStatus: 'pending',
+            femaleDietStatus: 'pending',
+            maleWeight: details?.maleWeight || 'N/A',
+            femaleWeight: details?.femaleWeight || 'N/A',
+            maleWeightStatus: 'pending',
+            femaleWeightStatus: 'pending',
+            coupleWalkingStatus: 'pending',
+          });
+        } catch (error) {
+          console.error(`Error fetching data for couple ${coupleId} on ${date}:`, error);
+        }
+      }
+    }
+    
+    // Sort by date then coupleId
+    exportData.sort((a, b) => {
+      if (a.reportDate !== b.reportDate) {
+        return a.reportDate.localeCompare(b.reportDate);
+      }
+      return a.coupleId.localeCompare(b.coupleId);
     });
     
     return { data: exportData, dateRange };
@@ -499,7 +573,7 @@ export default function AdminMonitoringScreen() {
   const exportToCSV = async () => {
     setIsExporting(true);
     try {
-      const { data, dateRange } = generateExportData();
+      const { data, dateRange } = await generateExportData();
       
       // CSV Headers - Clean and organized
       const headers = [
@@ -598,7 +672,7 @@ export default function AdminMonitoringScreen() {
   const exportToPDF = async () => {
     setIsExporting(true);
     try {
-      const { data, dateRange } = generateExportData();
+      const { data, dateRange } = await generateExportData();
       
       // Generate HTML content for PDF with professional design
       const htmlContent = `
@@ -636,14 +710,15 @@ export default function AdminMonitoringScreen() {
     .logo-placeholder {
       width: 60px;
       height: 60px;
-      background: linear-gradient(135deg, #006dab 0%, #0088d4 100%);
       border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
-      font-size: 24px;
-      font-weight: bold;
+    }
+    .logo-placeholder img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
     }
     .header-text h1 { 
       font-size: 24px; 
@@ -807,7 +882,7 @@ export default function AdminMonitoringScreen() {
   <div class="report-container">
     <div class="header">
       <div class="header-left">
-        <div class="logo-placeholder">FFB</div>
+        <div class="logo-placeholder"><img src="${FIT_FOR_BABY_LOGO}" alt="Fit for Baby" /></div>
         <div class="header-text">
           <h1>Fit for Baby</h1>
           <p>Monitoring & Activity Report</p>
@@ -947,7 +1022,7 @@ export default function AdminMonitoringScreen() {
   const exportToExcel = async () => {
     setIsExporting(true);
     try {
-      const { data, dateRange } = generateExportData();
+      const { data, dateRange } = await generateExportData();
       
       // Generate Excel-compatible XML (SpreadsheetML) with better structure
       const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
