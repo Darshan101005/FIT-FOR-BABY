@@ -2,15 +2,21 @@ import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { MobileProfileCardSkeleton, QuestionnaireCardSkeleton, WebProfileCardSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
+import { cloudinaryService } from '@/services/cloudinary.service';
 import { coupleService, questionnaireService } from '@/services/firestore.service';
 import { QuestionnaireProgress } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     Animated,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
@@ -33,6 +39,7 @@ interface ProfileData {
   initials: string;
   userGender: 'male' | 'female';
   partnerGender: 'male' | 'female';
+  profilePhoto?: string; // Cloudinary URL
 }
 
 // Custom Toggle Component for consistent styling across platforms
@@ -113,7 +120,8 @@ export default function ProfileScreen() {
     userInfo, 
     questionnaire: cachedQuestionnaire, 
     streak: cachedStreak,
-    isInitialized 
+    isInitialized,
+    refreshUserInfo 
   } = useUserData();
 
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
@@ -125,6 +133,10 @@ export default function ProfileScreen() {
   const [stepTracking, setStepTracking] = useState(true);
   const [partnerSync, setPartnerSync] = useState(true);
   const [isLoading, setIsLoading] = useState(true); // Always start with loading
+  
+  // Profile photo states
+  const [isPhotoModalVisible, setIsPhotoModalVisible] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   
   // Profile data from Firestore
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
@@ -159,6 +171,7 @@ export default function ProfileScreen() {
         initials,
         userGender: userInfo.gender || 'male',
         partnerGender: userInfo.gender === 'male' ? 'female' : 'male',
+        profilePhoto: userInfo.profilePhoto,
       });
       
       setNotifications(userInfo.pushNotificationsEnabled !== false);
@@ -216,6 +229,7 @@ export default function ProfileScreen() {
                 initials,
                 userGender: userGender as 'male' | 'female',
                 partnerGender: userGender === 'male' ? 'female' : 'male',
+                profilePhoto: user.profilePhoto,
               });
               
               // Load push notification setting (default to true)
@@ -322,6 +336,126 @@ export default function ProfileScreen() {
     }, 2500);
   };
 
+  // ============================================
+  // PROFILE PHOTO FUNCTIONS
+  // ============================================
+  
+  const handlePhotoPress = () => {
+    setIsPhotoModalVisible(true);
+  };
+
+  const pickImageFromGallery = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Please allow access to your photo library to upload a profile picture.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setIsPhotoModalVisible(false);
+        await uploadProfilePhoto(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      showToast('Failed to pick image', 'error');
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Please allow camera access to take a profile picture.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setIsPhotoModalVisible(false);
+        await uploadProfilePhoto(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      showToast('Failed to take photo', 'error');
+    }
+  };
+
+  const uploadProfilePhoto = async (imageUri: string) => {
+    if (!profileData) return;
+    
+    setIsUploadingPhoto(true);
+    try {
+      const userId = `${profileData.coupleId}_${profileData.userGender === 'male' ? 'M' : 'F'}`;
+      const photoUrl = await cloudinaryService.uploadProfilePicture(userId, imageUri);
+      
+      // Update Firestore
+      await coupleService.updateUserField(
+        profileData.coupleId,
+        profileData.userGender,
+        { [`${profileData.userGender}.profilePhoto`]: photoUrl }
+      );
+      
+      // Update local state immediately
+      setProfileData(prev => prev ? { ...prev, profilePhoto: photoUrl } : null);
+      
+      // Refresh global context so home page gets updated
+      await refreshUserInfo();
+      
+      showToast('Profile photo updated', 'success');
+    } catch (error) {
+      console.error('Error uploading profile photo:', error);
+      showToast('Failed to upload photo', 'error');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const deleteProfilePhoto = async () => {
+    if (!profileData) return;
+    
+    setIsPhotoModalVisible(false);
+    setIsUploadingPhoto(true);
+    
+    try {
+      // Update Firestore to remove photo URL (deleteField will be used)
+      await coupleService.updateUserField(
+        profileData.coupleId,
+        profileData.userGender,
+        { [`${profileData.userGender}.profilePhoto`]: null }
+      );
+      
+      // Update local state - set to null/undefined to show initials
+      setProfileData(prev => prev ? { ...prev, profilePhoto: undefined } : null);
+      
+      // Refresh global context so home page gets updated
+      await refreshUserInfo();
+      
+      showToast('Profile photo removed', 'success');
+    } catch (error) {
+      console.error('Error removing profile photo:', error);
+      showToast('Failed to remove photo', 'error');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  // ============================================
+  // END PROFILE PHOTO FUNCTIONS
+  // ============================================
+
   const handleLogout = async () => {
     try {
       // Clear all user-related storage
@@ -388,10 +522,27 @@ export default function ProfileScreen() {
         <>
           <View style={styles.profileCard}>
             <View style={styles.avatarContainer}>
-              <View style={[styles.avatar, { backgroundColor: colors.cardBackground }]}>
-                <Text style={[styles.avatarText, { color: colors.primary }]}>{profileData.initials}</Text>
-              </View>
-              <TouchableOpacity style={[styles.cameraButton, { backgroundColor: colors.cardBackground }]}>
+              {isUploadingPhoto ? (
+                <View style={[styles.avatar, { backgroundColor: colors.cardBackground }]}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : profileData.profilePhoto ? (
+                <Image
+                  source={{ uri: `${profileData.profilePhoto}?t=${Date.now()}` }}
+                  style={styles.avatarImage}
+                  contentFit="cover"
+                  {...(!isWeb && { cachePolicy: "none" })}
+                />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: colors.cardBackground }]}>
+                  <Text style={[styles.avatarText, { color: colors.primary }]}>{profileData.initials}</Text>
+                </View>
+              )}
+              <TouchableOpacity 
+                style={[styles.cameraButton, { backgroundColor: colors.cardBackground }]}
+                onPress={handlePhotoPress}
+                disabled={isUploadingPhoto}
+              >
                 <Ionicons name="camera" size={16} color={colors.primary} />
               </TouchableOpacity>
             </View>
@@ -451,10 +602,26 @@ export default function ProfileScreen() {
       <View style={[styles.webProfileCard, { backgroundColor: colors.cardBackground }]}>
         <View style={styles.webProfileRow}>
           <View style={styles.avatarContainer}>
-            <View style={[styles.avatar, { backgroundColor: colors.primary + '15' }]}>
-              <Text style={[styles.avatarText, { color: colors.primary }]}>{profileData.initials}</Text>
-            </View>
-            <TouchableOpacity style={[styles.cameraButton, { backgroundColor: colors.cardBackground, borderWidth: 1, borderColor: colors.border }]}>
+            {isUploadingPhoto ? (
+              <View style={[styles.avatar, { backgroundColor: colors.primary + '15' }]}>
+                <ActivityIndicator size="small" color={colors.primary} />
+              </View>
+            ) : profileData.profilePhoto ? (
+              <Image
+                source={{ uri: `${profileData.profilePhoto}?t=${Date.now()}` }}
+                style={styles.avatarImage}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: colors.primary + '15' }]}>
+                <Text style={[styles.avatarText, { color: colors.primary }]}>{profileData.initials}</Text>
+              </View>
+            )}
+            <TouchableOpacity 
+              style={[styles.cameraButton, { backgroundColor: colors.cardBackground, borderWidth: 1, borderColor: colors.border }]}
+              onPress={handlePhotoPress}
+              disabled={isUploadingPhoto}
+            >
               <Ionicons name="camera" size={14} color={colors.primary} />
             </TouchableOpacity>
           </View>
@@ -902,6 +1069,57 @@ export default function ProfileScreen() {
       
       {/* Bottom Navigation */}
       <BottomNavBar />
+
+      {/* Profile Photo Modal */}
+      <Modal
+        visible={isPhotoModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsPhotoModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setIsPhotoModalVisible(false)}
+        >
+          <View style={[styles.photoModalContent, { backgroundColor: colors.cardBackground }]}>
+            <Text style={[styles.photoModalTitle, { color: colors.text }]}>Profile Photo</Text>
+            
+            <TouchableOpacity 
+              style={[styles.photoModalOption, { borderBottomColor: colors.border }]}
+              onPress={takePhoto}
+            >
+              <Ionicons name="camera-outline" size={24} color={colors.primary} />
+              <Text style={[styles.photoModalOptionText, { color: colors.text }]}>Take Photo</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.photoModalOption, { borderBottomColor: colors.border }]}
+              onPress={pickImageFromGallery}
+            >
+              <Ionicons name="images-outline" size={24} color={colors.primary} />
+              <Text style={[styles.photoModalOptionText, { color: colors.text }]}>Choose from Gallery</Text>
+            </TouchableOpacity>
+            
+            {profileData?.profilePhoto && (
+              <TouchableOpacity 
+                style={[styles.photoModalOption, { borderBottomWidth: 0 }]}
+                onPress={deleteProfilePhoto}
+              >
+                <Ionicons name="trash-outline" size={24} color="#ef4444" />
+                <Text style={[styles.photoModalOptionText, { color: '#ef4444' }]}>Remove Photo</Text>
+              </TouchableOpacity>
+            )}
+            
+            <TouchableOpacity 
+              style={[styles.photoModalCancel, { backgroundColor: colors.inputBackground }]}
+              onPress={() => setIsPhotoModalVisible(false)}
+            >
+              <Text style={[styles.photoModalCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1060,6 +1278,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
   },
   avatarText: {
     fontSize: 28,
@@ -1280,5 +1503,46 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     color: '#94a3b8',
+  },
+  // Photo Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  photoModalContent: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 20,
+    padding: 20,
+  },
+  photoModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  photoModalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    gap: 16,
+  },
+  photoModalOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  photoModalCancel: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  photoModalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

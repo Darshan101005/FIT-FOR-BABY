@@ -881,7 +881,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingBottom: isWeb ? 40 : 60,
   },
-  faqSection: { marginTop: 24, marginBottom: 24 },
+  faqSection: { marginTop: 16, marginBottom: 12 },
   faqCard: {
     borderRadius: 16,
     padding: 20,

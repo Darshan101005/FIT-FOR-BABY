@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
     Animated,
@@ -95,6 +95,7 @@ export default function ChatScreen() {
   const [userName, setUserName] = useState<string>('');
   const [coupleId, setCoupleId] = useState<string>('');
   const [gender, setGender] = useState<'male' | 'female'>('male');
+  const [userProfilePhoto, setUserProfilePhoto] = useState<string | null>(null);
 
   // Chat state
   const [chat, setChat] = useState<Chat | null>(null);
@@ -137,6 +138,18 @@ export default function ChatScreen() {
           setCoupleId(storedCoupleId);
           setGender(storedGender as 'male' | 'female');
           setUserName(storedUserName || 'User');
+          
+          // Load profile photo from Firestore
+          try {
+            const { coupleService } = await import('@/services/firestore.service');
+            const couple = await coupleService.get(storedCoupleId);
+            if (couple) {
+              const user = couple[storedGender as 'male' | 'female'];
+              setUserProfilePhoto(user.profilePhoto || null);
+            }
+          } catch (e) {
+            console.log('Could not load profile photo:', e);
+          }
         } else {
           console.warn('Missing coupleId or userGender in AsyncStorage');
           setIsLoading(false);
@@ -559,11 +572,20 @@ export default function ChatScreen() {
 
                     {/* User avatar on right */}
                     {message.senderType === 'user' && (
-                      <View style={styles.userAvatarContainer}>
-                        <Text style={styles.userAvatarText}>
-                          {(userName || 'U').charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
+                      userProfilePhoto ? (
+                        <Image
+                          source={{ uri: `${userProfilePhoto}?t=${Date.now()}` }}
+                          style={styles.userAvatarImage}
+                          contentFit="cover"
+                          {...(!isWeb && { cachePolicy: "none" })}
+                        />
+                      ) : (
+                        <View style={styles.userAvatarContainer}>
+                          <Text style={styles.userAvatarText}>
+                            {(userName || 'U').charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )
                     )}
                   </View>
                 ))}
@@ -875,6 +897,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#006dab',
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 8,
+  },
+  userAvatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     marginLeft: 8,
   },
   userAvatarText: {

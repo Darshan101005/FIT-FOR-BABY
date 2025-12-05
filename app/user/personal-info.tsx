@@ -52,7 +52,7 @@ interface UserPersonalInfo {
   name: string;
   gender: 'male' | 'female';
   dateOfBirth: string;
-  profileImage: string | null;
+  profilePhoto: string | null;
   userId: string;
   coupleId: string;
   email: string;
@@ -75,7 +75,7 @@ export default function PersonalInfoScreen() {
   
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   
   // User data
@@ -83,7 +83,7 @@ export default function PersonalInfoScreen() {
     name: '',
     gender: 'male',
     dateOfBirth: '',
-    profileImage: null,
+    profilePhoto: null,
     userId: '',
     coupleId: '',
     email: '',
@@ -134,7 +134,7 @@ export default function PersonalInfoScreen() {
                 name: user.name || '',
                 gender: userGender,
                 dateOfBirth: user.dateOfBirth || '',
-                profileImage: user.profileImage || null,
+                profilePhoto: user.profilePhoto || null,
                 userId: user.id || '',
                 coupleId: coupleId,
                 email: user.email || '',
@@ -155,7 +155,7 @@ export default function PersonalInfoScreen() {
                   phone: partner.phone || '',
                 },
               });
-              setProfileImage(user.profileImage || null);
+              setProfilePhoto(user.profilePhoto || null);
             }
           }
         } catch (error) {
@@ -288,7 +288,7 @@ export default function PersonalInfoScreen() {
     });
     
     if (!result.canceled && result.assets[0]) {
-      setProfileImage(result.assets[0].uri);
+      setProfilePhoto(result.assets[0].uri);
       showToast('Profile photo updated', 'success');
       // TODO: Upload to Firebase Storage and save URL
     }
@@ -336,9 +336,13 @@ export default function PersonalInfoScreen() {
           onPress={pickImage}
           activeOpacity={0.8}
         >
-          {profileImage ? (
+          {profilePhoto ? (
             <View style={styles.avatarLarge}>
-              <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+              <Image 
+                source={{ uri: `${profilePhoto}?t=${Date.now()}` }} 
+                style={styles.avatarImage}
+                cachePolicy="none"
+              />
             </View>
           ) : (
             <View style={styles.avatarLarge}>

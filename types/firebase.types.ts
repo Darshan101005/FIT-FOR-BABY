@@ -910,6 +910,7 @@ export interface CoupleUser {
   phone?: string;
   age?: number;
   dateOfBirth?: string; // YYYY-MM-DD
+  profilePhoto?: string; // Cloudinary URL for profile picture
   
   // Physical Stats (entered later by user)
   weight?: number;

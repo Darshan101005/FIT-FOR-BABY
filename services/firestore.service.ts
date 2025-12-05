@@ -8,6 +8,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -807,10 +808,13 @@ export const coupleService = {
   async updateUserField(coupleId: string, gender: 'male' | 'female', data: Record<string, any>): Promise<void> {
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
     
-    // Filter out null/undefined values
+    // Handle data - use deleteField() for null values to actually remove from Firestore
     const cleanData: Record<string, any> = { updatedAt: now() };
     Object.entries(data).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
+      if (value === null) {
+        // Use deleteField() to remove the field from Firestore
+        cleanData[key] = deleteField();
+      } else if (value !== undefined && value !== '') {
         cleanData[key] = value;
       }
     });

@@ -71,6 +71,7 @@ export default function UserHomeScreen() {
     reminders: broadcasts,
     streakData,
     refreshDailyData,
+    refreshUserInfo,
     dismissReminder,
     clearAllReminders,
   } = useUserData();
@@ -137,14 +138,19 @@ export default function UserHomeScreen() {
     };
   }, [userInfo, refreshDailyData]);
 
-  // Refresh daily data when home page comes into focus (e.g., after logging steps/food/exercise)
+  // Refresh daily data and user info when home page comes into focus (e.g., after logging steps/food/exercise or updating profile)
   useFocusEffect(
     useCallback(() => {
       // Only refresh if we've already loaded once (not initial load)
       if (hasLoadedOnce) {
         refreshDailyData();
+        // Only refresh user info on mobile (for profile photo sync)
+        // On web, the context already handles real-time updates
+        if (!isWeb) {
+          refreshUserInfo();
+        }
       }
-    }, [hasLoadedOnce, refreshDailyData])
+    }, [hasLoadedOnce, refreshDailyData, refreshUserInfo])
   );
 
   // Calculate time from steps (100 steps per minute for normal walking)
@@ -337,8 +343,12 @@ export default function UserHomeScreen() {
                 onPress={() => router.push('/user/profile')}
                 activeOpacity={0.8}
               >
-                {userInfo?.profileImage ? (
-                  <Image source={{ uri: userInfo.profileImage }} style={styles.avatar} />
+                {userInfo?.profilePhoto ? (
+                  <Image 
+                    source={{ uri: `${userInfo.profilePhoto}?t=${Date.now()}` }} 
+                    style={styles.avatar}
+                    {...(!isWeb && { cachePolicy: "none" })}
+                  />
                 ) : (
                   <View style={[styles.avatarPlaceholder, { backgroundColor: '#006dab' }]}>
                     <Text style={styles.avatarText}>

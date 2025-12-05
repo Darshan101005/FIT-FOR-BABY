@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
-const GEMINI_API_KEY: string = 'GEMINI_API_KEY';
+const GEMINI_API_KEY: string = 'GEMINI_API_KEY'; // Replace with your actual Gemini API key
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 export interface StepValidationResult {

@@ -50,6 +50,7 @@ interface UserData {
   status: 'Active' | 'Inactive';
   dateOfBirth?: string;
   lastWeightDate?: string;
+  profilePhoto?: string;
 }
 
 export default function UserDashboardScreen() {
@@ -163,6 +164,7 @@ export default function UserDashboardScreen() {
               email: couple.male.email || '',
               status: couple.status === 'active' ? 'Active' : 'Inactive',
               dateOfBirth: couple.male.dateOfBirth,
+              profilePhoto: couple.male.profilePhoto,
             });
           }
           
@@ -179,6 +181,7 @@ export default function UserDashboardScreen() {
               email: couple.female.email || '',
               status: couple.status === 'active' ? 'Active' : 'Inactive',
               dateOfBirth: couple.female.dateOfBirth,
+              profilePhoto: couple.female.profilePhoto,
             });
           }
         }
@@ -402,9 +405,18 @@ export default function UserDashboardScreen() {
     return (
     <View style={[styles.userInfoCard, { flex: 1, borderLeftWidth: 4, borderLeftColor: isMale ? COLORS.primary : '#e91e8c' }]}>
       <View style={styles.userInfoHeader}>
-        <View style={[styles.userAvatar, { backgroundColor: isMale ? COLORS.primary : '#e91e8c' }]}>
-          <Ionicons name={isMale ? 'male' : 'female'} size={28} color="#fff" />
-        </View>
+        {user?.profilePhoto ? (
+          <Image
+            source={{ uri: `${user.profilePhoto}?t=${Date.now()}` }}
+            style={styles.userAvatarImage}
+            contentFit="cover"
+            cachePolicy="none"
+          />
+        ) : (
+          <View style={[styles.userAvatar, { backgroundColor: isMale ? COLORS.primary : '#e91e8c' }]}>
+            <Ionicons name={isMale ? 'male' : 'female'} size={28} color="#fff" />
+          </View>
+        )}
         <View style={styles.userInfoDetails}>
           <View style={styles.userNameRow}>
             <Text style={styles.userName}>{user?.name || 'N/A'}</Text>
@@ -2296,6 +2308,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  userAvatarImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
   },
   userInfoDetails: {
     flex: 1,

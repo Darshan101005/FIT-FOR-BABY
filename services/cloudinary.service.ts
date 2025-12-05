@@ -40,7 +40,7 @@ export const cloudinaryService = {
         const formData = new FormData();
         formData.append('file', blob, `upload_${Date.now()}.jpg`);
         formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
-        formData.append('folder', `fit_for_baby/${folder}`);
+        formData.append('folder', folder);
 
         const uploadResponse = await fetch(CLOUDINARY_UPLOAD_URL, {
           method: 'POST',
@@ -67,7 +67,7 @@ export const cloudinaryService = {
             fieldName: 'file',
             parameters: {
               upload_preset: CLOUDINARY_CONFIG.uploadPreset,
-              folder: `fit_for_baby/${folder}`,
+              folder: folder,
             },
           }
         );
@@ -96,7 +96,7 @@ export const cloudinaryService = {
     imageUri: string,
     onProgress?: (progress: number) => void
   ): Promise<string> {
-    return this.uploadImage(imageUri, `step_proofs/${userId}`, onProgress);
+    return this.uploadImage(imageUri, `Step-Counts/${userId}`, onProgress);
   },
 
   /**
@@ -129,7 +129,7 @@ export const cloudinaryService = {
     imageUri: string,
     onProgress?: (progress: number) => void
   ): Promise<string> {
-    return this.uploadImage(imageUri, `profile_pictures/${userId}`, onProgress);
+    return this.uploadImage(imageUri, `Profile/${userId}`, onProgress);
   },
 
   /**
@@ -147,6 +147,15 @@ export const cloudinaryService = {
    */
   getThumbnailUrl(url: string): string {
     return this.getOptimizedUrl(url, 150, 150);
+  },
+
+  /**
+   * Add cache busting parameter to URL to force reload
+   */
+  getCacheBustedUrl(url: string): string {
+    if (!url) return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}t=${Date.now()}`;
   },
 };
 

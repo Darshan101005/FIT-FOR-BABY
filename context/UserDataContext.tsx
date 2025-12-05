@@ -36,7 +36,7 @@ interface UserInfo {
   name: string;
   email: string;
   phone: string;
-  profileImage: string | null;
+  profilePhoto: string | null; // Cloudinary URL
   weight: number;
   height: number;
   partnerName: string;
@@ -247,7 +247,7 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
         name: user.name || userName || 'User',
         email: user.email || '',
         phone: user.phone || '',
-        profileImage: user.profileImage || null,
+        profilePhoto: user.profilePhoto || null,
         weight: user.weight || 60,
         height: user.height || 165,
         partnerName: partner.name || 'Partner',
