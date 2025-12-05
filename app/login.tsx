@@ -1,3 +1,4 @@
+import { useAuth } from '@/context/AuthContext';
 import { loginWithEmail } from '@/services/firebase';
 import { adminService, coupleService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   KeyboardAvoidingView,
@@ -27,6 +28,7 @@ type LoginMode = 'individual' | 'shared';
 export default function LoginScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
+  const { setSessionExpiry, refreshAuthState } = useAuth();
   const [loginMode, setLoginMode] = useState<LoginMode>('individual');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,6 +38,7 @@ export default function LoginScreen() {
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const spinnerAnim = useRef(new Animated.Value(0)).current;
+  const passwordInputRef = useRef<TextInput>(null);
 
   const isMobileWeb = useMemo(() => {
     if (!isWeb) return false;
@@ -135,12 +138,16 @@ export default function LoginScreen() {
       await AsyncStorage.setItem('coupleId', couple.id);
       await AsyncStorage.setItem('quickAccessMode', 'true');
       
+      // Refresh auth state so AuthContext knows about partial auth
+      await refreshAuthState();
+      
       setLoginState('success');
       showToast('Select your profile', 'success');
       
+      // Go directly to enter-pin with profile selection params
       setTimeout(() => {
-        router.push({
-          pathname: '/verify-otp',
+        router.replace({
+          pathname: '/user/enter-pin',
           params: { 
             mode: 'quick-access',
             coupleId: couple.id,
@@ -148,6 +155,7 @@ export default function LoginScreen() {
             femaleName: couple.female.name,
             maleStatus: couple.male.status,
             femaleStatus: couple.female.status,
+            showProfileSelection: 'true',
           }
         });
       }, 500);
@@ -202,6 +210,12 @@ export default function LoginScreen() {
 
             // Update last login
             await adminService.updateLastLogin(adminData.uid);
+            
+            // Set session expiry based on rememberMe
+            await setSessionExpiry(rememberMe);
+            
+            // Refresh auth context state to sync with AsyncStorage
+            await refreshAuthState();
 
             setLoginState('success');
             const roleLabel = adminData.role === 'owner' ? 'Owner' : 
@@ -269,6 +283,12 @@ export default function LoginScreen() {
 
           // Update last login
           await adminService.updateLastLogin(adminByPhone.uid);
+          
+          // Set session expiry based on rememberMe
+          await setSessionExpiry(rememberMe);
+          
+          // Refresh auth context state to sync with AsyncStorage
+          await refreshAuthState();
 
           setLoginState('success');
           const roleLabel = adminByPhone.role === 'owner' ? 'Owner' : 
@@ -341,17 +361,22 @@ export default function LoginScreen() {
       await AsyncStorage.setItem('coupleId', couple.id);
       await AsyncStorage.setItem('pendingProfileSelection', 'true');
       
+      // Refresh auth state so AuthContext knows about partial auth
+      await refreshAuthState();
+      
       setLoginState('success');
       showToast('Select your profile', 'success');
       
+      // Go directly to enter-pin with profile selection params
       setTimeout(() => {
-        router.push({
-          pathname: '/verify-otp',
+        router.replace({
+          pathname: '/user/enter-pin',
           params: { 
             mode: 'profile-select',
             coupleId: couple.id,
             maleName: couple.male.name,
             femaleName: couple.female.name,
+            showProfileSelection: 'true',
           }
         });
       }, 500);
@@ -385,6 +410,12 @@ export default function LoginScreen() {
     
     // Check if password reset is needed
     if (!user.isPasswordReset) {
+      // Set flag to indicate user is in setup flow - prevents auth redirects to home
+      await AsyncStorage.setItem('pendingSetup', 'password-reset');
+      // Refresh auth state so user is authenticated (needed to access /user/* routes)
+      // The pendingSetup flag will prevent redirect to home
+      await refreshAuthState();
+      
       setLoginState('success');
       showToast('Please reset your password', 'success');
       
@@ -403,6 +434,12 @@ export default function LoginScreen() {
     
     // Check if PIN needs to be set
     if (!user.isPinSet) {
+      // Set flag to indicate user is in setup flow - prevents auth redirects to home
+      await AsyncStorage.setItem('pendingSetup', 'pin-setup');
+      // Refresh auth state so user is authenticated (needed to access /user/* routes)
+      // The pendingSetup flag will prevent redirect to home
+      await refreshAuthState();
+      
       setLoginState('success');
       showToast('Please set your PIN', 'success');
       
@@ -421,6 +458,12 @@ export default function LoginScreen() {
     
     // Update last login
     await coupleService.updateLastLogin(couple.id, gender);
+    
+    // Set session expiry based on rememberMe
+    await setSessionExpiry(rememberMe);
+    
+    // Refresh auth context state to sync with AsyncStorage
+    await refreshAuthState();
     
     setLoginState('success');
     showToast(`Welcome ${user.name}!`, 'success');
@@ -488,8 +531,8 @@ export default function LoginScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder={loginMode === 'individual' 
-                        ? 'Enter your User ID, Email or Phone' 
-                        : 'Enter your Couple ID, Phone or Email'}
+                        ? 'Enter User ID, Email or Phone' 
+                        : 'Couple ID, Phone or Email'}
                       placeholderTextColor="#94a3b8"
                       value={email}
                       onChangeText={setEmail}
@@ -499,6 +542,15 @@ export default function LoginScreen() {
                       editable={loginState === 'idle'}
                       selectionColor="transparent"
                       underlineColorAndroid="transparent"
+                      returnKeyType={loginMode === 'individual' ? 'next' : 'go'}
+                      onSubmitEditing={() => {
+                        if (loginMode === 'individual') {
+                          passwordInputRef.current?.focus();
+                        } else {
+                          handleContinue();
+                        }
+                      }}
+                      blurOnSubmit={loginMode !== 'individual'}
                     />
                   </View>
                 </View>
@@ -509,6 +561,7 @@ export default function LoginScreen() {
                     <Text style={styles.label}>Password</Text>
                     <View style={styles.inputWrapper}>
                       <TextInput
+                        ref={passwordInputRef}
                         style={[styles.input, styles.passwordInput]}
                         placeholder="Enter your password"
                         placeholderTextColor="#94a3b8"
@@ -519,6 +572,8 @@ export default function LoginScreen() {
                         editable={loginState === 'idle'}
                         selectionColor="transparent"
                         underlineColorAndroid="transparent"
+                        returnKeyType="go"
+                        onSubmitEditing={handleContinue}
                       />
                       <TouchableOpacity
                         style={styles.eyeIcon}
