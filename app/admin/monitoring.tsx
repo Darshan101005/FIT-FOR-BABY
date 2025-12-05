@@ -5,19 +5,18 @@ import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
-import { FIT_FOR_BABY_LOGO } from '../../constants/logo';
 import { CoupleStepEntry, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
@@ -710,15 +709,14 @@ export default function AdminMonitoringScreen() {
     .logo-placeholder {
       width: 60px;
       height: 60px;
+      background: linear-gradient(135deg, #006dab 0%, #0088d4 100%);
       border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-    .logo-placeholder img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
     }
     .header-text h1 { 
       font-size: 24px; 
@@ -882,7 +880,7 @@ export default function AdminMonitoringScreen() {
   <div class="report-container">
     <div class="header">
       <div class="header-left">
-        <div class="logo-placeholder"><img src="${FIT_FOR_BABY_LOGO}" alt="Fit for Baby" /></div>
+        <div class="logo-placeholder">FFB</div>
         <div class="header-text">
           <h1>Fit for Baby</h1>
           <p>Monitoring & Activity Report</p>
