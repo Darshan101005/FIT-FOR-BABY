@@ -1,8 +1,9 @@
+import { useUserData } from '@/context/UserDataContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
@@ -36,6 +37,7 @@ export default function LogWeightScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
+  const { refreshWeightHistory, refreshUserInfo } = useUserData();
 
   const [step, setStep] = useState<'log' | 'history'>('log');
   const [weight, setWeight] = useState('');
@@ -199,6 +201,11 @@ export default function LogWeightScreen() {
       await coupleService.updateStreak(coupleId, userGender);
 
       showToast('Weight logged successfully!', 'success');
+      
+      // Refresh context data so other pages show updated values
+      refreshWeightHistory();
+      refreshUserInfo();
+      
       setWeight('');
       setWaist('');
       setNotes('');

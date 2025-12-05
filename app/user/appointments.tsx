@@ -1,24 +1,25 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { Skeleton } from '@/components/ui/SkeletonLoader';
 import { useApp } from '@/context/AppContext';
+import { useUserData } from '@/context/UserDataContext';
 import { doctorVisitService, formatDateString, nursingVisitService } from '@/services/firestore.service';
 import { DoctorVisit, NursingDepartmentVisit } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -35,7 +36,17 @@ export default function AppointmentsScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
 
-  // User data from AsyncStorage
+  // Get cached data from context
+  const { 
+    userInfo,
+    doctorVisits: cachedDoctorVisits, 
+    nursingVisits: cachedNursingVisits,
+    isInitialized,
+    refreshDoctorVisits,
+    refreshNursingVisits
+  } = useUserData();
+
+  // User data from context/AsyncStorage
   const [coupleId, setCoupleId] = useState<string>('');
   const [userGender, setUserGender] = useState<'male' | 'female'>('male');
   const [userName, setUserName] = useState<string>('');
@@ -50,10 +61,10 @@ export default function AppointmentsScreen() {
   const [doctorName, setDoctorName] = useState('');
   const [appointmentPurpose, setAppointmentPurpose] = useState('');
   
-  // Dynamic data from Firestore
+  // Local state synced with context
   const [doctorVisits, setDoctorVisits] = useState<DoctorVisit[]>([]);
   const [nursingVisits, setNursingVisits] = useState<NursingDepartmentVisit[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!isInitialized);
   
   const [activeSection, setActiveSection] = useState<'appointments' | 'nurseVisit'>('appointments');
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -61,10 +72,42 @@ export default function AppointmentsScreen() {
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
 
-  // Load data on focus
+  // Sync with context data
+  useEffect(() => {
+    if (userInfo) {
+      setCoupleId(userInfo.coupleId || '');
+      setUserGender(userInfo.gender || 'male');
+      setUserName(userInfo.name || '');
+    }
+  }, [userInfo]);
+
+  useEffect(() => {
+    if (cachedDoctorVisits) {
+      setDoctorVisits(cachedDoctorVisits);
+    }
+  }, [cachedDoctorVisits]);
+
+  useEffect(() => {
+    if (cachedNursingVisits) {
+      setNursingVisits(cachedNursingVisits);
+    }
+  }, [cachedNursingVisits]);
+
+  useEffect(() => {
+    if (isInitialized) {
+      setIsLoading(false);
+    }
+  }, [isInitialized]);
+
+  // Fallback load if context not ready (only on first load)
   useFocusEffect(
     useCallback(() => {
       const loadData = async () => {
+        // Only load if context data is not available
+        if (isInitialized && cachedDoctorVisits && cachedNursingVisits) {
+          return;
+        }
+
         setIsLoading(true);
         try {
           const storedCoupleId = await AsyncStorage.getItem('coupleId');
@@ -92,7 +135,7 @@ export default function AppointmentsScreen() {
       };
 
       loadData();
-    }, [])
+    }, [isInitialized, cachedDoctorVisits, cachedNursingVisits])
   );
 
   const showToast = (message: string, type: 'error' | 'success') => {
@@ -227,6 +270,9 @@ export default function AppointmentsScreen() {
       setDoctorVisits([savedVisit, ...doctorVisits]);
       showToast('Appointment logged successfully!', 'success');
       
+      // Refresh context cache
+      refreshDoctorVisits();
+      
       setDoctorName('');
       setAppointmentPurpose('');
       setSelectedDate(null);
@@ -245,6 +291,9 @@ export default function AppointmentsScreen() {
       await doctorVisitService.delete(coupleId, id);
       setDoctorVisits(doctorVisits.filter(apt => apt.id !== id));
       showToast('Appointment removed', 'success');
+      
+      // Refresh context cache
+      refreshDoctorVisits();
     } catch (error) {
       console.error('Error deleting appointment:', error);
       showToast('Failed to remove appointment', 'error');

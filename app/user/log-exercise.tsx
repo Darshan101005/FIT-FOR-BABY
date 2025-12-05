@@ -1,9 +1,10 @@
+import { useUserData } from '@/context/UserDataContext';
 import { coupleExerciseService, coupleService, globalSettingsService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
@@ -118,6 +119,7 @@ export default function LogExerciseScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
+  const { refreshDailyData } = useUserData();
 
   const [step, setStep] = useState<'type' | 'details' | 'summary'>('type');
   const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null);
@@ -156,7 +158,8 @@ export default function LogExerciseScreen() {
               coupleWalkingMinutes: settings.coupleWalkingMinutes || 60,
               highKneesMinutes: settings.highKneesMinutes || 30,
             });
-            setDailyExerciseGoal(settings.dailyExerciseMinutes || 60);
+            // Use coupleWalkingMinutes as the daily exercise goal
+            setDailyExerciseGoal(settings.coupleWalkingMinutes || 60);
           }
 
           // Load today's exercises
@@ -263,6 +266,10 @@ export default function LogExerciseScreen() {
       }
 
       showToast(`Exercise logged! ${caloriesBurned} cal burned.${goalMessage}`, 'success');
+      
+      // Refresh context data so home page shows updated values
+      refreshDailyData();
+      
       setTimeout(() => {
         router.back();
       }, 2000);
@@ -399,7 +406,7 @@ export default function LogExerciseScreen() {
                   styles.intensityOption,
                   intensity === level.id && styles.intensityOptionActive,
                 ]}
-                onPress={() => setIntensity(level.id)}
+                onPress={() => setIntensity(level.id as 'light' | 'moderate' | 'vigorous')}
               >
                 <Text
                   style={[

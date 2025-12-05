@@ -1,6 +1,7 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { ProgressPageSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
+import { useUserData } from '@/context/UserDataContext';
 import { CoupleWeightLog, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService, formatDateString, globalSettingsService } from '@/services/firestore.service';
 import { GlobalSettings } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     Platform,
     ScrollView,
@@ -68,6 +69,16 @@ export default function ProgressScreen() {
   const isMobile = screenWidth < 768;
   const { colors } = useTheme();
 
+  // Get cached data from context
+  const { 
+    userInfo, 
+    globalSettings: cachedGlobalSettings,
+    weeklyStats: cachedWeeklyStats,
+    weightHistory: cachedWeightHistory,
+    streak: cachedStreak,
+    isInitialized
+  } = useUserData();
+
   const [selectedRange, setSelectedRange] = useState('week');
   const [selectedMetric, setSelectedMetric] = useState<'steps' | 'calories' | 'exercise'>('steps');
   
@@ -93,6 +104,66 @@ export default function ProgressScreen() {
   // Global settings from Firestore
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedFull, setHasLoadedFull] = useState(false);
+
+  // Sync with context data for instant display
+  useEffect(() => {
+    if (userInfo) {
+      setCoupleId(userInfo.coupleId || null);
+      setUserGender(userInfo.gender || 'male');
+      if (userInfo.weight) {
+        setUserWeight(userInfo.weight);
+      }
+    }
+  }, [userInfo]);
+
+  useEffect(() => {
+    if (cachedGlobalSettings) {
+      setGlobalSettings(cachedGlobalSettings);
+    }
+  }, [cachedGlobalSettings]);
+
+  useEffect(() => {
+    if (cachedWeeklyStats) {
+      setWeeklyStepsTotal(cachedWeeklyStats.totalSteps);
+      setCoupleWalkingMinutes(cachedWeeklyStats.coupleWalkingMinutes);
+      setHighKneesMinutes(cachedWeeklyStats.highKneesMinutes);
+    }
+  }, [cachedWeeklyStats]);
+
+  useEffect(() => {
+    if (cachedWeightHistory && cachedWeightHistory.length > 0) {
+      // Transform cached weight history to WeightData format
+      const firstLog = cachedWeightHistory[cachedWeightHistory.length - 1];
+      const latestLog = cachedWeightHistory[0];
+      
+      const weightData: WeightData[] = [];
+      weightData.push({
+        date: firstLog.date,
+        weight: firstLog.weight,
+        label: 'Start',
+      });
+      
+      if (cachedWeightHistory.length > 1) {
+        weightData.push({
+          date: latestLog.date,
+          weight: latestLog.weight,
+          label: 'Current',
+        });
+      }
+      
+      setWeightHistory(weightData);
+      setCombinedWeightLost(Math.max(0, firstLog.weight - latestLog.weight));
+    }
+  }, [cachedWeightHistory]);
+
+  useEffect(() => {
+    // Only show content once we have actual data, not just initialized flag
+    // hasLoadedFull will be set true after useFocusEffect completes
+    if (hasLoadedFull) {
+      setIsLoading(false);
+    }
+  }, [hasLoadedFull]);
 
   // Achievements state
   const [achievements, setAchievements] = useState<Achievement[]>([
@@ -176,14 +247,26 @@ export default function ProgressScreen() {
     useCallback(() => {
       const loadData = async () => {
         try {
-          setIsLoading(true);
+          // Only show loading on first load, not on subsequent focuses
+          if (!hasLoadedFull && !isInitialized) {
+            setIsLoading(true);
+          }
           
-          // Get user session data
-          const [storedCoupleId, storedGender, settings] = await Promise.all([
-            AsyncStorage.getItem('coupleId'),
-            AsyncStorage.getItem('userGender'),
-            globalSettingsService.get(),
-          ]);
+          // Get user session data - use context if available
+          let storedCoupleId = userInfo?.coupleId || null;
+          let storedGender = userInfo?.gender || null;
+          let settings = cachedGlobalSettings;
+          
+          if (!storedCoupleId || !storedGender) {
+            [storedCoupleId, storedGender] = await Promise.all([
+              AsyncStorage.getItem('coupleId'),
+              AsyncStorage.getItem('userGender'),
+            ]) as [string | null, string | null];
+          }
+          
+          if (!settings) {
+            settings = await globalSettingsService.get();
+          }
 
           if (!storedCoupleId || !storedGender) {
             setIsLoading(false);
@@ -444,11 +527,12 @@ export default function ProgressScreen() {
           console.error('Error loading progress data:', error);
         } finally {
           setIsLoading(false);
+          setHasLoadedFull(true);
         }
       };
 
       loadData();
-    }, [])
+    }, [hasLoadedFull, isInitialized, userInfo, cachedGlobalSettings])
   );
 
   // Update achievements based on actual data

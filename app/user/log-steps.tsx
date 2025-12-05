@@ -1,3 +1,4 @@
+import { useUserData } from '@/context/UserDataContext';
 import { cloudinaryService } from '@/services/cloudinary.service';
 import { coupleService, coupleStepsService, formatDateString } from '@/services/firestore.service';
 import { geminiService, StepValidationResult } from '@/services/gemini.service';
@@ -9,16 +10,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
+    Animated,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -54,6 +55,7 @@ export default function LogStepsScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
+  const { refreshDailyData } = useUserData();
 
   const [stepCount, setStepCount] = useState('');
   const [stepEntries, setStepEntries] = useState<StepEntry[]>([]);
@@ -254,6 +256,9 @@ export default function LogStepsScreen() {
       setImageUri(null);
       setUploadProgress(0);
       showToast(`${stepsToAdd.toLocaleString()} steps added! Total: ${totalSteps.toLocaleString()}`, 'success');
+      
+      // Refresh context data so home page shows updated values
+      refreshDailyData();
     } catch (error) {
       console.error('Error adding steps:', error);
       showToast('Failed to save steps. Please try again.', 'error');
@@ -289,6 +294,9 @@ export default function LogStepsScreen() {
       }));
       
       showToast('Entry deleted', 'success');
+      
+      // Refresh context data
+      refreshDailyData();
     } catch (error) {
       console.error('Error deleting entry:', error);
       showToast('Failed to delete entry', 'error');

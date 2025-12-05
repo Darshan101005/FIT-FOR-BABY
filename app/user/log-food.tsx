@@ -1,32 +1,33 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useTheme } from '@/context/ThemeContext';
+import { useUserData } from '@/context/UserDataContext';
 import { coupleFoodLogService, coupleService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  useWindowDimensions,
-  View
+    ActivityIndicator,
+    Animated,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View
 } from 'react-native';
 import {
-  calculateNutrition,
-  foodCategories,
-  foodDatabase,
-  FoodItemData,
-  getFoodsByMealTime,
-  mealTimes,
-  searchFoods,
-  searchFoodsByMealTime
+    calculateNutrition,
+    foodCategories,
+    foodDatabase,
+    FoodItemData,
+    getFoodsByMealTime,
+    mealTimes,
+    searchFoods,
+    searchFoodsByMealTime
 } from '../../data/foodDatabase';
 
 const isWeb = Platform.OS === 'web';
@@ -44,6 +45,7 @@ export default function LogFoodScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors } = useTheme();
+  const { refreshDailyData } = useUserData();
 
   const [step, setStep] = useState<'meal' | 'category' | 'food' | 'quantity' | 'summary'>('meal');
   const [selectedMealTime, setSelectedMealTime] = useState<string | null>(null);
@@ -363,6 +365,10 @@ export default function LogFoodScreen() {
       await coupleService.updateStreak(coupleId, userGender);
 
       showToast(`${currentMealLabel} logged! ${totalNutrition.calories} cal intake recorded.`, 'success');
+      
+      // Refresh context data so home page shows updated values
+      refreshDailyData();
+      
       setTimeout(() => {
         router.back();
       }, 2000);

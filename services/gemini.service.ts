@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
-const GEMINI_API_KEY: string = 'AIzaSyAFvqjXLN-wld3HqKlU3ZpZ29bChgwkemk';
+const GEMINI_API_KEY: string = 'GEMINI_API_KEY';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 export interface StepValidationResult {
@@ -80,13 +80,15 @@ Respond in this exact JSON format only, no other text:
       });
 
       if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error('Gemini API error:', response.status, errorText);
         return {
           isValid: false,
           isStepCountImage: false,
           extractedStepCount: null,
           matchesUserInput: false,
           confidence: 'low',
-          message: 'Verification failed. Please try again.',
+          message: `Verification failed (${response.status}). Please try again.`,
         };
       }
 
@@ -131,6 +133,7 @@ Respond in this exact JSON format only, no other text:
         aiReason,
       };
     } catch (error) {
+      console.error('Gemini validation error:', error);
       return {
         isValid: false,
         isStepCountImage: false,

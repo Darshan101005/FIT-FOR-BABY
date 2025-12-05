@@ -1,6 +1,7 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import SkeletonLoader from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
+import { useUserData } from '@/context/UserDataContext';
 import { broadcastService, chatService } from '@/services/firestore.service';
 import { Broadcast, Chat } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -98,6 +99,13 @@ export default function MessagesScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const { colors } = useTheme();
 
+  // Get cached data from context
+  const { 
+    broadcasts: cachedBroadcasts, 
+    chatUnreadCount: cachedChatUnreadCount,
+    isInitialized
+  } = useUserData();
+
   const [view, setView] = useState<'threads' | 'chat' | 'faq'>('threads');
   const [selectedThread, setSelectedThread] = useState<ChatThread | null>(null);
   const [messages, setMessages] = useState<Message[]>([getWelcomeMessage()]);
@@ -105,15 +113,45 @@ export default function MessagesScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
-  const [isLoadingBroadcasts, setIsLoadingBroadcasts] = useState(true);
+  const [isLoadingBroadcasts, setIsLoadingBroadcasts] = useState(!isInitialized);
   const [unreadBroadcastCount, setUnreadBroadcastCount] = useState(0);
   
   // Chat state for nursing department
   const [nursingChat, setNursingChat] = useState<Chat | null>(null);
-  const [chatUnreadCount, setChatUnreadCount] = useState(0);
-  const [isLoadingChat, setIsLoadingChat] = useState(true);
+  const [chatUnreadCount, setChatUnreadCount] = useState(cachedChatUnreadCount);
+  const [isLoadingChat, setIsLoadingChat] = useState(!isInitialized);
 
-  // Subscribe to nursing chat for unread count
+  // Sync with context data
+  useEffect(() => {
+    if (cachedBroadcasts) {
+      // Filter to only show broadcasts (not reminders) in Announcements section
+      const broadcastsOnly = cachedBroadcasts.filter(b => b.type !== 'reminder');
+      setBroadcasts(broadcastsOnly);
+      setIsLoadingBroadcasts(false);
+      
+      // Calculate unread count
+      (async () => {
+        const lastReadStr = await AsyncStorage.getItem(BROADCASTS_READ_KEY);
+        const lastReadTime = lastReadStr ? parseInt(lastReadStr) : 0;
+        
+        const unreadCount = broadcastsOnly.filter(b => {
+          const createdAt = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt as any);
+          return createdAt.getTime() > lastReadTime;
+        }).length;
+        
+        setUnreadBroadcastCount(unreadCount);
+      })();
+    }
+  }, [cachedBroadcasts]);
+
+  useEffect(() => {
+    setChatUnreadCount(cachedChatUnreadCount);
+    if (isInitialized) {
+      setIsLoadingChat(false);
+    }
+  }, [cachedChatUnreadCount, isInitialized]);
+
+  // Subscribe to nursing chat for real-time updates
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     
@@ -150,8 +188,13 @@ export default function MessagesScreen() {
   // Total unread = broadcasts + chat messages
   const totalUnreadCount = unreadBroadcastCount + chatUnreadCount;
 
-  // Fetch broadcasts and check which are unread (filter out reminders - only show broadcasts)
+  // Fetch broadcasts if context not available (fallback)
   useEffect(() => {
+    // Skip if context already has data
+    if (cachedBroadcasts && cachedBroadcasts.length > 0) {
+      return;
+    }
+    
     const fetchBroadcasts = async () => {
       setIsLoadingBroadcasts(true);
       try {
@@ -180,7 +223,7 @@ export default function MessagesScreen() {
     };
 
     fetchBroadcasts();
-  }, []);
+  }, [cachedBroadcasts]);
 
   // Mark broadcasts as read when user views the announcements section
   const markBroadcastsAsRead = async () => {

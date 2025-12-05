@@ -492,7 +492,7 @@ export const PersonalInfoSkeleton: React.FC<{ isMobile?: boolean }> = ({ isMobil
   );
 };
 
-// Mobile Profile Card Skeleton (for inline use in profile header)
+// Mobile Profile Card Skeleton (for inline use in profile header) - Horizontal line style
 export const MobileProfileCardSkeleton: React.FC = () => {
   return (
     <>
@@ -500,34 +500,33 @@ export const MobileProfileCardSkeleton: React.FC = () => {
         <View style={styles.profileAvatarWrapper}>
           <SkeletonCircle size={80} />
         </View>
-        <View style={{ flex: 1, gap: 8 }}>
-          <Skeleton width={140} height={22} borderRadius={4} />
-          <Skeleton width={180} height={14} borderRadius={4} />
-          <Skeleton width={160} height={24} borderRadius={20} style={{ marginTop: 4 }} />
+        <View style={{ flex: 1, gap: 10 }}>
+          <Skeleton width={140} height={12} borderRadius={2} />
+          <Skeleton width={100} height={10} borderRadius={2} />
         </View>
       </View>
       
       <View style={styles.profileStatsRow}>
         <View style={styles.profileStatItem}>
-          <Skeleton width={40} height={22} borderRadius={4} />
-          <Skeleton width={60} height={11} borderRadius={4} style={{ marginTop: 4 }} />
+          <Skeleton width={30} height={10} borderRadius={2} />
+          <Skeleton width={55} height={8} borderRadius={2} style={{ marginTop: 6 }} />
         </View>
         <View style={[styles.profileStatDivider, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
         <View style={styles.profileStatItem}>
-          <Skeleton width={30} height={22} borderRadius={4} />
-          <Skeleton width={60} height={11} borderRadius={4} style={{ marginTop: 4 }} />
+          <Skeleton width={25} height={10} borderRadius={2} />
+          <Skeleton width={55} height={8} borderRadius={2} style={{ marginTop: 6 }} />
         </View>
         <View style={[styles.profileStatDivider, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
         <View style={styles.profileStatItem}>
-          <Skeleton width={35} height={22} borderRadius={4} />
-          <Skeleton width={60} height={11} borderRadius={4} style={{ marginTop: 4 }} />
+          <Skeleton width={30} height={10} borderRadius={2} />
+          <Skeleton width={55} height={8} borderRadius={2} style={{ marginTop: 6 }} />
         </View>
       </View>
     </>
   );
 };
 
-// Web Profile Card Skeleton (for inline use)
+// Web Profile Card Skeleton (for inline use) - Uses horizontal line shimmer style
 export const WebProfileCardSkeleton: React.FC = () => {
   const { colors } = useTheme();
   
@@ -535,18 +534,17 @@ export const WebProfileCardSkeleton: React.FC = () => {
     <View style={[styles.webProfileCardSkeleton, { backgroundColor: colors.cardBackground }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <SkeletonCircle size={80} />
-        <View style={{ flex: 1, marginLeft: 16, gap: 8 }}>
-          <Skeleton width={150} height={20} borderRadius={4} />
-          <Skeleton width={180} height={14} borderRadius={4} />
-          <Skeleton width={140} height={24} borderRadius={20} />
+        <View style={{ flex: 1, marginLeft: 16, gap: 10 }}>
+          <Skeleton width={150} height={12} borderRadius={2} />
+          <Skeleton width={100} height={10} borderRadius={2} />
         </View>
       </View>
       <View style={[styles.webStatsRowSkeleton, { borderTopColor: colors.borderLight }]}>
         {[1, 2, 3].map((_, i) => (
           <React.Fragment key={i}>
             <View style={styles.webStatItemSkeleton}>
-              <Skeleton width={40} height={20} borderRadius={4} />
-              <Skeleton width={60} height={11} borderRadius={4} style={{ marginTop: 4 }} />
+              <Skeleton width={30} height={10} borderRadius={2} />
+              <Skeleton width={60} height={8} borderRadius={2} style={{ marginTop: 6 }} />
             </View>
             {i < 2 && <View style={[styles.webStatDividerSkeleton, { backgroundColor: colors.borderLight }]} />}
           </React.Fragment>

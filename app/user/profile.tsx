@@ -1,22 +1,23 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { MobileProfileCardSkeleton, QuestionnaireCardSkeleton, WebProfileCardSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
+import { useUserData } from '@/context/UserDataContext';
 import { coupleService, questionnaireService } from '@/services/firestore.service';
 import { QuestionnaireProgress } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -107,6 +108,14 @@ export default function ProfileScreen() {
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const { isDarkMode, toggleDarkMode, colors } = useTheme();
 
+  // Get cached data from context
+  const { 
+    userInfo, 
+    questionnaire: cachedQuestionnaire, 
+    streak: cachedStreak,
+    isInitialized 
+  } = useUserData();
+
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const [language, setLanguage] = useState('English');
   const [notifications, setNotifications] = useState(true);
@@ -115,14 +124,14 @@ export default function ProfileScreen() {
   const [dataSync, setDataSync] = useState(true);
   const [stepTracking, setStepTracking] = useState(true);
   const [partnerSync, setPartnerSync] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Always start with loading
   
   // Profile data from Firestore
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   
   // Questionnaire progress from Firestore
   const [questionnaireProgress, setQuestionnaireProgress] = useState<QuestionnaireProgress | null>(null);
-  const [questionnaireLoading, setQuestionnaireLoading] = useState(true);
+  const [questionnaireLoading, setQuestionnaireLoading] = useState(true); // Always start with loading
   
   // Profile stats
   const [profileStats, setProfileStats] = useState({
@@ -132,11 +141,55 @@ export default function ProfileScreen() {
     longestStreak: 0,
   });
 
-  // Fetch profile data when screen loads
+  // Sync with context data
+  useEffect(() => {
+    if (userInfo) {
+      const nameParts = (userInfo.name || 'User').split(' ');
+      const initials = nameParts.length > 1 
+        ? `${nameParts[0][0]}${nameParts[nameParts.length-1][0]}`.toUpperCase()
+        : (userInfo.name || 'U')[0].toUpperCase();
+      
+      setProfileData({
+        name: userInfo.name || 'User',
+        email: userInfo.email || '',
+        coupleId: userInfo.coupleId || '',
+        userId: userInfo.id || '',
+        partnerName: userInfo.partnerName || '',
+        partnerUserId: userInfo.partnerId || '',
+        initials,
+        userGender: userInfo.gender || 'male',
+        partnerGender: userInfo.gender === 'male' ? 'female' : 'male',
+      });
+      
+      setNotifications(userInfo.pushNotificationsEnabled !== false);
+      setIsLoading(false);
+    }
+  }, [userInfo]);
+
+  useEffect(() => {
+    if (cachedQuestionnaire) {
+      setQuestionnaireProgress(cachedQuestionnaire);
+      setQuestionnaireLoading(false);
+    }
+  }, [cachedQuestionnaire]);
+
+  useEffect(() => {
+    if (cachedStreak !== undefined) {
+      setProfileStats(prev => ({
+        ...prev,
+        currentStreak: cachedStreak,
+      }));
+    }
+  }, [cachedStreak]);
+
+  // Fetch profile data when screen loads (for data not in context)
   useFocusEffect(
     useCallback(() => {
       const loadProfileData = async () => {
+        // Always show loading state until data is fetched
         setIsLoading(true);
+        setQuestionnaireLoading(true);
+        
         try {
           const coupleId = await AsyncStorage.getItem('coupleId');
           const userGender = await AsyncStorage.getItem('userGender');
@@ -188,14 +241,19 @@ export default function ProfileScreen() {
                 longestStreak: user.longestStreak || 0,
               });
               
-              // Fetch questionnaire progress
-              try {
-                setQuestionnaireLoading(true);
-                const qProgress = await questionnaireService.getProgress(coupleId, userGender as 'male' | 'female');
-                setQuestionnaireProgress(qProgress);
-              } catch (qError) {
-                console.error('Error fetching questionnaire progress:', qError);
-              } finally {
+              // Fetch questionnaire progress if not in context
+              if (!cachedQuestionnaire) {
+                try {
+                  const qProgress = await questionnaireService.getProgress(coupleId, userGender as 'male' | 'female');
+                  setQuestionnaireProgress(qProgress);
+                } catch (qError) {
+                  console.error('Error fetching questionnaire progress:', qError);
+                } finally {
+                  setQuestionnaireLoading(false);
+                }
+              } else {
+                // Use cached data and stop loading
+                setQuestionnaireProgress(cachedQuestionnaire);
                 setQuestionnaireLoading(false);
               }
             } else {
@@ -434,7 +492,11 @@ export default function ProfileScreen() {
   const renderQuestionnaireStatus = () => {
     // Show skeleton while loading questionnaire data
     if (questionnaireLoading) {
-      return <QuestionnaireCardSkeleton />;
+      return (
+        <View style={isMobile ? { marginTop: 16 } : undefined}>
+          <QuestionnaireCardSkeleton />
+        </View>
+      );
     }
 
     // Helper function to format date
@@ -489,7 +551,7 @@ export default function ProfileScreen() {
     };
 
     return (
-      <View style={[styles.questionnaireCard, { backgroundColor: colors.cardBackground }]}>
+      <View style={[styles.questionnaireCard, { backgroundColor: colors.cardBackground }, isMobile && { marginTop: 16 }]}>
         <View style={styles.questionnaireHeader}>
           <MaterialCommunityIcons 
             name={statusIcon as any} 

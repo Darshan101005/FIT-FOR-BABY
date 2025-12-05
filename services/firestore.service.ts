@@ -5,23 +5,23 @@
 import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
 import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    getDoc,
-    getDocs,
-    increment,
-    limit,
-    onSnapshot,
-    orderBy,
-    query,
-    setDoc,
-    Timestamp,
-    Unsubscribe,
-    updateDoc,
-    where,
-    writeBatch
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  increment,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  Timestamp,
+  Unsubscribe,
+  updateDoc,
+  where,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -1230,16 +1230,23 @@ export const coupleWeightLogService = {
 
   // Get weight logs for a date range
   async getByDateRange(coupleId: string, gender: 'male' | 'female', startDate: string, endDate: string): Promise<CoupleWeightLog[]> {
-    const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'weightLogs');
-    const q = query(
-      logsRef,
-      where('gender', '==', gender),
-      where('date', '>=', startDate),
-      where('date', '<=', endDate),
-      orderBy('date', 'desc')
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CoupleWeightLog));
+    try {
+      const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'weightLogs');
+      // Simple query - filter by gender client-side to avoid composite index requirement
+      const q = query(
+        logsRef,
+        where('date', '>=', startDate),
+        where('date', '<=', endDate),
+        orderBy('date', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as CoupleWeightLog))
+        .filter(log => log.gender === gender);
+    } catch (error) {
+      console.error('Error getting weight logs by date range:', error);
+      return [];
+    }
   },
 
   // Delete weight log

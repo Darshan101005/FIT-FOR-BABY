@@ -1,43 +1,32 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { HomePageSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTheme } from '@/context/ThemeContext';
-import { broadcastService, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, formatDateString, globalSettingsService, nursingVisitService } from '@/services/firestore.service';
+import { useUserData } from '@/context/UserDataContext';
+import { formatDateString } from '@/services/firestore.service';
 import {
-  addNotificationReceivedListener,
-  addNotificationResponseListener,
-  registerForPushNotificationsAsync,
-  savePushTokenForUser
+    addNotificationReceivedListener,
+    addNotificationResponseListener,
+    registerForPushNotificationsAsync,
+    savePushTokenForUser
 } from '@/services/notification.service';
-import { Broadcast, GlobalSettings, NursingDepartmentVisit } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
 const isWeb = Platform.OS === 'web';
 const STEPS_STORAGE_KEY = '@fitforbaby_steps_today';
-
-// User data interface
-interface UserData {
-  name: string;
-  coupleId: string;
-  userId: string;
-  userGender: 'male' | 'female';
-  profileImage: string | null;
-  unreadNotifications: number;
-}
 
 // Generate dates for selector (3 days before, today, 3 days after)
 const generateDates = (isMobile: boolean = false) => {
@@ -70,42 +59,25 @@ export default function UserHomeScreen() {
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
   
+  // Get cached data from context - NO MORE LOADING ON EVERY PAGE SWITCH!
+  const { 
+    isInitialLoading, 
+    hasLoadedOnce,
+    userInfo, 
+    globalSettings, 
+    dailyDataCache, 
+    getDailyData,
+    nursingVisits: upcomingNursingVisits,
+    reminders: broadcasts,
+    streakData,
+    refreshDailyData,
+    dismissReminder,
+    clearAllReminders,
+  } = useUserData();
+  
   const [selectedDateIndex, setSelectedDateIndex] = useState(3); // Today is at index 3
   const [notificationSidebarVisible, setNotificationSidebarVisible] = useState(false);
-  const [userWeight, setUserWeight] = useState(60); // Default 60kg for calorie calculation
-  const [isLoading, setIsLoading] = useState(true); // Loading state for skeleton
   const sidebarAnim = useRef(new Animated.Value(300)).current;
-  
-  // Preloaded data for all visible dates - keyed by date string
-  const [allDatesData, setAllDatesData] = useState<{
-    [dateString: string]: {
-      steps: number;
-      exerciseMinutes: number;
-      exerciseCalories: number;
-      foodLogCount: number;
-    };
-  }>({});
-  
-  // User data state - fetched from Firestore
-  const [userData, setUserData] = useState<UserData | null>(null);
-  
-  // Global settings from Firestore
-  const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
-  
-  // Upcoming nursing visits
-  const [upcomingNursingVisits, setUpcomingNursingVisits] = useState<NursingDepartmentVisit[]>([]);
-  
-  // Broadcasts/Reminders from admin
-  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
-  
-  // Dismissed reminders (stored locally)
-  const [dismissedReminderIds, setDismissedReminderIds] = useState<string[]>([]);
-  
-  // Streak data
-  const [streakData, setStreakData] = useState<{ currentStreak: number; longestStreak: number }>({ 
-    currentStreak: 0, 
-    longestStreak: 0 
-  });
 
   // Push notification token
   const [pushToken, setPushToken] = useState<string | null>(null);
@@ -115,6 +87,10 @@ export default function UserHomeScreen() {
   
   // Check if selected date is today (only allow logging for today)
   const isSelectedDateToday = dates[selectedDateIndex]?.isToday || false;
+  
+  // Use cached data - show skeleton only on FIRST load
+  const isLoading = isInitialLoading && !hasLoadedOnce;
+  const userWeight = userInfo?.weight || 60;
 
   // Register for push notifications on mount
   useEffect(() => {
@@ -126,11 +102,8 @@ export default function UserHomeScreen() {
           setPushToken(token);
           
           // Save token to Firestore for this user
-          const coupleId = await AsyncStorage.getItem('coupleId');
-          const userGender = await AsyncStorage.getItem('userGender');
-          
-          if (coupleId && userGender) {
-            await savePushTokenForUser(coupleId, userGender as 'male' | 'female', token);
+          if (userInfo?.coupleId && userInfo?.userGender) {
+            await savePushTokenForUser(userInfo.coupleId, userInfo.userGender, token);
             console.log('Push token saved successfully');
           }
         }
@@ -144,15 +117,8 @@ export default function UserHomeScreen() {
     // Set up notification listeners
     const notificationReceivedListener = addNotificationReceivedListener(async notification => {
       console.log('Notification received:', notification);
-      // Refresh reminders when a new notification is received
-      try {
-        const recentBroadcasts = await broadcastService.getRecent(7);
-        // Filter to only show reminders on home page (not broadcasts)
-        const remindersOnly = recentBroadcasts.filter(b => b.type === 'reminder' || b.type === undefined);
-        setBroadcasts(remindersOnly);
-      } catch (error) {
-        console.log('Error refreshing reminders:', error);
-      }
+      // Refresh data from context when notification received
+      refreshDailyData();
     });
 
     const notificationResponseListener = addNotificationResponseListener(response => {
@@ -169,7 +135,17 @@ export default function UserHomeScreen() {
       notificationReceivedListener.remove();
       notificationResponseListener.remove();
     };
-  }, []);
+  }, [userInfo, refreshDailyData]);
+
+  // Refresh daily data when home page comes into focus (e.g., after logging steps/food/exercise)
+  useFocusEffect(
+    useCallback(() => {
+      // Only refresh if we've already loaded once (not initial load)
+      if (hasLoadedOnce) {
+        refreshDailyData();
+      }
+    }, [hasLoadedOnce, refreshDailyData])
+  );
 
   // Calculate time from steps (100 steps per minute for normal walking)
   const calculateTimeFromSteps = (steps: number): number => {
@@ -181,57 +157,16 @@ export default function UserHomeScreen() {
     return Math.round(0.0004 * weight * steps);
   };
 
-  // Dismiss a single reminder (store locally)
-  const dismissReminder = async (reminderId: string) => {
-    try {
-      const updatedDismissed = [...dismissedReminderIds, reminderId];
-      setDismissedReminderIds(updatedDismissed);
-      await AsyncStorage.setItem('@fitforbaby_dismissed_reminders', JSON.stringify(updatedDismissed));
-      // Update broadcasts to remove dismissed one
-      setBroadcasts(prev => prev.filter(b => b.id !== reminderId));
-    } catch (error) {
-      console.log('Error dismissing reminder:', error);
-    }
-  };
-
-  // Clear all reminders (store all as dismissed)
-  const clearAllReminders = async () => {
-    try {
-      const allIds = broadcasts.map(b => b.id).filter(Boolean) as string[];
-      const updatedDismissed = [...new Set([...dismissedReminderIds, ...allIds])];
-      setDismissedReminderIds(updatedDismissed);
-      await AsyncStorage.setItem('@fitforbaby_dismissed_reminders', JSON.stringify(updatedDismissed));
-      setBroadcasts([]);
-    } catch (error) {
-      console.log('Error clearing reminders:', error);
-    }
-  };
-
-  // Load dismissed reminder IDs on mount
-  useEffect(() => {
-    const loadDismissedReminders = async () => {
-      try {
-        const dismissed = await AsyncStorage.getItem('@fitforbaby_dismissed_reminders');
-        if (dismissed) {
-          setDismissedReminderIds(JSON.parse(dismissed));
-        }
-      } catch (error) {
-        console.log('Error loading dismissed reminders:', error);
-      }
-    };
-    loadDismissedReminders();
-  }, []);
-
-  // Progress data for the selected date - uses preloaded data
+  // Progress data for the selected date - uses CACHED data from context
   const getProgressDataForDate = () => {
     const stepTarget = globalSettings?.dailySteps || 7000;
     const exerciseGoal = globalSettings?.coupleWalkingMinutes || 60;
     const caloriesGoal = globalSettings?.dailyCaloriesBurnt || 200;
     
-    // Get data for the selected date from preloaded data
+    // Get data for the selected date from CACHED context data
     const selectedDate = dates[selectedDateIndex]?.date;
     const dateString = selectedDate ? formatDateString(selectedDate) : '';
-    const dateData = allDatesData[dateString] || { steps: 0, exerciseMinutes: 0, exerciseCalories: 0, foodLogCount: 0 };
+    const dateData = getDailyData(dateString);
     
     const currentSteps = dateData.steps;
     const stepCalories = calculateCaloriesFromSteps(currentSteps, userWeight);
@@ -250,138 +185,6 @@ export default function UserHomeScreen() {
       caloriesGoalMet: totalCaloriesBurnt >= caloriesGoal,
     };
   };
-
-  // Load user data and steps when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      const loadAllData = async () => {
-        setIsLoading(true);
-        try {
-          // Load all data in parallel
-          const [coupleId, userGender, userName, userId, settings] = await Promise.all([
-            AsyncStorage.getItem('coupleId'),
-            AsyncStorage.getItem('userGender'),
-            AsyncStorage.getItem('userName'),
-            AsyncStorage.getItem('userId'),
-            globalSettingsService.get(),
-          ]);
-
-          // Set global settings
-          setGlobalSettings(settings);
-
-          // Get user weight and set user data first
-          let userWeightValue = 60;
-          if (coupleId && userGender) {
-            const couple = await coupleService.get(coupleId);
-            if (couple) {
-              const user = couple[userGender as 'male' | 'female'];
-              if (user.weight) {
-                userWeightValue = user.weight;
-                setUserWeight(userWeightValue);
-              }
-              
-              // Set user data
-              setUserData({
-                name: user.name || userName || 'User',
-                coupleId: coupleId,
-                userId: userId || user.id,
-                userGender: userGender as 'male' | 'female',
-                profileImage: user.profileImage || null,
-                unreadNotifications: 0,
-              });
-            } else {
-              // Fallback if couple not found
-              setUserData({
-                name: userName || 'User',
-                coupleId: coupleId || '',
-                userId: userId || '',
-                userGender: userGender as 'male' | 'female',
-                profileImage: null,
-                unreadNotifications: 0,
-              });
-            }
-            
-            // Preload data for ALL visible dates at once (only past dates and today)
-            const visibleDates = dates.filter(d => !d.isFuture);
-            const allDataPromises = visibleDates.map(async (dateItem) => {
-              const dateString = formatDateString(dateItem.date);
-              
-              // Fetch all data for this date in parallel
-              const [totalSteps, exerciseTotals, foodLogs] = await Promise.all([
-                coupleStepsService.getTotalForDate(coupleId, userGender as 'male' | 'female', dateString),
-                coupleExerciseService.getTotalsForDate(coupleId, userGender as 'male' | 'female', dateString),
-                coupleFoodLogService.getByDate(coupleId, userGender as 'male' | 'female', dateString),
-              ]);
-              
-              return {
-                dateString,
-                data: {
-                  steps: totalSteps,
-                  exerciseMinutes: exerciseTotals.duration,
-                  exerciseCalories: exerciseTotals.calories,
-                  foodLogCount: foodLogs.length,
-                }
-              };
-            });
-            
-            // Wait for all dates data to be fetched
-            const allDatesResults = await Promise.all(allDataPromises);
-            
-            // Convert to object keyed by date string
-            const datesDataMap: { [key: string]: { steps: number; exerciseMinutes: number; exerciseCalories: number; foodLogCount: number } } = {};
-            allDatesResults.forEach(result => {
-              datesDataMap[result.dateString] = result.data;
-            });
-            setAllDatesData(datesDataMap);
-            
-            // Fetch upcoming nursing visits
-            const nursingVisits = await nursingVisitService.getUpcoming(coupleId);
-            setUpcomingNursingVisits(nursingVisits);
-            
-            // Fetch recent reminders (last 7 days) - filter out broadcasts and dismissed ones
-            const recentBroadcasts = await broadcastService.getRecent(7);
-            // Load dismissed IDs
-            const dismissedJson = await AsyncStorage.getItem('@fitforbaby_dismissed_reminders');
-            const dismissedIds = dismissedJson ? JSON.parse(dismissedJson) : [];
-            // Reminders show on home page, broadcasts show in messages Announcements
-            const remindersOnly = recentBroadcasts.filter(b => 
-              (b.type === 'reminder' || b.type === undefined) && !dismissedIds.includes(b.id)
-            );
-            setBroadcasts(remindersOnly);
-            
-            // Initialize streak from historical logs
-            const streak = await coupleService.initializeStreak(coupleId, userGender as 'male' | 'female');
-            setStreakData(streak);
-          } else {
-            // Fallback to basic data
-            setUserData({
-              name: userName || 'User',
-              coupleId: '',
-              userId: userId || '',
-              userGender: 'male',
-              profileImage: null,
-              unreadNotifications: 0,
-            });
-          }
-        } catch (error) {
-          console.error('Error loading data:', error);
-          // Set fallback user data on error
-          setUserData({
-            name: 'User',
-            coupleId: '',
-            userId: '',
-            userGender: 'male',
-            profileImage: null,
-            unreadNotifications: 0,
-          });
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      
-      loadAllData();
-    }, [])
-  );
 
   // Get progress data based on selected date
   const todayProgress = getProgressDataForDate();
@@ -509,8 +312,8 @@ export default function UserHomeScreen() {
     );
   };
 
-  // Show skeleton while loading
-  if (isLoading || !userData) {
+  // Show skeleton ONLY on first load - subsequent visits show cached data instantly
+  if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <HomePageSkeleton isMobile={isMobile} />
@@ -534,22 +337,22 @@ export default function UserHomeScreen() {
                 onPress={() => router.push('/user/profile')}
                 activeOpacity={0.8}
               >
-                {userData.profileImage ? (
-                  <Image source={{ uri: userData.profileImage }} style={styles.avatar} />
+                {userInfo?.profileImage ? (
+                  <Image source={{ uri: userInfo.profileImage }} style={styles.avatar} />
                 ) : (
                   <View style={[styles.avatarPlaceholder, { backgroundColor: '#006dab' }]}>
                     <Text style={styles.avatarText}>
-                      {userData.name.charAt(0).toUpperCase()}
+                      {(userInfo?.name || 'U').charAt(0).toUpperCase()}
                     </Text>
                   </View>
                 )}
               </TouchableOpacity>
               <View>
                 <Text style={[styles.greeting, { color: colors.text }]}>
-                  Hello, {userData.name}! 👋
+                  Hello, {userInfo?.name || 'User'}! 👋
                 </Text>
                 <Text style={[styles.coupleId, { color: colors.textSecondary }]}>
-                  Couple ID: {userData.coupleId}
+                  Couple ID: {userInfo?.coupleId || ''}
                 </Text>
               </View>
             </View>
@@ -559,9 +362,9 @@ export default function UserHomeScreen() {
               activeOpacity={0.7}
             >
               <Ionicons name="notifications-outline" size={22} color={colors.text} />
-              {userData.unreadNotifications > 0 && (
+              {broadcasts.length > 0 && (
                 <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>{userData.unreadNotifications}</Text>
+                  <Text style={styles.notificationBadgeText}>{broadcasts.length}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -810,82 +613,7 @@ export default function UserHomeScreen() {
             </View>
           </View>
 
-          {/* Reminders Section - Shows broadcasts from admin */}
-          {broadcasts.length > 0 && (
-            <>
-              <View style={styles.remindersSectionHeader}>
-                <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Reminders</Text>
-                <View style={styles.reminderBadgeCount}>
-                  <Text style={styles.reminderBadgeCountText}>{broadcasts.length}</Text>
-                </View>
-                {/* Clear All Button */}
-                <TouchableOpacity
-                  style={styles.clearAllRemindersHeaderButton}
-                  onPress={clearAllReminders}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                  <Text style={styles.clearAllRemindersHeaderText}>Clear All</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.remindersContainer}>
-                {broadcasts.slice(0, 3).map((broadcast, index) => {
-                  const priorityColor = broadcast.priority === 'urgent' ? '#ef4444' : 
-                                       broadcast.priority === 'important' ? '#f59e0b' : '#006dab';
-                  return (
-                    <View 
-                      key={broadcast.id || index} 
-                      style={[styles.reminderCard, { backgroundColor: colors.cardBackground }]}
-                    >
-                      <View style={[styles.reminderPriorityBar, { backgroundColor: priorityColor }]} />
-                      <View style={styles.reminderContent}>
-                        <View style={styles.reminderHeader}>
-                          <Ionicons name="megaphone" size={16} color={priorityColor} />
-                          <Text style={[styles.reminderTitle, { color: colors.text }]} numberOfLines={1}>
-                            {broadcast.title}
-                          </Text>
-                          {broadcast.priority === 'urgent' && (
-                            <View style={[styles.priorityTag, { backgroundColor: '#fee2e2' }]}>
-                              <Text style={[styles.priorityTagText, { color: '#ef4444' }]}>Urgent</Text>
-                            </View>
-                          )}
-                          {broadcast.priority === 'important' && (
-                            <View style={[styles.priorityTag, { backgroundColor: '#fef3c7' }]}>
-                              <Text style={[styles.priorityTagText, { color: '#f59e0b' }]}>Important</Text>
-                            </View>
-                          )}
-                          {/* Dismiss single reminder button */}
-                          <TouchableOpacity
-                            style={styles.dismissReminderButton}
-                            onPress={() => broadcast.id && dismissReminder(broadcast.id)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="close" size={16} color={colors.textSecondary} />
-                          </TouchableOpacity>
-                        </View>
-                        <Text style={[styles.reminderMessage, { color: colors.textSecondary }]} numberOfLines={2}>
-                          {broadcast.message}
-                        </Text>
-                        <Text style={[styles.reminderTime, { color: colors.textSecondary }]}>
-                          {formatTimeAgo(broadcast.sentAt)}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })}
-                {broadcasts.length > 3 && (
-                  <TouchableOpacity
-                    style={styles.viewAllRemindersButton}
-                    onPress={openNotificationSidebar}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.viewAllRemindersText}>View all {broadcasts.length} reminders</Text>
-                    <Ionicons name="arrow-forward" size={16} color="#006dab" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </>
-          )}
+          {/* Reminders are now shown only in notification sidebar (bell icon) */}
 
           {/* Upcoming Nursing Department Visits */}
           {upcomingNursingVisits.length > 0 && (
@@ -1009,7 +737,7 @@ export default function UserHomeScreen() {
                       {/* Dismiss single notification */}
                       <TouchableOpacity
                         style={styles.dismissReminderButton}
-                        onPress={() => dismissReminder(notification.id)}
+                        onPress={() => dismissReminder?.(notification.id)}
                         activeOpacity={0.7}
                       >
                         <Ionicons name="close" size={16} color={colors.textSecondary} />
@@ -1027,7 +755,7 @@ export default function UserHomeScreen() {
               {/* Clear All Button in sidebar */}
               <TouchableOpacity
                 style={styles.clearAllButton}
-                onPress={clearAllReminders}
+                onPress={() => clearAllReminders?.()}
                 activeOpacity={0.7}
               >
                 <Ionicons name="trash-outline" size={18} color="#ef4444" />
