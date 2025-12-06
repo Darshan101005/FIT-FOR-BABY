@@ -155,11 +155,11 @@ service cloud.firestore {
     
     // Couples collection (user onboarding)
     match /couples/{coupleId} {
-      // Admins can read, create, update couples
+      // Admins can read, create, update, delete couples
       allow read: if true; // Allow read for login verification
       allow create: if isAdmin();
       allow update: if true; // Allow update for user profile and weight logging
-      allow delete: if isSuperAdmin();
+      allow delete: if isAdmin(); // All admin roles (admin, superadmin, owner) can delete couples
       
       // Weight logs subcollection - couples can read/write their own logs
       match /weightLogs/{logId} {

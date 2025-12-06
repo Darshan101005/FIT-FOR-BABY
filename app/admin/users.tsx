@@ -1,21 +1,21 @@
-import { adminService, coupleService, nursingVisitService } from '@/services/firestore.service';
-import { Couple as FirestoreCouple, NursingDepartmentVisit } from '@/types/firebase.types';
+import { adminService, coupleService } from '@/services/firestore.service';
+import { Couple as FirestoreCouple } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -45,18 +45,6 @@ interface Couple extends FirestoreCouple {
   id: string;
 }
 
-// Get color for visit status
-const getVisitStatusColor = (status: string) => {
-  switch (status) {
-    case 'scheduled': return COLORS.info;
-    case 'confirmed': return COLORS.success;
-    case 'completed': return COLORS.textMuted;
-    case 'cancelled': return COLORS.error;
-    case 'missed': return COLORS.warning;
-    default: return COLORS.textMuted;
-  }
-};
-
 export default function AdminUsersScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -85,8 +73,28 @@ export default function AdminUsersScreen() {
     femaleTempPassword: '' 
   });
   const [currentAdminUid, setCurrentAdminUid] = useState('');
-  const [upcomingVisits, setUpcomingVisits] = useState<Record<string, NursingDepartmentVisit | null>>({});
-  const [loadingVisits, setLoadingVisits] = useState<Record<string, boolean>>({});
+
+  // Edit profile modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<{ coupleId: string; gender: 'male' | 'female' } | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    age: '',
+    dateOfBirth: '',
+    weight: '',
+    height: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    state: '',
+    pincode: '',
+  });
+
+  // Delete confirmation modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingCouple, setDeletingCouple] = useState<{ coupleId: string; maleName: string; femaleName: string } | null>(null);
 
   // Enrollment form state
   const [enrollForm, setEnrollForm] = useState({
@@ -185,28 +193,12 @@ export default function AdminUsersScreen() {
     }, 2500);
   };
 
-  const toggleCoupleExpand = async (coupleId: string) => {
-    const isExpanding = !expandedCouples.includes(coupleId);
-    
+  const toggleCoupleExpand = (coupleId: string) => {
     setExpandedCouples(prev =>
       prev.includes(coupleId)
         ? prev.filter(id => id !== coupleId)
         : [...prev, coupleId]
     );
-
-    // Load upcoming visit when expanding if not already loaded
-    if (isExpanding && upcomingVisits[coupleId] === undefined) {
-      setLoadingVisits(prev => ({ ...prev, [coupleId]: true }));
-      try {
-        const nextVisit = await nursingVisitService.getNext(coupleId);
-        setUpcomingVisits(prev => ({ ...prev, [coupleId]: nextVisit }));
-      } catch (error) {
-        console.error('Error loading upcoming visit:', error);
-        setUpcomingVisits(prev => ({ ...prev, [coupleId]: null }));
-      } finally {
-        setLoadingVisits(prev => ({ ...prev, [coupleId]: false }));
-      }
-    }
   };
 
   const getStatusColor = (status: string) => {
@@ -321,7 +313,7 @@ export default function AdminUsersScreen() {
     }
   };
 
-  const handleUserAction = async (action: 'edit' | 'reset' | 'toggle', coupleId: string, gender: 'male' | 'female') => {
+  const handleUserAction = async (action: 'edit' | 'reset' | 'toggle' | 'resetPin', coupleId: string, gender: 'male' | 'female') => {
     try {
       const couple = couples.find(c => c.coupleId === coupleId);
       const userName = couple ? couple[gender].name : '';
@@ -329,7 +321,25 @@ export default function AdminUsersScreen() {
       
       switch (action) {
         case 'edit':
-          showToast(`Edit profile for ${userId}`, 'success');
+          if (couple) {
+            const user = couple[gender];
+            setEditingUser({ coupleId, gender });
+            setEditForm({
+              name: user.name || '',
+              email: user.email || '',
+              phone: user.phone || '',
+              age: user.age?.toString() || '',
+              dateOfBirth: user.dateOfBirth || '',
+              weight: user.weight?.toString() || '',
+              height: user.height?.toString() || '',
+              addressLine1: user.address?.addressLine1 || '',
+              addressLine2: user.address?.addressLine2 || '',
+              city: user.address?.city || '',
+              state: user.address?.state || '',
+              pincode: user.address?.pincode || '',
+            });
+            setShowEditModal(true);
+          }
           break;
         case 'reset':
           setActionLoading(true);
@@ -346,6 +356,13 @@ export default function AdminUsersScreen() {
           showToast(`Password reset for ${userId}`, 'success');
           setActionLoading(false);
           break;
+        case 'resetPin':
+          setActionLoading(true);
+          await coupleService.forceResetPin(coupleId, gender);
+          showToast(`PIN reset for ${userId}. User will need to set a new PIN.`, 'success');
+          // The subscription will automatically update the couples list
+          setActionLoading(false);
+          break;
         case 'toggle':
           setActionLoading(true);
           if (couple) {
@@ -360,6 +377,81 @@ export default function AdminUsersScreen() {
     } catch (error: any) {
       console.error('Error with user action:', error);
       showToast(error.message || 'Action failed', 'error');
+      setActionLoading(false);
+    }
+  };
+
+  // Handle save edit profile
+  const handleSaveEdit = async () => {
+    if (!editingUser) return;
+    
+    try {
+      setActionLoading(true);
+      const { coupleId, gender } = editingUser;
+      
+      // Build update object with only changed fields
+      const updates: Record<string, any> = {};
+      
+      if (editForm.name.trim()) updates[`${gender}.name`] = editForm.name.trim();
+      if (editForm.email.trim()) updates[`${gender}.email`] = editForm.email.trim();
+      if (editForm.phone.trim()) updates[`${gender}.phone`] = editForm.phone.trim();
+      if (editForm.age) updates[`${gender}.age`] = parseInt(editForm.age);
+      if (editForm.dateOfBirth) updates[`${gender}.dateOfBirth`] = editForm.dateOfBirth;
+      if (editForm.weight) updates[`${gender}.weight`] = parseFloat(editForm.weight);
+      if (editForm.height) updates[`${gender}.height`] = parseFloat(editForm.height);
+      
+      // Calculate BMI if both weight and height are provided
+      if (editForm.weight && editForm.height) {
+        const weightKg = parseFloat(editForm.weight);
+        const heightM = parseFloat(editForm.height) / 100;
+        const bmi = (weightKg / (heightM * heightM)).toFixed(1);
+        updates[`${gender}.bmi`] = bmi;
+      }
+      
+      // Address fields
+      if (editForm.addressLine1 || editForm.addressLine2 || editForm.city || editForm.state || editForm.pincode) {
+        updates[`${gender}.address`] = {
+          addressLine1: editForm.addressLine1.trim(),
+          addressLine2: editForm.addressLine2.trim(),
+          city: editForm.city.trim(),
+          state: editForm.state.trim(),
+          pincode: editForm.pincode.trim(),
+        };
+      }
+      
+      await coupleService.update(coupleId, updates);
+      
+      setShowEditModal(false);
+      setEditingUser(null);
+      showToast('Profile updated successfully', 'success');
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      showToast(error.message || 'Failed to update profile', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle delete couple confirmation
+  const handleDeleteCouple = (coupleId: string, maleName: string, femaleName: string) => {
+    setDeletingCouple({ coupleId, maleName, femaleName });
+    setShowDeleteModal(true);
+  };
+
+  // Confirm delete couple
+  const confirmDeleteCouple = async () => {
+    if (!deletingCouple) return;
+    
+    try {
+      setActionLoading(true);
+      await coupleService.delete(deletingCouple.coupleId);
+      setShowDeleteModal(false);
+      setDeletingCouple(null);
+      showToast(`Couple ${deletingCouple.coupleId} deleted successfully`, 'success');
+    } catch (error: any) {
+      console.error('Error deleting couple:', error);
+      showToast(error.message || 'Failed to delete couple', 'error');
+    } finally {
       setActionLoading(false);
     }
   };
@@ -602,6 +694,13 @@ export default function AdminUsersScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
+                  onPress={() => handleUserAction('resetPin', couple.coupleId, 'male')}
+                >
+                  <Ionicons name="keypad-outline" size={16} color={COLORS.info} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.info }]}>Reset PIN</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
                   onPress={() => handleUserAction('toggle', couple.coupleId, 'male')}
                 >
                   <Ionicons name={couple.male.status === 'active' ? 'pause-circle-outline' : 'play-circle-outline'} size={16} color={couple.male.status === 'active' ? COLORS.error : COLORS.success} />
@@ -737,6 +836,13 @@ export default function AdminUsersScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
+                  onPress={() => handleUserAction('resetPin', couple.coupleId, 'female')}
+                >
+                  <Ionicons name="keypad-outline" size={16} color={COLORS.info} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.info }]}>Reset PIN</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
                   onPress={() => handleUserAction('toggle', couple.coupleId, 'female')}
                 >
                   <Ionicons name={couple.female.status === 'active' ? 'pause-circle-outline' : 'play-circle-outline'} size={16} color={couple.female.status === 'active' ? COLORS.error : COLORS.success} />
@@ -747,93 +853,16 @@ export default function AdminUsersScreen() {
               </View>
             </View>
 
-            {/* Upcoming Appointment Section */}
-            {(() => {
-              const visit = upcomingVisits[couple.coupleId];
-              const isLoadingVisit = loadingVisits[couple.coupleId];
-              
-              // Format date for display
-              const formatVisitDate = (dateStr: string) => {
-                const date = new Date(dateStr);
-                return date.toLocaleDateString('en-US', { 
-                  weekday: 'short', 
-                  month: 'short', 
-                  day: 'numeric',
-                  year: 'numeric'
-                });
-              };
-              
-              return (
-                <View style={styles.appointmentCard}>
-                  <View style={styles.appointmentHeader}>
-                    <Ionicons name="calendar" size={18} color={COLORS.primary} />
-                    <Text style={styles.appointmentTitle}>Upcoming Visit</Text>
-                  </View>
-                  {isLoadingVisit ? (
-                    <View style={styles.noAppointmentContent}>
-                      <ActivityIndicator size="small" color={COLORS.primary} />
-                      <Text style={styles.noAppointmentText}>Loading...</Text>
-                    </View>
-                  ) : visit ? (
-                    <View style={styles.appointmentContent}>
-                      <View style={styles.appointmentRow}>
-                        <View style={styles.appointmentInfo}>
-                          <View style={styles.appointmentDateBadge}>
-                            <Ionicons name="time-outline" size={14} color={COLORS.primary} />
-                            <Text style={styles.appointmentDateText}>{formatVisitDate(visit.date)} at {visit.time}</Text>
-                          </View>
-                          <View style={[styles.appointmentTypeBadge, { backgroundColor: getVisitStatusColor(visit.status) + '15' }]}>
-                            <Text style={[styles.appointmentTypeText, { color: getVisitStatusColor(visit.status) }]}>
-                              {visit.status.charAt(0).toUpperCase() + visit.status.slice(1)}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                      {visit.departmentName && (
-                        <View style={styles.appointmentDetailRow}>
-                          <Ionicons name="business" size={14} color={COLORS.accent} />
-                          <Text style={styles.appointmentDetailLabel}>Department:</Text>
-                          <Text style={styles.appointmentDetailValue}>{visit.departmentName}</Text>
-                        </View>
-                      )}
-                      {visit.assignedNurse && (
-                        <View style={styles.appointmentDetailRow}>
-                          <Ionicons name="person" size={14} color={COLORS.info} />
-                          <Text style={styles.appointmentDetailLabel}>Nurse:</Text>
-                          <Text style={styles.appointmentDetailValue}>{visit.assignedNurse}</Text>
-                        </View>
-                      )}
-                      {visit.purpose && (
-                        <View style={styles.appointmentDetailRow}>
-                          <Ionicons name="document-text" size={14} color={COLORS.info} />
-                          <Text style={styles.appointmentDetailLabel}>Purpose:</Text>
-                          <Text style={styles.appointmentDetailValue}>{visit.purpose}</Text>
-                        </View>
-                      )}
-                      {visit.location && (
-                        <View style={styles.appointmentDetailRow}>
-                          <Ionicons name="location" size={14} color={COLORS.warning} />
-                          <Text style={styles.appointmentDetailLabel}>Location:</Text>
-                          <Text style={styles.appointmentDetailValue}>{visit.location}</Text>
-                        </View>
-                      )}
-                      {visit.visitNumber && (
-                        <View style={styles.appointmentDetailRow}>
-                          <Ionicons name="list" size={14} color={COLORS.textMuted} />
-                          <Text style={styles.appointmentDetailLabel}>Visit #:</Text>
-                          <Text style={styles.appointmentDetailValue}>{visit.visitNumber}</Text>
-                        </View>
-                      )}
-                    </View>
-                  ) : (
-                    <View style={styles.noAppointmentContent}>
-                      <Ionicons name="calendar-outline" size={24} color={COLORS.textMuted} />
-                      <Text style={styles.noAppointmentText}>No upcoming visits scheduled</Text>
-                    </View>
-                  )}
-                </View>
-              );
-            })()}
+            {/* Couple Actions - Delete button */}
+            <View style={styles.coupleActionsRow}>
+              <TouchableOpacity
+                style={[styles.deleteCoupleButton]}
+                onPress={() => handleDeleteCouple(couple.coupleId, couple.male.name, couple.female.name)}
+              >
+                <Ionicons name="trash-outline" size={16} color={COLORS.error} />
+                <Text style={[styles.actionButtonText, { color: COLORS.error }]}>Delete Couple</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -1163,6 +1192,272 @@ export default function AdminUsersScreen() {
     );
   };
 
+  // Edit Profile Modal
+  const renderEditModal = () => {
+    if (!editingUser) return null;
+    
+    const genderColor = editingUser.gender === 'male' ? COLORS.primary : COLORS.accent;
+    const genderIcon = editingUser.gender === 'male' ? 'male' : 'female';
+    const userId = `${editingUser.coupleId}_${editingUser.gender.charAt(0).toUpperCase()}`;
+    
+    return (
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, isMobile && styles.modalContentMobile]}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.genderIcon, { backgroundColor: genderColor + '15' }]}>
+                  <Ionicons name={genderIcon} size={18} color={genderColor} />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Edit Profile</Text>
+                  <Text style={styles.modalSubtitle}>{userId}</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <View style={styles.formSection}>
+                {/* Personal Information */}
+                <Text style={styles.formSectionTitle}>Personal Information</Text>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Full Name *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.name}
+                    onChangeText={(text) => setEditForm({ ...editForm, name: text })}
+                    placeholder="Enter full name"
+                    placeholderTextColor={COLORS.textMuted}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Email</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.email}
+                    onChangeText={(text) => setEditForm({ ...editForm, email: text })}
+                    placeholder="Enter email"
+                    placeholderTextColor={COLORS.textMuted}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Phone</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.phone}
+                    onChangeText={(text) => setEditForm({ ...editForm, phone: text })}
+                    placeholder="Enter phone number"
+                    placeholderTextColor={COLORS.textMuted}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+
+                <View style={styles.inputRow}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>Age</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.age}
+                      onChangeText={(text) => setEditForm({ ...editForm, age: text })}
+                      placeholder="Years"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, { flex: 2, marginLeft: 12 }]}>
+                    <Text style={styles.inputLabel}>Date of Birth</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.dateOfBirth}
+                      onChangeText={(text) => setEditForm({ ...editForm, dateOfBirth: text })}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor={COLORS.textMuted}
+                    />
+                  </View>
+                </View>
+
+                {/* Health Metrics */}
+                <Text style={[styles.formSectionTitle, { marginTop: 20 }]}>Health Metrics</Text>
+                
+                <View style={styles.inputRow}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>Weight (kg)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.weight}
+                      onChangeText={(text) => setEditForm({ ...editForm, weight: text })}
+                      placeholder="kg"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
+                    <Text style={styles.inputLabel}>Height (cm)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.height}
+                      onChangeText={(text) => setEditForm({ ...editForm, height: text })}
+                      placeholder="cm"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                </View>
+
+                {/* Address */}
+                <Text style={[styles.formSectionTitle, { marginTop: 20 }]}>Address</Text>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Address Line 1</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.addressLine1}
+                    onChangeText={(text) => setEditForm({ ...editForm, addressLine1: text })}
+                    placeholder="Street address"
+                    placeholderTextColor={COLORS.textMuted}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Address Line 2</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.addressLine2}
+                    onChangeText={(text) => setEditForm({ ...editForm, addressLine2: text })}
+                    placeholder="Apartment, suite, etc."
+                    placeholderTextColor={COLORS.textMuted}
+                  />
+                </View>
+
+                <View style={styles.inputRow}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>City</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.city}
+                      onChangeText={(text) => setEditForm({ ...editForm, city: text })}
+                      placeholder="City"
+                      placeholderTextColor={COLORS.textMuted}
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
+                    <Text style={styles.inputLabel}>State</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.state}
+                      onChangeText={(text) => setEditForm({ ...editForm, state: text })}
+                      placeholder="State"
+                      placeholderTextColor={COLORS.textMuted}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Pincode</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.pincode}
+                    onChangeText={(text) => setEditForm({ ...editForm, pincode: text })}
+                    placeholder="Pincode"
+                    placeholderTextColor={COLORS.textMuted}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonOutline]}
+                onPress={() => setShowEditModal(false)}
+              >
+                <Text style={[styles.modalButtonText, { color: COLORS.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={handleSaveEdit}
+              >
+                <Text style={[styles.modalButtonText, { color: '#fff' }]}>Save Changes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // Delete Confirmation Modal
+  const renderDeleteModal = () => {
+    if (!deletingCouple) return null;
+    
+    return (
+      <Modal
+        visible={showDeleteModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            {/* Warning Icon */}
+            <View style={[styles.deleteIconCircle, { backgroundColor: COLORS.error + '15' }]}>
+              <Ionicons name="warning" size={40} color={COLORS.error} />
+            </View>
+            
+            <Text style={styles.deleteTitle}>Delete Couple?</Text>
+            <Text style={styles.deleteSubtitle}>
+              Are you sure you want to delete couple {deletingCouple.coupleId}?
+            </Text>
+            <Text style={styles.deleteNames}>
+              {deletingCouple.maleName} & {deletingCouple.femaleName}
+            </Text>
+            
+            <View style={styles.deleteWarning}>
+              <Ionicons name="information-circle" size={16} color={COLORS.error} />
+              <Text style={styles.deleteWarningText}>
+                This action cannot be undone. All data for this couple will be permanently deleted.
+              </Text>
+            </View>
+
+            <View style={styles.deleteButtonRow}>
+              <TouchableOpacity
+                style={[styles.deleteButton, styles.deleteButtonCancel]}
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setDeletingCouple(null);
+                }}
+              >
+                <Text style={[styles.deleteButtonText, { color: COLORS.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteButton, styles.deleteButtonConfirm]}
+                onPress={confirmDeleteCouple}
+              >
+                <Ionicons name="trash" size={18} color="#fff" />
+                <Text style={[styles.deleteButtonText, { color: '#fff' }]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -1239,6 +1534,8 @@ export default function AdminUsersScreen() {
 
       {renderEnrollmentModal()}
       {renderTempPasswordModal()}
+      {renderEditModal()}
+      {renderDeleteModal()}
       {toast.visible && renderToast()}
       
       {/* Loading overlay for actions */}
@@ -2088,5 +2385,111 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+
+  // Input Row (for side by side inputs)
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+
+  // Couple Actions Row
+  coupleActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingTop: 16,
+    paddingHorizontal: 4,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    marginTop: 16,
+  },
+
+  // Delete Couple Button
+  deleteCoupleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.error + '10',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: COLORS.error + '30',
+  },
+
+  // Delete Modal
+  deleteModalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  deleteIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  deleteTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  deleteSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  deleteNames: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 16,
+  },
+  deleteWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: COLORS.error + '10',
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+    marginBottom: 24,
+    width: '100%',
+  },
+  deleteWarningText: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.error,
+    lineHeight: 18,
+  },
+  deleteButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  deleteButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 10,
+    gap: 6,
+  },
+  deleteButtonCancel: {
+    backgroundColor: COLORS.borderLight,
+  },
+  deleteButtonConfirm: {
+    backgroundColor: COLORS.error,
+  },
+  deleteButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

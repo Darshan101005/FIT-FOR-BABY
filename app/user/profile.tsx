@@ -1,5 +1,6 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { MobileProfileCardSkeleton, QuestionnaireCardSkeleton, WebProfileCardSkeleton } from '@/components/ui/SkeletonLoader';
+import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { cloudinaryService } from '@/services/cloudinary.service';
@@ -114,6 +115,7 @@ export default function ProfileScreen() {
   const isMobile = screenWidth < 768;
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const { isDarkMode, toggleDarkMode, colors } = useTheme();
+  const { logout: authLogout } = useAuth();
 
   // Get cached data from context
   const { 
@@ -458,18 +460,17 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     try {
-      // Clear all user-related storage
+      showToast('Logging out...', 'success');
+      // Use the AuthContext logout which clears all storage and redirects
+      await authLogout();
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Fallback - clear storage manually and redirect
       await AsyncStorage.multiRemove([
         'userRole', 'coupleId', 'userGender', 'userId', 'userName',
         'quickAccessMode', 'pendingProfileSelection',
         'isSuperAdmin', 'adminUid', 'adminEmail', 'adminName'
       ]);
-      showToast('Logged out successfully', 'success');
-      setTimeout(() => {
-        router.replace('/login');
-      }, 1500);
-    } catch (error) {
-      console.error('Logout error:', error);
       router.replace('/login');
     }
   };

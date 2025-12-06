@@ -1,9 +1,11 @@
+import { useAuth } from '@/context/AuthContext';
 import { coupleService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -12,6 +14,7 @@ export default function ResetPasswordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { width: screenWidth } = useWindowDimensions();
+  const { refreshAuthState, setSessionExpiry } = useAuth();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(true); // Visible by default
@@ -124,8 +127,11 @@ export default function ResetPasswordScreen() {
         
         showToast('Password set successfully!', 'success');
         
-        setTimeout(() => {
+        setTimeout(async () => {
           if (!user?.isPinSet) {
+            // Update pendingSetup flag to indicate PIN setup phase
+            await AsyncStorage.setItem('pendingSetup', 'pin-setup');
+            
             // Navigate to PIN setup
             router.replace({
               pathname: '/user/manage-pin',
@@ -136,7 +142,10 @@ export default function ResetPasswordScreen() {
               }
             });
           } else {
-            // Navigate to home
+            // Setup complete - clear pendingSetup flag, set session and navigate to home
+            await AsyncStorage.removeItem('pendingSetup');
+            await setSessionExpiry(true);
+            await refreshAuthState();
             router.replace('/user/home');
           }
         }, 1000);

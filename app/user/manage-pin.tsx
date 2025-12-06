@@ -1,4 +1,5 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { coupleService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,22 +8,22 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
 type Mode = 'view' | 'setup' | 'update' | 'reset';
-type Step = 'main' | 'verify-otp' | 'enter-pin' | 'confirm-pin' | 'success';
+type Step = 'main' | 'enter-pin' | 'confirm-pin' | 'success';
 
 export default function ManagePinScreen() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function ManagePinScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
+  const { refreshAuthState, setSessionExpiry } = useAuth();
 
   // Get params
   const paramMode = params.mode as Mode;
@@ -47,18 +49,14 @@ export default function ManagePinScreen() {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [step, setStep] = useState<Step>(initialMode === 'reset' || initialMode === 'setup' ? 'enter-pin' : 'main');
   
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [pin, setPin] = useState(['', '', '', '']);
   const [confirmPin, setConfirmPin] = useState(['', '', '', '']);
   const [error, setError] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [resendTimer, setResendTimer] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   
-  const otpRefs = useRef<(TextInput | null)[]>([]);
   const pinRefs = useRef<(TextInput | null)[]>([]);
   const confirmPinRefs = useRef<(TextInput | null)[]>([]);
 
@@ -96,13 +94,6 @@ export default function ManagePinScreen() {
     loadUserData();
   }, [paramCoupleId, paramGender]);
 
-  useEffect(() => {
-    if (resendTimer > 0) {
-      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [resendTimer]);
-
   const showToast = (message: string, type: 'error' | 'success' | 'info') => {
     setToast({ visible: true, message, type });
     Animated.spring(toastAnim, {
@@ -120,69 +111,20 @@ export default function ManagePinScreen() {
 
   const handleSetPin = () => {
     setMode('setup');
-    setStep('verify-otp');
+    setStep('enter-pin');
     resetFields();
   };
 
   const handleUpdatePin = () => {
     setMode('update');
-    setStep('verify-otp');
+    setStep('enter-pin');
     resetFields();
   };
 
   const resetFields = () => {
-    setOtp(['', '', '', '', '', '']);
     setPin(['', '', '', '']);
     setConfirmPin(['', '', '', '']);
     setError('');
-    setOtpSent(false);
-  };
-
-  const handleSendOtp = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setOtpSent(true);
-      setResendTimer(60);
-      setIsLoading(false);
-      showToast('OTP sent to your email', 'success');
-    }, 1000);
-  };
-
-  const handleOtpChange = (value: string, index: number) => {
-    if (value.length > 1) return;
-    
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-    setError('');
-
-    if (value && index < 5) {
-      otpRefs.current[index + 1]?.focus();
-    }
-
-    if (index === 5 && value) {
-      const fullOtp = newOtp.join('');
-      verifyOtp(fullOtp);
-    }
-  };
-
-  const handleOtpKeyPress = (key: string, index: number) => {
-    if (key === 'Backspace' && !otp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const verifyOtp = (otpValue: string) => {
-    setIsLoading(true);
-    setTimeout(() => {
-      if (otpValue === '123456') {
-        setStep('enter-pin');
-        showToast('Email verified successfully', 'success');
-      } else {
-        setError('Invalid OTP. Please try again.');
-      }
-      setIsLoading(false);
-    }, 1000);
   };
 
   const handlePinChange = (value: string, index: number, isConfirm: boolean) => {
@@ -337,86 +279,6 @@ export default function ManagePinScreen() {
     </View>
   );
 
-  const renderOtpStep = () => (
-    <View style={styles.stepContainer}>
-      <View style={[styles.iconContainer, { backgroundColor: colors.primary + '15' }]}>
-        <Ionicons name="mail" size={40} color={colors.primary} />
-      </View>
-      
-      <Text style={[styles.stepTitle, { color: colors.text }]}>Verify Your Email</Text>
-      <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
-        We'll send a verification code to {maskedEmail} to confirm it's you.
-      </Text>
-
-      {!otpSent ? (
-        <TouchableOpacity
-          style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-          onPress={handleSendOtp}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <Text style={styles.primaryButtonText}>Sending...</Text>
-          ) : (
-            <>
-              <Ionicons name="send" size={18} color="#fff" />
-              <Text style={styles.primaryButtonText}>Send OTP</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      ) : (
-        <>
-          <Text style={[styles.otpLabel, { color: colors.textSecondary }]}>
-            Enter 6-digit code
-          </Text>
-          
-          <View style={styles.otpContainer}>
-            {otp.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={(ref) => { otpRefs.current[index] = ref; }}
-                style={[
-                  styles.otpInput,
-                  { 
-                    backgroundColor: isDarkMode ? colors.cardBackground : '#f8fafc',
-                    borderColor: error ? '#ef4444' : digit ? colors.primary : colors.border,
-                    color: colors.text,
-                  },
-                ]}
-                value={digit}
-                onChangeText={(value) => handleOtpChange(value.replace(/[^0-9]/g, ''), index)}
-                onKeyPress={({ nativeEvent }) => handleOtpKeyPress(nativeEvent.key, index)}
-                keyboardType="number-pad"
-                maxLength={1}
-                selectTextOnFocus
-                autoFocus={index === 0}
-              />
-            ))}
-          </View>
-
-          {error && (
-            <View style={styles.errorContainer}>
-              <Ionicons name="warning" size={16} color="#ef4444" />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={styles.resendButton}
-            onPress={handleSendOtp}
-            disabled={resendTimer > 0}
-          >
-            <Text style={[
-              styles.resendText,
-              { color: resendTimer > 0 ? colors.textMuted : colors.primary },
-            ]}>
-              {resendTimer > 0 ? `Resend code in ${resendTimer}s` : 'Resend code'}
-            </Text>
-          </TouchableOpacity>
-        </>
-      )}
-    </View>
-  );
-
   const renderPinStep = (isConfirm: boolean) => {
     const currentPin = isConfirm ? confirmPin : pin;
     const refs = isConfirm ? confirmPinRefs : pinRefs;
@@ -495,32 +357,46 @@ export default function ManagePinScreen() {
     );
   };
 
-  const renderSuccessStep = () => (
-    <View style={styles.stepContainer}>
-      <View style={[styles.successIcon, { backgroundColor: '#22c55e20' }]}>
-        <Ionicons name="checkmark-circle" size={64} color="#22c55e" />
-      </View>
-      
-      <Text style={[styles.stepTitle, { color: colors.text }]}>
-        {mode === 'setup' ? 'PIN Created!' : 'PIN Updated!'}
-      </Text>
-      <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
-        Your session PIN has been {mode === 'setup' ? 'created' : 'updated'} successfully. 
-        You can now use it to switch between profiles.
-      </Text>
+  const renderSuccessStep = () => {
+    const handleDone = async () => {
+      if (mode === 'setup') {
+        // First-time setup complete - clear pendingSetup flag, set session and go to home
+        await AsyncStorage.removeItem('pendingSetup');
+        await setSessionExpiry(true);
+        await refreshAuthState();
+        router.replace('/user/home' as any);
+      } else {
+        router.back();
+      }
+    };
+    
+    return (
+      <View style={styles.stepContainer}>
+        <View style={[styles.successIcon, { backgroundColor: '#22c55e20' }]}>
+          <Ionicons name="checkmark-circle" size={64} color="#22c55e" />
+        </View>
+        
+        <Text style={[styles.stepTitle, { color: colors.text }]}>
+          {mode === 'setup' ? 'PIN Created!' : 'PIN Updated!'}
+        </Text>
+        <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
+          Your session PIN has been {mode === 'setup' ? 'created' : 'updated'} successfully. 
+          You can now use it to switch between profiles.
+        </Text>
 
-      <TouchableOpacity
-        style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-        onPress={() => router.back()}
-      >
-        <Text style={styles.primaryButtonText}>Done</Text>
-      </TouchableOpacity>
-    </View>
-  );
+        <TouchableOpacity
+          style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+          onPress={handleDone}
+        >
+          <Text style={styles.primaryButtonText}>{mode === 'setup' ? 'Continue' : 'Done'}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   const renderStepIndicator = () => {
-    const steps = ['verify-otp', 'enter-pin', 'confirm-pin'];
-    const stepLabels = ['1', '2', '3'];
+    const steps = ['enter-pin', 'confirm-pin'];
+    const stepLabels = ['1', '2'];
     const currentIndex = steps.indexOf(step);
 
     return (
@@ -557,12 +433,15 @@ export default function ManagePinScreen() {
   const handleBack = () => {
     if (step === 'main') {
       router.back();
-    } else if (step === 'verify-otp') {
-      setStep('main');
-      setMode('view');
-      resetFields();
     } else if (step === 'enter-pin') {
-      setStep('verify-otp');
+      // Go back to main (or exit if in setup/reset mode from params)
+      if (mode === 'setup' || mode === 'reset') {
+        router.back();
+      } else {
+        setStep('main');
+        setMode('view');
+        resetFields();
+      }
     } else if (step === 'confirm-pin') {
       setStep('enter-pin');
       setConfirmPin(['', '', '', '']);
@@ -613,12 +492,6 @@ export default function ManagePinScreen() {
 
           <View style={[styles.content, isMobile && styles.contentMobile]}>
             {step === 'main' && renderMainView()}
-            {step === 'verify-otp' && (
-              <>
-                {renderStepIndicator()}
-                {renderOtpStep()}
-              </>
-            )}
             {step === 'enter-pin' && (
               <>
                 {renderStepIndicator()}

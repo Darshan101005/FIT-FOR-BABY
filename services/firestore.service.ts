@@ -5,24 +5,24 @@
 import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
 import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  deleteField,
-  doc,
-  getDoc,
-  getDocs,
-  increment,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  setDoc,
-  Timestamp,
-  Unsubscribe,
-  updateDoc,
-  where,
-  writeBatch
+    addDoc,
+    collection,
+    deleteDoc,
+    deleteField,
+    doc,
+    getDoc,
+    getDocs,
+    increment,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    setDoc,
+    Timestamp,
+    Unsubscribe,
+    updateDoc,
+    where,
+    writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -748,6 +748,16 @@ export const coupleService = {
     const couple = await this.get(coupleId);
     if (!couple) return false;
     return couple[gender].pin === pin;
+  },
+
+  // Force reset PIN (admin action)
+  async forceResetPin(coupleId: string, gender: 'male' | 'female'): Promise<void> {
+    const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    await updateDoc(coupleRef, {
+      [`${gender}.pin`]: '',
+      [`${gender}.isPinSet`]: false,
+      updatedAt: now(),
+    });
   },
 
   // Update last login

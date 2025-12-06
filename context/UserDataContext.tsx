@@ -688,25 +688,66 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Check for user changes (e.g., profile switching)
+  // Check for user changes (e.g., profile switching, or initial auth completion)
   // This handles the case where a different user logs in while the provider is still mounted
+  // OR when user data becomes available after initial mount (e.g., after profile selection + PIN)
   useEffect(() => {
     const checkUserChange = async () => {
       const currentCoupleId = await AsyncStorage.getItem('coupleId');
       const currentGender = await AsyncStorage.getItem('userGender');
+      const currentUserId = await AsyncStorage.getItem('userId');
+      const forceReload = await AsyncStorage.getItem('forceUserDataReload');
       
-      // If user data in AsyncStorage doesn't match current userInfo, reload
-      if (userInfo && (userInfo.coupleId !== currentCoupleId || userInfo.userGender !== currentGender)) {
-        console.log('User changed, reloading data...');
-        loadAllData(true);
+      // Case 0: Force reload flag is set (after shared login/profile switch)
+      if (forceReload === 'true') {
+        console.log('Force reload flag detected, reloading data...');
+        await AsyncStorage.removeItem('forceUserDataReload');
+        await loadAllData(true);
+        return true; // Data was reloaded
       }
+      
+      // Case 1: userInfo is null but user data now exists in AsyncStorage - initial load needed
+      if (!userInfo && currentCoupleId && currentGender && currentUserId) {
+        console.log('User data now available, loading data...');
+        await loadAllData(true);
+        return true; // Data was reloaded
+      }
+      
+      // Case 2: userInfo exists but doesn't match current AsyncStorage - user switched profiles
+      if (userInfo && currentCoupleId && currentGender && currentUserId) {
+        if (userInfo.coupleId !== currentCoupleId || userInfo.userGender !== currentGender || userInfo.userId !== currentUserId) {
+          console.log('User/profile changed, reloading data...', {
+            old: { coupleId: userInfo.coupleId, gender: userInfo.userGender, userId: userInfo.userId },
+            new: { coupleId: currentCoupleId, gender: currentGender, userId: currentUserId }
+          });
+          await loadAllData(true);
+          return true; // Data was reloaded
+        }
+      }
+      
+      return false; // No reload needed
     };
     
-    // Check periodically (when component re-renders) - not too aggressively
+    // Check immediately after hasLoadedOnce
     if (hasLoadedOnce) {
       checkUserChange();
     }
-  }, [hasLoadedOnce, userInfo]);
+    
+    // Set up a polling interval to detect profile switches
+    // This handles: profile switching, shared login completing, etc.
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    if (hasLoadedOnce) {
+      pollInterval = setInterval(async () => {
+        await checkUserChange();
+      }, 1000); // Check every 1 second for profile changes
+    }
+    
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [hasLoadedOnce, userInfo, loadAllData]);
 
   // ============================================
   // CONTEXT VALUE

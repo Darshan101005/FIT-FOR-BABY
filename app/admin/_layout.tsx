@@ -2,19 +2,21 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, usePathname, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Animated,
-  Image,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Animated,
+    Image,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
 import { supportRequestService } from '../../services/firestore.service';
 
 // Fit for Baby Color Palette
@@ -107,10 +109,60 @@ const navItems: NavItem[] = [
 
 const isWeb = Platform.OS === 'web';
 
+// Loading screen for auth check
+function AuthLoadingScreen() {
+  return (
+    <View style={authStyles.loadingContainer}>
+      <Image
+        source={require('../../assets/logos/fit_for_baby_horizontal.png')}
+        style={authStyles.logo}
+        resizeMode="contain"
+      />
+      <Text style={authStyles.loadingTitle}>Fit for Baby</Text>
+      <Text style={authStyles.loadingSubtitle}>Admin Portal</Text>
+      <ActivityIndicator size="large" color="#006dab" style={authStyles.spinner} />
+      <Text style={authStyles.loadingText}>Verifying admin access...</Text>
+    </View>
+  );
+}
+
+const authStyles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  logo: {
+    width: 100,
+    height: 100,
+    marginBottom: 16,
+  },
+  loadingTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#006dab',
+    marginBottom: 4,
+  },
+  loadingSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 24,
+  },
+  spinner: {
+    marginBottom: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+});
+
 export default function AdminLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const { width: screenWidth } = useWindowDimensions();
+  const { isAuthenticated, isLoading: authLoading, userRole, logout } = useAuth();
   
   // Responsive breakpoints
   const isMobile = screenWidth < 768;
@@ -125,6 +177,20 @@ export default function AdminLayout() {
   const [adminRole, setAdminRole] = useState('admin');
   const [adminInitials, setAdminInitials] = useState('AD');
   const [requestedCallsCount, setRequestedCallsCount] = useState<number>(0);
+
+  // Auth protection - redirect if not authenticated or not an admin
+  useEffect(() => {
+    if (!authLoading) {
+      const isAdmin = ['admin', 'superadmin', 'owner'].includes(userRole || '');
+      
+      if (!isAuthenticated) {
+        router.replace('/login');
+      } else if (!isAdmin) {
+        // User trying to access admin routes
+        router.replace('/user/home');
+      }
+    }
+  }, [isAuthenticated, authLoading, userRole, router]);
 
   useEffect(() => {
     loadAdminInfo();
@@ -174,9 +240,26 @@ export default function AdminLayout() {
     router.push(route as any);
   };
 
-  const handleLogout = () => {
-    router.replace('/login');
+  const handleLogout = async () => {
+    try {
+      await logout(); // This clears AsyncStorage and navigates to login
+    } catch (error) {
+      console.error('Error during logout:', error);
+      // Fallback - navigate anyway
+      router.replace('/login');
+    }
   };
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return <AuthLoadingScreen />;
+  }
+
+  // Don't render if not authenticated or wrong role
+  const isAdmin = ['admin', 'superadmin', 'owner'].includes(userRole || '');
+  if (!isAuthenticated || !isAdmin) {
+    return <AuthLoadingScreen />;
+  }
 
   const renderNavItem = (item: NavItem, collapsed: boolean = false) => {
     const active = isActive(item.route);
