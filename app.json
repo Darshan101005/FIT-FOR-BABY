@@ -26,7 +26,18 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro",
+      "name": "Fit for Baby",
+      "shortName": "FitForBaby",
+      "description": "A comprehensive pregnancy wellness app for expecting parents",
+      "themeColor": "#006dab",
+      "backgroundColor": "#ffffff",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "scope": "/",
+      "preferRelatedApplications": false
     },
     "plugins": [
       "expo-router",

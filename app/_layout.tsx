@@ -1,9 +1,14 @@
+import PWAInstallBanner from '@/components/PWAInstallBanner';
 import { AppProvider } from '@/context/AppContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
+import { initPWA } from '@/services/pwa.service';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, Image, Platform, StyleSheet, Text, View } from 'react-native';
+
+const isWeb = Platform.OS === 'web';
 
 // Loading screen component
 function LoadingScreen() {
@@ -24,6 +29,13 @@ function LoadingScreen() {
 // Main navigation with auth check
 function RootNavigator() {
   const { isLoading } = useAuth();
+
+  // Initialize PWA on web
+  useEffect(() => {
+    if (isWeb) {
+      initPWA();
+    }
+  }, []);
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -50,6 +62,9 @@ function RootNavigator() {
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
+      
+      {/* PWA Install Banner - shows only on mobile web browsers */}
+      {isWeb && <PWAInstallBanner />}
     </>
   );
 }

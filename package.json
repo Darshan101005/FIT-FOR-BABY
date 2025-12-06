@@ -8,11 +8,15 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "build:web": "expo export --platform web && node ./scripts/copy-pwa-files.js",
+    "preview:web": "npx serve dist",
+    "deploy:web": "npm run build:web && firebase deploy --only hosting",
     "lint": "expo lint",
     "emulators": "firebase emulators:start",
     "emulators:import": "firebase emulators:start --import=./firebase-data --export-on-exit",
     "deploy:rules": "firebase deploy --only firestore:rules,storage:rules",
-    "deploy:indexes": "firebase deploy --only firestore:indexes"
+    "deploy:indexes": "firebase deploy --only firestore:indexes",
+    "generate:pwa-icons": "node ./scripts/generate-pwa-icons.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
