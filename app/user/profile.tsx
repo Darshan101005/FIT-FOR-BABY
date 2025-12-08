@@ -1,17 +1,20 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { MobileProfileCardSkeleton, QuestionnaireCardSkeleton, WebProfileCardSkeleton } from '@/components/ui/SkeletonLoader';
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { cloudinaryService } from '@/services/cloudinary.service';
-import { coupleService, questionnaireService } from '@/services/firestore.service';
+import { coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService, questionnaireService } from '@/services/firestore.service';
 import { QuestionnaireProgress } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -116,6 +119,7 @@ export default function ProfileScreen() {
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const { isDarkMode, toggleDarkMode, colors } = useTheme();
   const { logout: authLogout } = useAuth();
+  const { language: appLanguage, setLanguage: setAppLanguage, t } = useLanguage();
 
   // Get cached data from context
   const { 
@@ -127,7 +131,6 @@ export default function ProfileScreen() {
   } = useUserData();
 
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
-  const [language, setLanguage] = useState('English');
   const [notifications, setNotifications] = useState(true);
   const [dailyReminders, setDailyReminders] = useState(true);
   const [weeklyReports, setWeeklyReports] = useState(true);
@@ -135,6 +138,10 @@ export default function ProfileScreen() {
   const [stepTracking, setStepTracking] = useState(true);
   const [partnerSync, setPartnerSync] = useState(true);
   const [isLoading, setIsLoading] = useState(true); // Always start with loading
+  
+  // Export data states
+  const [isExporting, setIsExporting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   
   // Profile photo states
   const [isPhotoModalVisible, setIsPhotoModalVisible] = useState(false);
@@ -173,7 +180,7 @@ export default function ProfileScreen() {
         initials,
         userGender: userInfo.gender || 'male',
         partnerGender: userInfo.gender === 'male' ? 'female' : 'male',
-        profilePhoto: userInfo.profilePhoto,
+        profilePhoto: userInfo.profilePhoto || undefined,
       });
       
       setNotifications(userInfo.pushNotificationsEnabled !== false);
@@ -350,7 +357,7 @@ export default function ProfileScreen() {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Please allow access to your photo library to upload a profile picture.');
+        Alert.alert(t('profile.permissionRequired'), t('profile.galleryPermissionMsg'));
         return;
       }
 
@@ -375,7 +382,7 @@ export default function ProfileScreen() {
     try {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Please allow camera access to take a profile picture.');
+        Alert.alert(t('profile.permissionRequired'), t('profile.cameraPermissionMsg'));
         return;
       }
 
@@ -458,6 +465,443 @@ export default function ProfileScreen() {
   // END PROFILE PHOTO FUNCTIONS
   // ============================================
 
+  // ============================================
+  // EXPORT DATA FUNCTION
+  // ============================================
+  const handleExportData = async () => {
+    if (!profileData || !userInfo) {
+      showToast('User data not available', 'error');
+      return;
+    }
+
+    setIsExporting(true);
+    setShowExportModal(false);
+
+    try {
+      // Fetch all user data
+      const coupleId = profileData.coupleId;
+      const userGender = profileData.userGender;
+      
+      // Get couple data
+      const coupleData = await coupleService.get(coupleId);
+      
+      // Get steps data (last 30 days)
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      // Format dates as strings (YYYY-MM-DD)
+      const formatDateStr = (date: Date) => {
+        return date.toISOString().split('T')[0];
+      };
+      
+      const stepsData = await coupleStepsService.getByDateRange(coupleId, userGender, formatDateStr(thirtyDaysAgo), formatDateStr(today));
+      
+      // Get weight logs
+      const weightData = await coupleWeightLogService.getAll(coupleId, userGender);
+      
+      // Get food logs (last 7 days)
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const foodData = await coupleFoodLogService.getByDateRange(coupleId, userGender, formatDateStr(sevenDaysAgo), formatDateStr(today));
+      
+      // Get exercise logs (last 30 days)
+      const exerciseData = await coupleExerciseService.getByDateRange(coupleId, userGender, formatDateStr(thirtyDaysAgo), formatDateStr(today));
+      
+      // Get questionnaire progress
+      const questionnaireData = await questionnaireService.getProgress(coupleId, userGender);
+
+      // Generate HTML report
+      const htmlContent = generateExportHTML({
+        userData: coupleData?.[userGender] || {},
+        coupleData: {
+          coupleId,
+          coupleName: `${coupleData?.male?.name || 'N/A'} & ${coupleData?.female?.name || 'N/A'}`,
+          enrollmentDate: coupleData?.enrollmentDate || 'N/A',
+        },
+        stepsData: stepsData || [],
+        weightData: weightData || [],
+        foodData: foodData || [],
+        exerciseData: exerciseData || [],
+        questionnaireData,
+        profileData,
+      });
+
+      if (isWeb) {
+        // Open in new tab for printing/saving as PDF
+        const newWindow = window.open('', '_blank');
+        if (newWindow) {
+          newWindow.document.write(htmlContent);
+          newWindow.document.close();
+        }
+        showToast('Report opened in new tab. Use Print → Save as PDF', 'success');
+      } else {
+        // Mobile - save HTML and share
+        const fileName = `fit_for_baby_my_data_${new Date().toISOString().split('T')[0]}.html`;
+        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, htmlContent);
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/html', dialogTitle: 'Export My Data' });
+        showToast('Report ready to share!', 'success');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast('Failed to export data. Please try again.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Generate export HTML content
+  const generateExportHTML = (data: {
+    userData: any;
+    coupleData: any;
+    stepsData: any[];
+    weightData: any[];
+    foodData: any[];
+    exerciseData: any[];
+    questionnaireData: any;
+    profileData: ProfileData;
+  }) => {
+    const { userData, coupleData, stepsData, weightData, foodData, exerciseData, questionnaireData, profileData } = data;
+    
+    const formatDate = (dateStr: string) => {
+      if (!dateStr) return 'N/A';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    };
+
+    const formatTimestamp = (timestamp: any) => {
+      if (!timestamp) return 'N/A';
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
+
+    // Calculate totals
+    const totalSteps = stepsData.reduce((sum, s) => sum + (s.steps || 0), 0);
+    const avgSteps = stepsData.length > 0 ? Math.round(totalSteps / stepsData.length) : 0;
+    const totalExerciseMinutes = exerciseData.reduce((sum, e) => sum + (e.duration || 0), 0);
+    const latestWeight = weightData.length > 0 ? weightData[0]?.weight || 'N/A' : 'N/A';
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fit for Baby - My Health Data</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      padding: 30px; 
+      color: #1e293b;
+      background: #fff;
+      line-height: 1.6;
+    }
+    .report-container { max-width: 900px; margin: 0 auto; }
+    .header { 
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #006dab;
+    }
+    .header-left { display: flex; align-items: center; gap: 15px; }
+    .logo {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #006dab 0%, #0088d4 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    .header-text h1 { font-size: 24px; font-weight: 700; color: #006dab; }
+    .header-text p { font-size: 13px; color: #64748b; }
+    .user-info-card {
+      background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 30px;
+      border: 1px solid #0ea5e9;
+    }
+    .user-info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .info-item { margin-bottom: 12px; }
+    .info-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .info-value { font-size: 16px; font-weight: 600; color: #0f172a; }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+    .summary-card {
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      border: 1px solid #e2e8f0;
+    }
+    .summary-card.steps { background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border-color: #22c55e; }
+    .summary-card.weight { background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); border-color: #3b82f6; }
+    .summary-card.exercise { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-color: #f59e0b; }
+    .summary-card.food { background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%); border-color: #ec4899; }
+    .summary-value { font-size: 28px; font-weight: 800; margin-bottom: 5px; }
+    .summary-label { font-size: 12px; color: #64748b; font-weight: 500; }
+    .section { margin-bottom: 30px; }
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #006dab;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .data-table { 
+      width: 100%; 
+      border-collapse: collapse;
+      font-size: 13px;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .data-table thead tr { background: linear-gradient(135deg, #006dab 0%, #0088d4 100%); }
+    .data-table th { color: white; padding: 12px 10px; text-align: left; font-weight: 600; }
+    .data-table td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+    .data-table tbody tr:nth-child(even) { background: #f8fafc; }
+    .data-table tbody tr:hover { background: #f1f5f9; }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 2px solid #e2e8f0;
+      text-align: center;
+      color: #64748b;
+      font-size: 12px;
+    }
+    .print-btn {
+      background: linear-gradient(135deg, #006dab 0%, #0088d4 100%);
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    .print-btn:hover { opacity: 0.9; }
+    @media print {
+      .no-print { display: none; }
+      body { padding: 20px; }
+    }
+    @media (max-width: 600px) {
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      .user-info-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="report-container">
+    <div class="header">
+      <div class="header-left">
+        <div class="logo">FFB</div>
+        <div class="header-text">
+          <h1>My Health Data Report</h1>
+          <p>Fit for Baby - Personal Health Tracking</p>
+        </div>
+      </div>
+      <div style="text-align: right; font-size: 13px; color: #64748b;">
+        <strong>Generated:</strong><br>
+        ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+      </div>
+    </div>
+
+    <div class="user-info-card">
+      <h3 style="margin-bottom: 16px; color: #006dab;">👤 Personal Information</h3>
+      <div class="user-info-grid">
+        <div class="info-item">
+          <div class="info-label">Name</div>
+          <div class="info-value">${profileData.name}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Email</div>
+          <div class="info-value">${profileData.email}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Couple ID</div>
+          <div class="info-value">${coupleData.coupleId}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Partner</div>
+          <div class="info-value">${profileData.partnerName}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Enrollment Date</div>
+          <div class="info-value">${formatDate(coupleData.enrollmentDate)}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Phone</div>
+          <div class="info-value">${userData.phone || t('profile.notProvided')}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card steps">
+        <div class="summary-value" style="color: #16a34a;">${avgSteps.toLocaleString()}</div>
+        <div class="summary-label">Avg Daily Steps</div>
+      </div>
+      <div class="summary-card weight">
+        <div class="summary-value" style="color: #2563eb;">${latestWeight}${latestWeight !== 'N/A' ? ' kg' : ''}</div>
+        <div class="summary-label">Current Weight</div>
+      </div>
+      <div class="summary-card exercise">
+        <div class="summary-value" style="color: #d97706;">${totalExerciseMinutes}</div>
+        <div class="summary-label">Exercise Minutes</div>
+      </div>
+      <div class="summary-card food">
+        <div class="summary-value" style="color: #db2777;">${foodData.length}</div>
+        <div class="summary-label">Food Logs (7 days)</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">📊 Steps Log (Last 30 Days)</h2>
+      ${stepsData.length > 0 ? `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Steps</th>
+            <th>Goal</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${stepsData.slice(0, 30).map(s => `
+          <tr>
+            <td>${formatDate(s.date)}</td>
+            <td><strong>${(s.steps || 0).toLocaleString()}</strong></td>
+            <td>${(s.goal || 10000).toLocaleString()}</td>
+            <td style="color: ${(s.steps || 0) >= (s.goal || 10000) ? '#16a34a' : '#f59e0b'};">
+              ${(s.steps || 0) >= (s.goal || 10000) ? '✅ Complete' : '⏳ In Progress'}
+            </td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ` : '<p style="color: #64748b; text-align: center; padding: 20px;">No steps data recorded yet.</p>'}
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">⚖️ Weight Log</h2>
+      ${weightData.length > 0 ? `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Weight (kg)</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${weightData.slice(0, 20).map(w => `
+          <tr>
+            <td>${formatDate(w.date)}</td>
+            <td><strong>${w.weight} kg</strong></td>
+            <td>${w.notes || '-'}</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ` : '<p style="color: #64748b; text-align: center; padding: 20px;">No weight data recorded yet.</p>'}
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">🏃 Exercise Log</h2>
+      ${exerciseData.length > 0 ? `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Exercise Type</th>
+            <th>Duration</th>
+            <th>Calories</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${exerciseData.slice(0, 20).map(e => `
+          <tr>
+            <td>${formatDate(e.date)}</td>
+            <td><strong>${e.exerciseType || e.type || 'Exercise'}</strong></td>
+            <td>${e.duration || 0} min</td>
+            <td>${e.caloriesBurned || e.calories || '-'} kcal</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ` : '<p style="color: #64748b; text-align: center; padding: 20px;">No exercise data recorded yet.</p>'}
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">🍽️ Food Log (Last 7 Days)</h2>
+      ${foodData.length > 0 ? `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Meal</th>
+            <th>Food Item</th>
+            <th>Calories</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${foodData.slice(0, 30).map(f => `
+          <tr>
+            <td>${formatDate(f.date)}</td>
+            <td>${f.mealType || 'Meal'}</td>
+            <td><strong>${f.foodName || f.name || 'Food'}</strong></td>
+            <td>${f.calories || '-'} kcal</td>
+          </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ` : '<p style="color: #64748b; text-align: center; padding: 20px;">No food data recorded yet.</p>'}
+    </div>
+
+    ${questionnaireData ? `
+    <div class="section">
+      <h2 class="section-title">📋 Questionnaire Progress</h2>
+      <div style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+        <p><strong>Status:</strong> ${questionnaireData.isComplete ? '✅ Completed' : '⏳ In Progress'}</p>
+        <p><strong>Progress:</strong> ${questionnaireData.progress || 0}%</p>
+        <p><strong>Answers:</strong> ${questionnaireData.answers ? Object.keys(questionnaireData.answers).length : 0} questions answered</p>
+      </div>
+    </div>
+    ` : ''}
+
+    <div class="footer">
+      <p style="font-weight: 600; color: #006dab; margin-bottom: 5px;">Fit for Baby - Health Monitoring System</p>
+      <p>This report contains your personal health data from the Fit for Baby app.</p>
+      <p>Generated on ${new Date().toLocaleString()}</p>
+    </div>
+
+    <div class="no-print" style="text-align: center; margin-top: 30px;">
+      <button onclick="window.print()" class="print-btn">
+        🖨️ Print / Save as PDF
+      </button>
+    </div>
+  </div>
+</body>
+</html>`;
+  };
+
   const handleLogout = async () => {
     try {
       showToast('Logging out...', 'success');
@@ -513,7 +957,7 @@ export default function ProfileScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={styles.headerTitle}>{t('profile.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -553,7 +997,7 @@ export default function ProfileScreen() {
               {profileData.partnerName && (
                 <View style={styles.partnerBadge}>
                   <Ionicons name="heart" size={14} color="#ef4444" />
-                  <Text style={styles.partnerText}>Connected with {profileData.partnerName}</Text>
+                  <Text style={styles.partnerText}>{t('profile.connectedWith')} {profileData.partnerName}</Text>
                 </View>
               )}
             </View>
@@ -562,17 +1006,17 @@ export default function ProfileScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{profileStats.daysActive}</Text>
-              <Text style={styles.statLabel}>Days Active</Text>
+              <Text style={styles.statLabel}>{t('profile.daysActive')}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{profileStats.weeklyGoalsAchieved}</Text>
-              <Text style={styles.statLabel}>Weekly Goals</Text>
+              <Text style={styles.statLabel}>{t('profile.weeklyGoals')}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{profileStats.currentStreak}🔥</Text>
-              <Text style={styles.statLabel}>Log Streak</Text>
+              <Text style={styles.statLabel}>{t('profile.logStreak')}</Text>
             </View>
           </View>
         </>
@@ -587,7 +1031,7 @@ export default function ProfileScreen() {
         <TouchableOpacity onPress={() => router.back()} style={[styles.webBackButton, { backgroundColor: colors.cardBackground }]}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.webHeaderTitle, { color: colors.text }]}>Profile</Text>
+        <Text style={[styles.webHeaderTitle, { color: colors.text }]}>{t('profile.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
     </>
@@ -632,7 +1076,7 @@ export default function ProfileScreen() {
             {profileData.partnerName && (
               <View style={[styles.webPartnerBadge, { backgroundColor: '#ef444415' }]}>
                 <Ionicons name="heart" size={12} color="#ef4444" />
-                <Text style={styles.webPartnerText}>Connected with {profileData.partnerName}</Text>
+                <Text style={styles.webPartnerText}>{t('profile.connectedWith')} {profileData.partnerName}</Text>
               </View>
             )}
           </View>
@@ -640,17 +1084,17 @@ export default function ProfileScreen() {
         <View style={[styles.webStatsRow, { borderTopColor: colors.borderLight }]}>
           <View style={styles.webStatItem}>
             <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.daysActive}</Text>
-            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Days Active</Text>
+            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>{t('profile.daysActive')}</Text>
           </View>
           <View style={[styles.webStatDivider, { backgroundColor: colors.borderLight }]} />
           <View style={styles.webStatItem}>
             <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.weeklyGoalsAchieved}</Text>
-            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Weekly Goals</Text>
+            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>{t('profile.weeklyGoals')}</Text>
           </View>
           <View style={[styles.webStatDivider, { backgroundColor: colors.borderLight }]} />
           <View style={styles.webStatItem}>
             <Text style={[styles.webStatValue, { color: colors.primary }]}>{profileStats.currentStreak}🔥</Text>
-            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>Log Streak</Text>
+            <Text style={[styles.webStatLabel, { color: colors.textSecondary }]}>{t('profile.logStreak')}</Text>
           </View>
         </View>
       </View>
@@ -690,19 +1134,19 @@ export default function ProfileScreen() {
     // Determine icon, color, and status text
     let statusIcon = 'clipboard-outline';
     let statusColor = colors.textMuted;
-    let statusText = 'Not started';
-    let actionButtonText = 'Start';
+    let statusText = t('profile.notStarted');
+    let actionButtonText = t('profile.start');
     
     if (isCompleted) {
       statusIcon = 'clipboard-check';
       statusColor = colors.success;
-      statusText = `Completed on ${completedDate}`;
-      actionButtonText = 'View';
+      statusText = `${t('profile.completed')} ${completedDate}`;
+      actionButtonText = t('profile.view');
     } else if (isInProgress) {
       statusIcon = 'clipboard-edit-outline';
       statusColor = colors.warning;
-      statusText = `${Math.round(progressPercent)}% complete • Last updated ${lastUpdatedDate}`;
-      actionButtonText = 'Continue';
+      statusText = `${Math.round(progressPercent)}% ${t('profile.percentComplete')} • ${t('profile.lastUpdated')} ${lastUpdatedDate}`;
+      actionButtonText = t('profile.continue');
     }
 
     const handlePress = () => {
@@ -727,7 +1171,7 @@ export default function ProfileScreen() {
             color={statusColor} 
           />
           <View style={styles.questionnaireInfo}>
-            <Text style={[styles.questionnaireTitle, { color: colors.text }]}>Health Questionnaire</Text>
+            <Text style={[styles.questionnaireTitle, { color: colors.text }]}>{t('profile.healthQuestionnaire')}</Text>
             <Text style={[styles.questionnaireStatus, { color: statusColor }]}>{statusText}</Text>
           </View>
           <TouchableOpacity 
@@ -753,7 +1197,7 @@ export default function ProfileScreen() {
         {isInProgress && questionnaireProgress?.progress && (
           <View style={styles.questionnaireDetails}>
             <Text style={[styles.questionnaireDetailText, { color: colors.textSecondary }]}>
-              {questionnaireProgress.progress.answeredQuestions} of {questionnaireProgress.progress.totalQuestions} questions answered
+              {questionnaireProgress.progress.answeredQuestions} / {questionnaireProgress.progress.totalQuestions} {t('profile.questionsAnswered')}
             </Text>
             <Text style={[styles.questionnaireLanguageTag, { backgroundColor: colors.inputBackground, color: colors.textSecondary }]}>
               {questionnaireProgress.language === 'english' ? '🇬🇧 English' : '🇮🇳 தமிழ்'}
@@ -763,7 +1207,7 @@ export default function ProfileScreen() {
         {isCompleted && (
           <View style={styles.questionnaireDetails}>
             <Text style={[styles.questionnaireDetailText, { color: colors.textSecondary }]}>
-              ✓ All questions answered
+              ✓ {t('profile.allQuestionsAnswered')}
             </Text>
             <Text style={[styles.questionnaireLanguageTag, { backgroundColor: colors.inputBackground, color: colors.textSecondary }]}>
               {questionnaireProgress?.language === 'english' ? '🇬🇧 English' : '🇮🇳 தமிழ்'}
@@ -819,16 +1263,16 @@ export default function ProfileScreen() {
 
   const renderLanguageSelector = () => (
     <View style={styles.languageSection}>
-      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Language / மொழி</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('profile.languageTitle')}</Text>
       <View style={styles.languageOptions}>
         <TouchableOpacity 
           style={[
             styles.languageOption,
             { backgroundColor: colors.cardBackground, borderColor: colors.border },
-            language === 'English' && { borderColor: colors.primary, backgroundColor: isDarkMode ? colors.primaryLight : '#eff6ff' },
+            appLanguage === 'en' && { borderColor: colors.primary, backgroundColor: isDarkMode ? colors.primaryLight : '#eff6ff' },
           ]}
           onPress={() => {
-            setLanguage('English');
+            setAppLanguage('en');
             showToast('Language changed to English', 'success');
           }}
         >
@@ -836,9 +1280,9 @@ export default function ProfileScreen() {
           <Text style={[
             styles.languageText,
             { color: colors.textSecondary },
-            language === 'English' && { color: colors.primary },
+            appLanguage === 'en' && { color: colors.primary },
           ]}>English</Text>
-          {language === 'English' && (
+          {appLanguage === 'en' && (
             <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
           )}
         </TouchableOpacity>
@@ -847,10 +1291,10 @@ export default function ProfileScreen() {
           style={[
             styles.languageOption,
             { backgroundColor: colors.cardBackground, borderColor: colors.border },
-            language === 'Tamil' && { borderColor: colors.primary, backgroundColor: isDarkMode ? colors.primaryLight : '#eff6ff' },
+            appLanguage === 'ta' && { borderColor: colors.primary, backgroundColor: isDarkMode ? colors.primaryLight : '#eff6ff' },
           ]}
           onPress={() => {
-            setLanguage('Tamil');
+            setAppLanguage('ta');
             showToast('மொழி தமிழுக்கு மாற்றப்பட்டது', 'success');
           }}
         >
@@ -858,9 +1302,9 @@ export default function ProfileScreen() {
           <Text style={[
             styles.languageText,
             { color: colors.textSecondary },
-            language === 'Tamil' && { color: colors.primary },
+            appLanguage === 'ta' && { color: colors.primary },
           ]}>தமிழ் (Tamil)</Text>
-          {language === 'Tamil' && (
+          {appLanguage === 'ta' && (
             <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
           )}
         </TouchableOpacity>
@@ -897,11 +1341,11 @@ export default function ProfileScreen() {
           {renderQuestionnaireStatus()}
           {renderLanguageSelector()}
 
-          {renderSettingsSection('Appearance', [
+          {renderSettingsSection(t('profile.appearance'), [
             {
               id: 'dark-mode',
               icon: isDarkMode ? 'sunny' : 'moon',
-              label: 'Dark Mode',
+              label: t('profile.darkMode'),
               type: 'toggle',
               value: isDarkMode,
               onPress: handleDarkModeToggle,
@@ -909,11 +1353,11 @@ export default function ProfileScreen() {
             },
           ])}
 
-          {renderSettingsSection('Notifications', [
+          {renderSettingsSection(t('profile.notifications'), [
             {
               id: 'notifications',
               icon: 'notifications',
-              label: 'Push Notifications',
+              label: t('account.pushNotifications'),
               type: 'toggle',
               value: notifications,
               onPress: handleNotificationsToggle,
@@ -922,7 +1366,7 @@ export default function ProfileScreen() {
             {
               id: 'daily-reminders',
               icon: 'alarm',
-              label: 'Daily Reminders',
+              label: t('account.dailyReminders'),
               type: 'toggle',
               value: dailyReminders,
               onPress: () => setDailyReminders(!dailyReminders),
@@ -931,7 +1375,7 @@ export default function ProfileScreen() {
             {
               id: 'weekly-reports',
               icon: 'bar-chart',
-              label: 'Weekly Reports',
+              label: t('account.weeklyReports'),
               type: 'toggle',
               value: weeklyReports,
               onPress: () => setWeeklyReports(!weeklyReports),
@@ -939,41 +1383,11 @@ export default function ProfileScreen() {
             },
           ])}
 
-          {renderSettingsSection('Health Tracking', [
-            {
-              id: 'step-tracking',
-              icon: 'walk',
-              label: 'Auto Step Tracking',
-              type: 'toggle',
-              value: stepTracking,
-              onPress: () => setStepTracking(!stepTracking),
-              color: '#22c55e',
-            },
-            {
-              id: 'partner-sync',
-              icon: 'people',
-              label: 'Partner Sync',
-              type: 'toggle',
-              value: partnerSync,
-              onPress: () => setPartnerSync(!partnerSync),
-              color: '#ef4444',
-            },
-            {
-              id: 'data-sync',
-              icon: 'cloud-upload',
-              label: 'Cloud Sync',
-              type: 'toggle',
-              value: dataSync,
-              onPress: () => setDataSync(!dataSync),
-              color: '#006dab',
-            },
-          ])}
-
-          {renderSettingsSection('Account', [
+          {renderSettingsSection(t('account.title'), [
             {
               id: 'switch-profile',
               icon: 'swap-horizontal',
-              label: 'Switch Profile',
+              label: t('account.switchProfile'),
               type: 'link',
               onPress: () => {
                 if (profileData) {
@@ -991,7 +1405,7 @@ export default function ProfileScreen() {
             {
               id: 'manage-pin',
               icon: 'keypad',
-              label: 'Manage Session PIN',
+              label: t('account.managePin'),
               type: 'link',
               onPress: () => router.push('/user/manage-pin' as any),
               color: '#f59e0b',
@@ -999,32 +1413,32 @@ export default function ProfileScreen() {
             {
               id: 'personal-info',
               icon: 'person',
-              label: 'Personal Information',
+              label: t('account.personalInfo'),
               type: 'link',
               onPress: () => router.push('/user/personal-info' as any),
             },
             {
               id: 'device-management',
               icon: 'phone-portrait-outline',
-              label: 'Device Management',
+              label: t('profile.deviceManagement'),
               type: 'link',
               onPress: () => router.push('/user/device-management' as any),
               color: '#8b5cf6',
             },
           ])}
 
-          {renderSettingsSection('Support', [
+          {renderSettingsSection(t('profile.support'), [
             {
               id: 'help',
               icon: 'help-circle',
-              label: 'Help Center',
+              label: t('profile.helpCenter'),
               type: 'link',
               onPress: () => router.push('/user/help-center' as any),
             },
             {
               id: 'feedback',
               icon: 'chatbubble-ellipses',
-              label: 'Send Feedback',
+              label: t('profile.sendFeedback'),
               type: 'link',
               onPress: () => router.push('/user/feedback' as any),
               color: '#f59e0b',
@@ -1032,20 +1446,20 @@ export default function ProfileScreen() {
             {
               id: 'about',
               icon: 'information-circle',
-              label: 'About Fit for Baby',
+              label: t('profile.about'),
               type: 'link',
               onPress: () => router.push('/user/about' as any),
               color: '#64748b',
             },
           ])}
 
-          {renderSettingsSection('Data & Privacy', [
+          {renderSettingsSection(t('account.dataPrivacy'), [
             {
               id: 'export-data',
               icon: 'download',
-              label: 'Export My Data',
+              label: t('account.exportData'),
               type: 'link',
-              onPress: () => {},
+              onPress: () => setShowExportModal(true),
             },
           ])}
 
@@ -1055,12 +1469,7 @@ export default function ProfileScreen() {
             onPress={handleLogout}
           >
             <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-            <Text style={styles.logoutText}>Log Out</Text>
-          </TouchableOpacity>
-
-          {/* Delete Account */}
-          <TouchableOpacity style={styles.deleteButton}>
-            <Text style={[styles.deleteText, { color: colors.textMuted }]}>Delete Account</Text>
+            <Text style={styles.logoutText}>{t('profile.logout')}</Text>
           </TouchableOpacity>
 
           {/* App Version */}
@@ -1070,6 +1479,86 @@ export default function ProfileScreen() {
       
       {/* Bottom Navigation */}
       <BottomNavBar />
+
+      {/* Export Data Modal */}
+      <Modal
+        visible={showExportModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExportModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowExportModal(false)}
+        >
+          <View style={[styles.photoModalContent, { backgroundColor: colors.cardBackground }]}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ 
+                width: 60, 
+                height: 60, 
+                borderRadius: 30, 
+                backgroundColor: '#006dab15',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 12
+              }}>
+                <Ionicons name="download-outline" size={32} color="#006dab" />
+              </View>
+              <Text style={[styles.photoModalTitle, { color: colors.text, marginBottom: 8 }]}>{t('profile.exportMyData')}</Text>
+              <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
+                {t('profile.exportDescription')}
+              </Text>
+            </View>
+            
+            <View style={{ 
+              backgroundColor: colors.inputBackground, 
+              padding: 12, 
+              borderRadius: 10, 
+              marginBottom: 16 
+            }}>
+              <Text style={{ fontSize: 12, color: colors.textMuted, marginBottom: 4 }}>{t('profile.dataIncluded')}</Text>
+              <Text style={{ fontSize: 13, color: colors.text }}>
+                • {t('profile.personalInformation')}{'\n'}
+                • {t('profile.stepsHistory')}{'\n'}
+                • {t('profile.weightLogs')}{'\n'}
+                • {t('profile.exerciseLogs')}{'\n'}
+                • {t('profile.foodLogs')}{'\n'}
+                • {t('profile.questionnaireProgressData')}
+              </Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={[styles.photoModalOption, { 
+                borderBottomWidth: 0, 
+                backgroundColor: '#006dab', 
+                borderRadius: 12,
+                justifyContent: 'center',
+              }]}
+              onPress={handleExportData}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="document-text-outline" size={20} color="#fff" />
+                  <Text style={[styles.photoModalOptionText, { color: '#fff', fontWeight: '600' }]}>
+                    {t('profile.generateReport')}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.photoModalCancel, { backgroundColor: colors.inputBackground }]}
+              onPress={() => setShowExportModal(false)}
+            >
+              <Text style={[styles.photoModalCancelText, { color: colors.textSecondary }]}>{t('profile.cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Profile Photo Modal */}
       <Modal
@@ -1084,14 +1573,14 @@ export default function ProfileScreen() {
           onPress={() => setIsPhotoModalVisible(false)}
         >
           <View style={[styles.photoModalContent, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[styles.photoModalTitle, { color: colors.text }]}>Profile Photo</Text>
+            <Text style={[styles.photoModalTitle, { color: colors.text }]}>{t('profile.profilePhoto')}</Text>
             
             <TouchableOpacity 
               style={[styles.photoModalOption, { borderBottomColor: colors.border }]}
               onPress={takePhoto}
             >
               <Ionicons name="camera-outline" size={24} color={colors.primary} />
-              <Text style={[styles.photoModalOptionText, { color: colors.text }]}>Take Photo</Text>
+              <Text style={[styles.photoModalOptionText, { color: colors.text }]}>{t('profile.takePhoto')}</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -1099,7 +1588,7 @@ export default function ProfileScreen() {
               onPress={pickImageFromGallery}
             >
               <Ionicons name="images-outline" size={24} color={colors.primary} />
-              <Text style={[styles.photoModalOptionText, { color: colors.text }]}>Choose from Gallery</Text>
+              <Text style={[styles.photoModalOptionText, { color: colors.text }]}>{t('profile.chooseFromGallery')}</Text>
             </TouchableOpacity>
             
             {profileData?.profilePhoto && (
@@ -1108,7 +1597,7 @@ export default function ProfileScreen() {
                 onPress={deleteProfilePhoto}
               >
                 <Ionicons name="trash-outline" size={24} color="#ef4444" />
-                <Text style={[styles.photoModalOptionText, { color: '#ef4444' }]}>Remove Photo</Text>
+                <Text style={[styles.photoModalOptionText, { color: '#ef4444' }]}>{t('profile.removePhoto')}</Text>
               </TouchableOpacity>
             )}
             
@@ -1116,7 +1605,7 @@ export default function ProfileScreen() {
               style={[styles.photoModalCancel, { backgroundColor: colors.inputBackground }]}
               onPress={() => setIsPhotoModalVisible(false)}
             >
-              <Text style={[styles.photoModalCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+              <Text style={[styles.photoModalCancelText, { color: colors.textSecondary }]}>{t('profile.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

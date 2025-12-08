@@ -1,5 +1,6 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { coupleService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,16 +9,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    Animated,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -32,6 +33,7 @@ export default function ManagePinScreen() {
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
   const { refreshAuthState, setSessionExpiry } = useAuth();
+  const { t } = useLanguage();
 
   // Get params
   const paramMode = params.mode as Mode;

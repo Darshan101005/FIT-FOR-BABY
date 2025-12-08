@@ -1,6 +1,7 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { Skeleton } from '@/components/ui/SkeletonLoader';
 import { useApp } from '@/context/AppContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useUserData } from '@/context/UserDataContext';
 import { doctorVisitService, formatDateString, nursingVisitService } from '@/services/firestore.service';
 import { DoctorVisit, NursingDepartmentVisit } from '@/types/firebase.types';
@@ -24,9 +25,6 @@ import {
 
 const isWeb = Platform.OS === 'web';
 
-const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const HOURS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
 const MINUTES = ['00', '15', '30', '45'];
 
@@ -35,6 +33,26 @@ export default function AppointmentsScreen() {
   const { user } = useApp();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
+  const { t, language } = useLanguage();
+
+  // Translated weekdays and months
+  const WEEKDAYS = [
+    t('days.sun').charAt(0), t('days.mon').charAt(0), t('days.tue').charAt(0), t('days.wed').charAt(0), 
+    t('days.thu').charAt(0), t('days.fri').charAt(0), t('days.sat').charAt(0)
+  ];
+  
+  const MONTHS = [
+    t('months.jan'), t('months.feb'), t('months.mar'), t('months.apr'),
+    t('months.may'), t('months.jun'), t('months.jul'), t('months.aug'),
+    t('months.sep'), t('months.oct'), t('months.nov'), t('months.dec')
+  ];
+  
+  const MONTH_FULL = [
+    t('appointments.monthFull.jan'), t('appointments.monthFull.feb'), t('appointments.monthFull.mar'),
+    t('appointments.monthFull.apr'), t('appointments.monthFull.may'), t('appointments.monthFull.jun'),
+    t('appointments.monthFull.jul'), t('appointments.monthFull.aug'), t('appointments.monthFull.sep'),
+    t('appointments.monthFull.oct'), t('appointments.monthFull.nov'), t('appointments.monthFull.dec')
+  ];
 
   // Get cached data from context
   const { 
@@ -290,13 +308,13 @@ export default function AppointmentsScreen() {
     try {
       await doctorVisitService.delete(coupleId, id);
       setDoctorVisits(doctorVisits.filter(apt => apt.id !== id));
-      showToast('Appointment removed', 'success');
+      showToast(t('appointments.appointmentRemoved'), 'success');
       
       // Refresh context cache
       refreshDoctorVisits();
     } catch (error) {
       console.error('Error deleting appointment:', error);
-      showToast('Failed to remove appointment', 'error');
+      showToast(t('appointments.failedToRemove'), 'error');
     }
   };
 
@@ -306,7 +324,7 @@ export default function AppointmentsScreen() {
         <Ionicons name="arrow-back" size={24} color="#0f172a" />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>Appointments</Text>
+        <Text style={styles.headerTitle}>{t('appointments.title')}</Text>
       </View>
     </View>
   );
@@ -410,7 +428,7 @@ export default function AppointmentsScreen() {
 
   const renderTimePicker = () => (
     <View style={styles.timeSection}>
-      <Text style={styles.inputLabel}>Time</Text>
+      <Text style={styles.inputLabel}>{t('appointments.time')}</Text>
       <TouchableOpacity 
         style={styles.timeButton}
         onPress={() => setShowTimePicker(true)}
@@ -429,7 +447,7 @@ export default function AppointmentsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.timePickerModal}>
             <View style={styles.timePickerHeader}>
-              <Text style={styles.timePickerTitle}>Select Time</Text>
+              <Text style={styles.timePickerTitle}>{t('appointments.selectTime')}</Text>
               <TouchableOpacity onPress={() => setShowTimePicker(false)}>
                 <Ionicons name="close" size={22} color="#64748b" />
               </TouchableOpacity>
@@ -437,7 +455,7 @@ export default function AppointmentsScreen() {
 
             <View style={styles.timePickerContent}>
               <View style={styles.timeColumn}>
-                <Text style={styles.timeColumnLabel}>Hour</Text>
+                <Text style={styles.timeColumnLabel}>{t('appointments.hour')}</Text>
                 <ScrollView style={styles.timeScrollView} showsVerticalScrollIndicator={false}>
                   {HOURS.map((hour) => (
                     <TouchableOpacity
@@ -454,7 +472,7 @@ export default function AppointmentsScreen() {
               </View>
 
               <View style={styles.timeColumn}>
-                <Text style={styles.timeColumnLabel}>Min</Text>
+                <Text style={styles.timeColumnLabel}>{t('appointments.min')}</Text>
                 <ScrollView style={styles.timeScrollView} showsVerticalScrollIndicator={false}>
                   {MINUTES.map((minute) => (
                     <TouchableOpacity
@@ -471,7 +489,7 @@ export default function AppointmentsScreen() {
               </View>
 
               <View style={styles.timeColumn}>
-                <Text style={styles.timeColumnLabel}>AM/PM</Text>
+                <Text style={styles.timeColumnLabel}>{t('appointments.ampm')}</Text>
                 <View style={styles.periodOptions}>
                   {(['AM', 'PM'] as const).map((p) => (
                     <TouchableOpacity
@@ -490,7 +508,7 @@ export default function AppointmentsScreen() {
               style={styles.timePickerDone}
               onPress={() => setShowTimePicker(false)}
             >
-              <Text style={styles.timePickerDoneText}>Done</Text>
+              <Text style={styles.timePickerDoneText}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -512,24 +530,24 @@ export default function AppointmentsScreen() {
         {renderTimePicker()}
         
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Doctor (Optional)</Text>
+          <Text style={styles.inputLabel}>{t('appointments.doctorOptional')}</Text>
           <TextInput
             style={styles.textInput}
             value={doctorName}
             onChangeText={setDoctorName}
-            placeholder="Dr. Name"
+            placeholder={t('appointments.doctorPlaceholder')}
             placeholderTextColor="#94a3b8"
           />
         </View>
       </View>
 
       <View style={styles.inputGroupFull}>
-        <Text style={styles.inputLabel}>Purpose (Optional)</Text>
+        <Text style={styles.inputLabel}>{t('appointments.purposeOptional')}</Text>
         <TextInput
           style={styles.textInput}
           value={appointmentPurpose}
           onChangeText={setAppointmentPurpose}
-          placeholder="e.g., Regular checkup"
+          placeholder={t('appointments.purposePlaceholder')}
           placeholderTextColor="#94a3b8"
         />
       </View>
@@ -544,12 +562,12 @@ export default function AppointmentsScreen() {
           {isSubmitting ? (
             <>
               <ActivityIndicator size="small" color="#ffffff" />
-              <Text style={styles.logButtonText}>Saving...</Text>
+              <Text style={styles.logButtonText}>{t('appointments.saving')}</Text>
             </>
           ) : (
             <>
               <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
-              <Text style={styles.logButtonText}>Log Appointment</Text>
+              <Text style={styles.logButtonText}>{t('appointments.logAppointment')}</Text>
             </>
           )}
         </View>
@@ -564,7 +582,7 @@ export default function AppointmentsScreen() {
       <View style={styles.loggedSection}>
         {sortedDoctorVisits.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Logged</Text>
+            <Text style={styles.sectionTitle}>{t('appointments.logged')}</Text>
             {sortedDoctorVisits.map((apt) => (
               <View key={apt.id} style={styles.appointmentCard}>
                 <View style={styles.appointmentDateBox}>
@@ -689,11 +707,11 @@ export default function AppointmentsScreen() {
         <View style={styles.nvCalendarLegend}>
           <View style={styles.nvLegendItem}>
             <View style={[styles.nvLegendDot, { backgroundColor: '#006dab' }]} />
-            <Text style={styles.nvLegendText}>Scheduled Visit</Text>
+            <Text style={styles.nvLegendText}>{t('appointments.scheduledVisit')}</Text>
           </View>
           <View style={styles.nvLegendItem}>
             <View style={[styles.nvLegendDot, { backgroundColor: '#94a3b8' }]} />
-            <Text style={styles.nvLegendText}>Completed</Text>
+            <Text style={styles.nvLegendText}>{t('appointments.completed')}</Text>
           </View>
         </View>
       </View>
@@ -718,8 +736,8 @@ export default function AppointmentsScreen() {
             <Ionicons name="medkit" size={24} color="#006dab" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.nurseVisitTitle}>Nursing Dept Visits</Text>
-            <Text style={styles.nurseVisitSubtitle}>Scheduled by admin</Text>
+            <Text style={styles.nurseVisitTitle}>{t('appointments.nursingDeptVisits')}</Text>
+            <Text style={styles.nurseVisitSubtitle}>{t('appointments.scheduledByAdmin')}</Text>
           </View>
         </View>
 
@@ -729,8 +747,8 @@ export default function AppointmentsScreen() {
         {nursingVisits.length === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="calendar-outline" size={48} color="#cbd5e1" />
-            <Text style={styles.emptyStateText}>No visits scheduled yet</Text>
-            <Text style={styles.emptyStateSubtext}>Visits will appear here once scheduled by admin</Text>
+            <Text style={styles.emptyStateText}>{t('appointments.noVisitsScheduled')}</Text>
+            <Text style={styles.emptyStateSubtext}>{t('appointments.visitsAppearHere')}</Text>
           </View>
         )}
 
@@ -738,7 +756,7 @@ export default function AppointmentsScreen() {
         {nextVisit && (
           <View style={styles.nextVisitCard}>
             <View style={styles.nextVisitBadge}>
-              <Text style={styles.nextVisitBadgeText}>Next Visit</Text>
+              <Text style={styles.nextVisitBadgeText}>{t('appointments.nextVisit')}</Text>
             </View>
             <View style={styles.nextVisitContent}>
               <View style={[styles.visitDateBox, styles.nextVisitDateBox]}>
@@ -758,12 +776,12 @@ export default function AppointmentsScreen() {
                   <Text style={[styles.visitNurseName, styles.nextVisitText]}>{nextVisit.departmentName}</Text>
                 )}
                 {nextVisit.visitNumber && (
-                  <Text style={[styles.visitNumberText, styles.nextVisitTextLight]}>Visit #{nextVisit.visitNumber}</Text>
+                  <Text style={[styles.visitNumberText, styles.nextVisitTextLight]}>{t('appointments.visitNumber')} #{nextVisit.visitNumber}</Text>
                 )}
                 {nextVisit.linkedDoctorVisitId && (
                   <View style={styles.linkedDoctorVisitBadge}>
                     <Ionicons name="medical" size={12} color="#98be4e" />
-                    <Text style={styles.linkedDoctorVisitText}>Same day as doctor visit</Text>
+                    <Text style={styles.linkedDoctorVisitText}>{t('appointments.sameDayDoctor')}</Text>
                   </View>
                 )}
               </View>
@@ -774,7 +792,7 @@ export default function AppointmentsScreen() {
         {/* Upcoming Visits */}
         {upcomingVisits.length > 1 && (
           <View style={styles.visitCategory}>
-            <Text style={styles.visitCategoryTitle}>Upcoming Visits</Text>
+            <Text style={styles.visitCategoryTitle}>{t('appointments.upcomingVisits')}</Text>
             {upcomingVisits.slice(1, 4).map((visit: NursingDepartmentVisit) => (
               <View key={visit.id} style={styles.nurseVisitCard}>
                 <View style={styles.visitDateBox}>
@@ -794,17 +812,17 @@ export default function AppointmentsScreen() {
                     <Text style={styles.visitNurseName}>{visit.departmentName}</Text>
                   )}
                   {visit.visitNumber && (
-                    <Text style={styles.visitNumberText}>Visit #{visit.visitNumber}</Text>
+                    <Text style={styles.visitNumberText}>{t('appointments.visitNumber')} #{visit.visitNumber}</Text>
                   )}
                   {visit.linkedDoctorVisitId && (
                     <View style={styles.linkedDoctorVisitBadgeSmall}>
                       <Ionicons name="medical" size={10} color="#98be4e" />
-                      <Text style={styles.linkedDoctorVisitTextSmall}>Doctor visit day</Text>
+                      <Text style={styles.linkedDoctorVisitTextSmall}>{t('appointments.doctorVisitDay')}</Text>
                     </View>
                   )}
                 </View>
                 <View style={[styles.visitStatusBadge, styles.visitStatusScheduled]}>
-                  <Text style={styles.visitStatusText}>{visit.status === 'confirmed' ? 'Confirmed' : 'Scheduled'}</Text>
+                  <Text style={styles.visitStatusText}>{visit.status === 'confirmed' ? t('appointments.statusConfirmed') : t('appointments.statusScheduled')}</Text>
                 </View>
               </View>
             ))}
@@ -814,7 +832,7 @@ export default function AppointmentsScreen() {
         {/* Past Visits */}
         {pastVisits.length > 0 && (
           <View style={styles.visitCategory}>
-            <Text style={styles.visitCategoryTitle}>Recent Completed</Text>
+            <Text style={styles.visitCategoryTitle}>{t('appointments.recentCompleted')}</Text>
             {[...pastVisits].reverse().map((visit: NursingDepartmentVisit) => (
               <View key={visit.id} style={[styles.nurseVisitCard, styles.nurseVisitCardPast]}>
                 <View style={[styles.visitDateBox, styles.visitDateBoxPast]}>
@@ -834,11 +852,11 @@ export default function AppointmentsScreen() {
                     <Text style={[styles.visitNurseName, styles.visitNurseNamePast]}>{visit.departmentName}</Text>
                   )}
                   {visit.visitNumber && (
-                    <Text style={styles.visitNumberText}>Visit #{visit.visitNumber}</Text>
+                    <Text style={styles.visitNumberText}>{t('appointments.visitNumber')} #{visit.visitNumber}</Text>
                   )}
                 </View>
                 <View style={[styles.visitStatusBadge, styles.visitStatusCompleted]}>
-                  <Text style={[styles.visitStatusText, styles.visitStatusTextCompleted]}>Completed</Text>
+                  <Text style={[styles.visitStatusText, styles.visitStatusTextCompleted]}>{t('appointments.completed')}</Text>
                 </View>
               </View>
             ))}
@@ -848,7 +866,7 @@ export default function AppointmentsScreen() {
         {/* Cancelled Visits */}
         {cancelledVisits.length > 0 && (
           <View style={styles.visitCategory}>
-            <Text style={styles.visitCategoryTitle}>Cancelled Visits</Text>
+            <Text style={styles.visitCategoryTitle}>{t('appointments.cancelledVisits')}</Text>
             {cancelledVisits.map((visit: NursingDepartmentVisit) => (
               <View key={visit.id} style={[styles.nurseVisitCard, styles.nurseVisitCardCancelled]}>
                 <View style={[styles.visitDateBox, styles.visitDateBoxCancelled]}>
@@ -868,11 +886,11 @@ export default function AppointmentsScreen() {
                     <Text style={[styles.visitNurseName, styles.visitNurseNameCancelled]}>{visit.departmentName}</Text>
                   )}
                   {visit.visitNumber && (
-                    <Text style={[styles.visitNumberText, styles.visitNumberTextCancelled]}>Visit #{visit.visitNumber}</Text>
+                    <Text style={[styles.visitNumberText, styles.visitNumberTextCancelled]}>{t('appointments.visitNumber')} #{visit.visitNumber}</Text>
                   )}
                 </View>
                 <View style={[styles.visitStatusBadge, styles.visitStatusCancelled]}>
-                  <Text style={[styles.visitStatusText, styles.visitStatusTextCancelled]}>Cancelled</Text>
+                  <Text style={[styles.visitStatusText, styles.visitStatusTextCancelled]}>{t('appointments.cancelled')}</Text>
                 </View>
               </View>
             ))}

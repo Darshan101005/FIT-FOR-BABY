@@ -1,8 +1,10 @@
 import { useAuth } from '@/context/AuthContext';
 import { UserDataProvider } from '@/context/UserDataContext';
+import { deviceService } from '@/services/firestore.service';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router';
-import { useEffect } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { ActivityIndicator, Alert, Image, Platform, StyleSheet, Text, View } from 'react-native';
 
 // Loading screen for auth check
 function AuthLoadingScreen() {
@@ -21,8 +23,74 @@ function AuthLoadingScreen() {
 }
 
 export default function UserLayout() {
-  const { isAuthenticated, isLoading, userRole } = useAuth();
+  const { isAuthenticated, isLoading, userRole, logout } = useAuth();
   const router = useRouter();
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+  const isLoggingOutRef = useRef(false);
+
+  // Monitor device session for remote logout
+  useEffect(() => {
+    let isMounted = true;
+
+    const setupDeviceMonitor = async () => {
+      try {
+        const coupleId = await AsyncStorage.getItem('coupleId');
+        const userGender = await AsyncStorage.getItem('userGender');
+        const deviceId = await AsyncStorage.getItem('currentDeviceId');
+
+        if (coupleId && userGender && deviceId && isAuthenticated) {
+          // Subscribe to device status changes for THIS device only
+          unsubscribeRef.current = deviceService.subscribeToDeviceStatus(
+            coupleId,
+            userGender as 'male' | 'female',
+            deviceId,
+            async () => {
+              // Only show alert if not already logging out and component is mounted
+              if (isMounted && !isLoggingOutRef.current) {
+                isLoggingOutRef.current = true;
+                console.log('This device was remotely logged out');
+                
+                // Unsubscribe first to prevent multiple triggers
+                if (unsubscribeRef.current) {
+                  unsubscribeRef.current();
+                  unsubscribeRef.current = null;
+                }
+                
+                // Show alert based on platform
+                if (Platform.OS === 'web') {
+                  alert('You have been logged out from another device.');
+                } else {
+                  Alert.alert(
+                    'Session Ended',
+                    'You have been logged out from another device.',
+                    [{ text: 'OK' }]
+                  );
+                }
+                
+                // Perform logout
+                await logout();
+                router.replace('/login');
+              }
+            }
+          );
+        }
+      } catch (error) {
+        console.error('Error setting up device monitor:', error);
+      }
+    };
+
+    if (isAuthenticated && userRole === 'user') {
+      setupDeviceMonitor();
+    }
+
+    return () => {
+      isMounted = false;
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, [isAuthenticated, userRole, logout, router]);
 
   useEffect(() => {
     // Redirect if not authenticated or not a user

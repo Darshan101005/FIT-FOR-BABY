@@ -1,5 +1,5 @@
-import { broadcastService, chatService, coupleService } from '@/services/firestore.service';
-import { Broadcast as BroadcastType, Chat, ChatMessage } from '@/types/firebase.types';
+import { broadcastService, chatService, coupleService, feedbackService } from '@/services/firestore.service';
+import { Broadcast as BroadcastType, Chat, ChatMessage, Feedback, FeedbackStatus } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { Timestamp } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Animated,
     Modal,
     Platform,
@@ -255,7 +256,7 @@ export default function AdminCommunicationScreen() {
   const isDesktop = screenWidth >= 1024;
   const toastAnim = useRef(new Animated.Value(-100)).current;
 
-  const [activeTab, setActiveTab] = useState<'inbox' | 'broadcast'>('inbox');
+  const [activeTab, setActiveTab] = useState<'inbox' | 'broadcast' | 'feedback'>('inbox');
   const [chatThreads] = useState<ChatThread[]>(mockChatThreads);
   const [selectedThread, setSelectedThread] = useState<ChatThread | null>(null);
   const [showChatModal, setShowChatModal] = useState(false);
@@ -277,6 +278,12 @@ export default function AdminCommunicationScreen() {
   const [isClearingChat, setIsClearingChat] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesScrollRef = useRef<ScrollView>(null);
+
+  // Feedback state
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(false);
+  const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
+  const [feedbackFilter, setFeedbackFilter] = useState<'all' | FeedbackStatus>('all');
 
   // Broadcast state
   const [broadcasts, setBroadcasts] = useState<BroadcastType[]>([]);
@@ -317,6 +324,7 @@ export default function AdminCommunicationScreen() {
   useFocusEffect(
     useCallback(() => {
       let unsubscribeChats: (() => void) | undefined;
+      let unsubscribeFeedbacks: (() => void) | undefined;
 
       const loadData = async () => {
         try {
@@ -342,6 +350,13 @@ export default function AdminCommunicationScreen() {
             setSupportChats(chats);
             setIsLoadingChats(false);
           });
+
+          // Subscribe to feedbacks (real-time)
+          setIsLoadingFeedbacks(true);
+          unsubscribeFeedbacks = feedbackService.subscribeToFeedbacks((feedbackList) => {
+            setFeedbacks(feedbackList);
+            setIsLoadingFeedbacks(false);
+          });
         } catch (error) {
           console.error('Error loading data:', error);
         } finally {
@@ -355,6 +370,9 @@ export default function AdminCommunicationScreen() {
       return () => {
         if (unsubscribeChats) {
           unsubscribeChats();
+        }
+        if (unsubscribeFeedbacks) {
+          unsubscribeFeedbacks();
         }
       };
     }, [])
@@ -790,6 +808,24 @@ export default function AdminCommunicationScreen() {
             Broadcast
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'feedback' && styles.tabActive]}
+          onPress={() => setActiveTab('feedback')}
+        >
+          <Ionicons
+            name="star"
+            size={18}
+            color={activeTab === 'feedback' ? COLORS.primary : COLORS.textMuted}
+          />
+          <Text style={[styles.tabText, activeTab === 'feedback' && styles.tabTextActive]}>
+            Feedback
+          </Text>
+          {feedbacks.filter(f => f.status === 'pending').length > 0 && (
+            <View style={styles.tabBadge}>
+              <Text style={styles.tabBadgeText}>{feedbacks.filter(f => f.status === 'pending').length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -1210,6 +1246,413 @@ export default function AdminCommunicationScreen() {
             <Ionicons name="send" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  };
+
+  // Feedback Section
+  const renderFeedbackSection = () => {
+    const filteredFeedbacks = feedbacks.filter(f => {
+      if (feedbackFilter === 'all') return true;
+      return f.status === feedbackFilter;
+    });
+
+    const formatDate = (timestamp: any) => {
+      if (!timestamp) return 'Unknown';
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    };
+
+    const getCategoryIcon = (category: string) => {
+      switch (category) {
+        case 'bug': return 'bug';
+        case 'feature': return 'bulb';
+        case 'improvement': return 'trending-up';
+        case 'question': return 'help-circle';
+        default: return 'chatbox';
+      }
+    };
+
+    const getCategoryColor = (category: string) => {
+      switch (category) {
+        case 'bug': return '#EF4444';
+        case 'feature': return '#8B5CF6';
+        case 'improvement': return '#3B82F6';
+        case 'question': return '#F59E0B';
+        default: return COLORS.textMuted;
+      }
+    };
+
+    const getStatusColor = (status: string) => {
+      switch (status) {
+        case 'pending': return '#F59E0B';
+        case 'reviewed': return '#3B82F6';
+        case 'resolved': return '#10B981';
+        default: return COLORS.textMuted;
+      }
+    };
+
+    const handleStatusChange = async (feedbackId: string, newStatus: 'pending' | 'reviewed' | 'resolved') => {
+      try {
+        await feedbackService.updateStatus(feedbackId, newStatus);
+        setToast({
+          visible: true,
+          message: `Feedback marked as ${newStatus}`,
+          type: 'success',
+        });
+      } catch (error) {
+        console.error('Error updating feedback status:', error);
+        setToast({
+          visible: true,
+          message: 'Failed to update feedback status',
+          type: 'error',
+        });
+      }
+    };
+
+    const handleDeleteFeedback = async (feedbackId: string) => {
+      try {
+        await feedbackService.delete(feedbackId);
+        setSelectedFeedback(null);
+        setToast({
+          visible: true,
+          message: 'Feedback deleted successfully',
+          type: 'success',
+        });
+      } catch (error) {
+        console.error('Error deleting feedback:', error);
+        setToast({
+          visible: true,
+          message: 'Failed to delete feedback',
+          type: 'error',
+        });
+      }
+    };
+
+    const renderStars = (rating: number) => {
+      return (
+        <View style={{ flexDirection: 'row', gap: 2 }}>
+          {[1, 2, 3, 4, 5].map(star => (
+            <Ionicons
+              key={star}
+              name={star <= rating ? 'star' : 'star-outline'}
+              size={14}
+              color={star <= rating ? '#F59E0B' : COLORS.textMuted}
+            />
+          ))}
+        </View>
+      );
+    };
+
+    if (isLoadingFeedbacks) {
+      return (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.emptyStateText}>Loading feedbacks...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.broadcastSection}>
+        {/* Section Header */}
+        <View style={styles.broadcastHeader}>
+          <View style={styles.broadcastHeaderLeft}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                backgroundColor: `${COLORS.primary}15`,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}>
+                <Ionicons name="star" size={20} color={COLORS.primary} />
+              </View>
+              <View>
+                <Text style={styles.sectionTitle}>User Feedback</Text>
+                <Text style={styles.sectionSubtitle}>
+                  {feedbacks.length} total • {feedbacks.filter(f => f.status === 'pending').length} pending
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Status Filters */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+          {(['all', 'pending', 'reviewed', 'resolved'] as const).map(status => (
+            <TouchableOpacity
+              key={status}
+              style={[
+                styles.statusChip,
+                feedbackFilter === status && styles.statusChipActive,
+              ]}
+              onPress={() => setFeedbackFilter(status)}
+            >
+              <Text style={[
+                styles.statusChipText,
+                feedbackFilter === status && styles.statusChipTextActive,
+              ]}>
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+                {status !== 'all' && ` (${feedbacks.filter(f => f.status === status).length})`}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Feedback List */}
+        {filteredFeedbacks.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="star-outline" size={48} color={COLORS.textMuted} />
+            <Text style={styles.emptyStateText}>No Feedback Found</Text>
+            <Text style={styles.emptyStateSubtext}>
+              {feedbackFilter === 'all' 
+                ? 'No feedback has been submitted yet.' 
+                : `No ${feedbackFilter} feedback.`}
+            </Text>
+          </View>
+        ) : (
+          <View style={{ gap: 12 }}>
+            {filteredFeedbacks.map(feedback => (
+              <TouchableOpacity
+                key={feedback.id}
+                style={styles.broadcastCard}
+                onPress={() => setSelectedFeedback(feedback)}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <View style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: `${getCategoryColor(feedback.category)}15`,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}>
+                      <Ionicons name={getCategoryIcon(feedback.category) as any} size={18} color={getCategoryColor(feedback.category)} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textPrimary }} numberOfLines={1}>
+                        {feedback.userName || 'Anonymous User'}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: COLORS.textMuted }}>
+                        {feedback.userEmail || 'No email'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                    backgroundColor: `${getStatusColor(feedback.status)}15`,
+                  }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: getStatusColor(feedback.status) }}>
+                      {feedback.status.toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <View style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 8,
+                    backgroundColor: `${getCategoryColor(feedback.category)}15`,
+                  }}>
+                    <Text style={{ fontSize: 11, fontWeight: '500', color: getCategoryColor(feedback.category) }}>
+                      {feedback.category.toUpperCase()}
+                    </Text>
+                  </View>
+                  {renderStars(feedback.rating)}
+                </View>
+
+                <Text style={{ fontSize: 14, color: COLORS.textPrimary, lineHeight: 20 }} numberOfLines={2}>
+                  {feedback.message}
+                </Text>
+
+                <Text style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 8 }}>
+                  {formatDate(feedback.createdAt)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Feedback Detail Modal */}
+        <Modal
+          visible={!!selectedFeedback}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setSelectedFeedback(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+              {selectedFeedback && (
+                <>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Feedback Details</Text>
+                    <TouchableOpacity onPress={() => setSelectedFeedback(null)}>
+                      <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={{ padding: 20 }}>
+                    {/* User Info */}
+                    <View style={{ marginBottom: 20 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>FROM</Text>
+                      <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.textPrimary }}>
+                        {selectedFeedback.userName || 'Anonymous User'}
+                      </Text>
+                      <Text style={{ fontSize: 14, color: COLORS.textSecondary, marginTop: 2 }}>
+                        {selectedFeedback.userEmail || 'No email provided'}
+                      </Text>
+                      {selectedFeedback.coupleName && (
+                        <Text style={{ fontSize: 13, color: COLORS.textMuted, marginTop: 4 }}>
+                          Couple: {selectedFeedback.coupleName}
+                        </Text>
+                      )}
+                    </View>
+
+                    {/* Category & Rating - Side by Side */}
+                    <View style={{ flexDirection: 'row', marginBottom: 20 }}>
+                      <View style={{ flex: 1, paddingRight: 12 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>CATEGORY</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <View style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: `${getCategoryColor(selectedFeedback.category)}15`,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            marginRight: 10,
+                          }}>
+                            <Ionicons name={getCategoryIcon(selectedFeedback.category) as any} size={16} color={getCategoryColor(selectedFeedback.category)} />
+                          </View>
+                          <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textPrimary }}>
+                            {selectedFeedback.category.charAt(0).toUpperCase() + selectedFeedback.category.slice(1)}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={{ flex: 1, paddingLeft: 12 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>RATING</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          {renderStars(selectedFeedback.rating)}
+                          <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textPrimary, marginLeft: 8 }}>
+                            {selectedFeedback.rating}/5
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Message */}
+                    <View style={{ marginBottom: 20 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>MESSAGE</Text>
+                      <View style={{
+                        backgroundColor: COLORS.background,
+                        padding: 14,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: COLORS.borderLight,
+                      }}>
+                        <Text style={{ fontSize: 14, color: COLORS.textPrimary, lineHeight: 22 }}>
+                          {selectedFeedback.message}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Submitted Date */}
+                    <View style={{ marginBottom: 20 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>SUBMITTED</Text>
+                      <Text style={{ fontSize: 15, color: COLORS.textPrimary, fontWeight: '500' }}>
+                        {formatDate(selectedFeedback.createdAt)}
+                      </Text>
+                    </View>
+
+                    {/* Status Actions */}
+                    <View style={{ marginBottom: 8 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>UPDATE STATUS</Text>
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        {(['pending', 'reviewed', 'resolved'] as const).map(status => (
+                          <TouchableOpacity
+                            key={status}
+                            style={{
+                              flex: 1,
+                              paddingVertical: 12,
+                              borderRadius: 10,
+                              backgroundColor: selectedFeedback.status === status 
+                                ? getStatusColor(status) 
+                                : `${getStatusColor(status)}15`,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderWidth: selectedFeedback.status === status ? 0 : 1,
+                              borderColor: `${getStatusColor(status)}30`,
+                            }}
+                            onPress={() => handleStatusChange(selectedFeedback.id, status)}
+                          >
+                            <Text style={{
+                              fontSize: 13,
+                              fontWeight: '600',
+                              color: selectedFeedback.status === status ? '#fff' : getStatusColor(status),
+                            }}>
+                              {status.charAt(0).toUpperCase() + status.slice(1)}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </ScrollView>
+
+                  {/* Delete Button */}
+                  <View style={{ padding: 20, paddingTop: 0 }}>
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        paddingVertical: 14,
+                        borderRadius: 10,
+                        backgroundColor: '#FEE2E2',
+                      }}
+                      onPress={() => {
+                        if (isWeb) {
+                          // Use confirm for web
+                          if (window.confirm('Are you sure you want to delete this feedback? This action cannot be undone.')) {
+                            handleDeleteFeedback(selectedFeedback.id);
+                          }
+                        } else {
+                          Alert.alert(
+                            'Delete Feedback',
+                            'Are you sure you want to delete this feedback? This action cannot be undone.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              { 
+                                text: 'Delete', 
+                                style: 'destructive',
+                                onPress: () => handleDeleteFeedback(selectedFeedback.id),
+                              },
+                            ]
+                          );
+                        }
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#EF4444' }}>Delete Feedback</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   };
@@ -1956,13 +2399,22 @@ export default function AdminCommunicationScreen() {
           {renderThreadList()}
           {isDesktop && renderChatPanel()}
         </View>
-      ) : (
+      ) : activeTab === 'broadcast' ? (
         <ScrollView
           contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.content, !isMobile && styles.contentDesktop]}>
             {renderBroadcastSection()}
+          </View>
+        </ScrollView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.content, !isMobile && styles.contentDesktop]}>
+            {renderFeedbackSection()}
           </View>
         </ScrollView>
       )}

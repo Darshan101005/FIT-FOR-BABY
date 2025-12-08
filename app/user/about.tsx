@@ -1,9 +1,9 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React from 'react';
 import {
     Image,
     Linking,
@@ -20,31 +20,24 @@ const isWeb = Platform.OS === 'web';
 
 const appInfo = {
   version: '1.0.0',
-  build: '2024.11.26',
-  releaseDate: 'November 2024',
+  build: '2025.12.07',
+  releaseDate: 'December 2025',
 };
 
-const teamMembers = [
-  { name: 'Healthcare Team', role: 'Medical Guidance', icon: 'medkit' },
-  { name: 'Development Team', role: 'App Development', icon: 'code-slash' },
-  { name: 'Design Team', role: 'UI/UX Design', icon: 'color-palette' },
-  { name: 'Research Team', role: 'Health Research', icon: 'flask' },
-];
-
 const features = [
-  { icon: 'nutrition', label: 'Nutrition Tracking', color: '#22c55e' },
+  { icon: 'footsteps', label: 'Step Tracking', color: '#22c55e' },
   { icon: 'fitness', label: 'Exercise Logging', color: '#3b82f6' },
   { icon: 'scale', label: 'Weight Monitoring', color: '#f59e0b' },
-  { icon: 'people', label: 'Partner Sync', color: '#ec4899' },
+  { icon: 'nutrition', label: 'Diet Plans', color: '#ec4899' },
   { icon: 'calendar', label: 'Appointments', color: '#8b5cf6' },
   { icon: 'chatbubbles', label: 'Messaging', color: '#06b6d4' },
 ];
 
 const socialLinks = [
   { id: 'website', icon: 'globe-outline', label: 'Website', url: 'https://fitforbaby.com', color: '#3b82f6' },
-  { id: 'instagram', icon: 'logo-instagram', label: 'Instagram', url: 'https://instagram.com/fitforbaby', color: '#e4405f' },
-  { id: 'twitter', icon: 'logo-twitter', label: 'Twitter', url: 'https://twitter.com/fitforbaby', color: '#1da1f2' },
-  { id: 'facebook', icon: 'logo-facebook', label: 'Facebook', url: 'https://facebook.com/fitforbaby', color: '#1877f2' },
+  { id: 'instagram', icon: 'logo-instagram', label: 'Instagram', url: '', color: '#e4405f' },
+  { id: 'twitter', icon: 'logo-twitter', label: 'Twitter', url: '', color: '#1da1f2' },
+  { id: 'facebook', icon: 'logo-facebook', label: 'Facebook', url: '', color: '#1877f2' },
 ];
 
 export default function AboutScreen() {
@@ -52,6 +45,7 @@ export default function AboutScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
+  const { t } = useLanguage();
 
   const handleLinkPress = (url: string) => {
     Linking.openURL(url);
@@ -68,7 +62,7 @@ export default function AboutScreen() {
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>About</Text>
+            <Text style={styles.headerTitle}>{t('about.title')}</Text>
             <View style={{ width: 40 }} />
           </View>
         </LinearGradient>
@@ -85,11 +79,11 @@ export default function AboutScreen() {
             </View>
             <Text style={[styles.appName, { color: colors.text }]}>Fit for Baby</Text>
             <Text style={[styles.appTagline, { color: colors.textSecondary }]}>
-              Your partner in a healthy pregnancy journey
+              {t('about.tagline')}
             </Text>
             <View style={styles.versionBadge}>
               <Text style={[styles.versionText, { color: colors.primary }]}>
-                Version {appInfo.version}
+                {t('about.version')} {appInfo.version}
               </Text>
             </View>
           </View>
@@ -97,64 +91,33 @@ export default function AboutScreen() {
           {/* Mission Statement */}
           <View style={[styles.missionCard, { backgroundColor: isDarkMode ? colors.primaryLight : '#eff6ff' }]}>
             <Ionicons name="heart" size={24} color={colors.primary} />
-            <Text style={[styles.missionTitle, { color: colors.text }]}>Our Mission</Text>
+            <Text style={[styles.missionTitle, { color: colors.text }]}>{t('about.ourMission')}</Text>
             <Text style={[styles.missionText, { color: colors.textSecondary }]}>
-              To empower expectant parents with the tools and guidance they need for a healthy pregnancy. 
-              We believe that both partners should be actively involved in the journey to parenthood, 
-              and our app is designed to make health tracking simple, engaging, and collaborative.
+              {t('about.missionText')}
             </Text>
-          </View>
-
-          {/* Team */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Our Team</Text>
-            <View style={[styles.teamCard, { backgroundColor: colors.cardBackground }]}>
-              {teamMembers.map((member, index) => (
-                <View
-                  key={member.name}
-                  style={[
-                    styles.teamMember,
-                    index < teamMembers.length - 1 && [
-                      styles.teamMemberBorder,
-                      { borderBottomColor: colors.borderLight },
-                    ],
-                  ]}
-                >
-                  <View style={[styles.teamIcon, { backgroundColor: colors.primary + '15' }]}>
-                    <Ionicons name={member.icon as any} size={20} color={colors.primary} />
-                  </View>
-                  <View style={styles.teamInfo}>
-                    <Text style={[styles.teamName, { color: colors.text }]}>{member.name}</Text>
-                    <Text style={[styles.teamRole, { color: colors.textSecondary }]}>
-                      {member.role}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
           </View>
 
           {/* App Details */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>App Information</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('about.appInfo')}</Text>
             <View style={[styles.detailsCard, { backgroundColor: colors.cardBackground }]}>
               <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Version</Text>
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('about.version')}</Text>
                 <Text style={[styles.detailValue, { color: colors.text }]}>{appInfo.version}</Text>
               </View>
               <View style={[styles.detailDivider, { backgroundColor: colors.borderLight }]} />
               <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Build</Text>
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('about.build')}</Text>
                 <Text style={[styles.detailValue, { color: colors.text }]}>{appInfo.build}</Text>
               </View>
               <View style={[styles.detailDivider, { backgroundColor: colors.borderLight }]} />
               <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Release Date</Text>
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('about.releaseDate')}</Text>
                 <Text style={[styles.detailValue, { color: colors.text }]}>{appInfo.releaseDate}</Text>
               </View>
               <View style={[styles.detailDivider, { backgroundColor: colors.borderLight }]} />
               <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Platform</Text>
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('about.platform')}</Text>
                 <Text style={[styles.detailValue, { color: colors.text }]}>
                   {Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Web'}
                 </Text>
@@ -164,42 +127,53 @@ export default function AboutScreen() {
 
           {/* Connect With Us */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Connect With Us</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('about.connectWithUs')}</Text>
             <View style={styles.socialGrid}>
-              {socialLinks.map((link) => (
-                <TouchableOpacity
-                  key={link.id}
-                  style={[styles.socialCard, { backgroundColor: colors.cardBackground }]}
-                  onPress={() => handleLinkPress(link.url)}
-                >
-                  <View style={[styles.socialIcon, { backgroundColor: link.color + '20' }]}>
-                    <Ionicons name={link.icon as any} size={24} color={link.color} />
-                  </View>
-                  <Text style={[styles.socialLabel, { color: colors.text }]}>{link.label}</Text>
-                </TouchableOpacity>
-              ))}
+              {socialLinks.map((link) => {
+                const isDisabled = !link.url;
+                return (
+                  <TouchableOpacity
+                    key={link.id}
+                    style={[
+                      styles.socialCard, 
+                      { backgroundColor: colors.cardBackground },
+                      isDisabled && { opacity: 0.5 }
+                    ]}
+                    onPress={() => link.url && handleLinkPress(link.url)}
+                    disabled={isDisabled}
+                  >
+                    <View style={[styles.socialIcon, { backgroundColor: link.color + '20' }]}>
+                      <Ionicons name={link.icon as any} size={24} color={link.color} />
+                    </View>
+                    <Text style={[styles.socialLabel, { color: colors.text }]}>{link.label}</Text>
+                    {isDisabled && (
+                      <Text style={[styles.comingSoonText, { color: colors.textMuted }]}>{t('about.comingSoon')}</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
           {/* Legal Links */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Legal</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('about.legal')}</Text>
             <View style={[styles.legalCard, { backgroundColor: colors.cardBackground }]}>
               <TouchableOpacity
                 style={styles.legalItem}
-                onPress={() => handleLinkPress('https://fitforbaby.com/privacy')}
+                onPress={() => router.push('/privacy-policy')}
               >
                 <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
-                <Text style={[styles.legalText, { color: colors.text }]}>Privacy Policy</Text>
+                <Text style={[styles.legalText, { color: colors.text }]}>{t('about.privacyPolicy')}</Text>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </TouchableOpacity>
               <View style={[styles.legalDivider, { backgroundColor: colors.borderLight }]} />
               <TouchableOpacity
                 style={styles.legalItem}
-                onPress={() => handleLinkPress('https://fitforbaby.com/terms')}
+                onPress={() => router.push('/terms-of-service')}
               >
                 <Ionicons name="document-text" size={20} color={colors.primary} />
-                <Text style={[styles.legalText, { color: colors.text }]}>Terms of Service</Text>
+                <Text style={[styles.legalText, { color: colors.text }]}>{t('about.termsOfService')}</Text>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
@@ -208,10 +182,10 @@ export default function AboutScreen() {
           {/* Acknowledgment */}
           <View style={[styles.acknowledgment, { backgroundColor: isDarkMode ? colors.cardBackground : '#f8fafc' }]}>
             <Text style={[styles.acknowledgmentText, { color: colors.textSecondary }]}>
-              Made with ❤️ for expecting parents everywhere.
+              {t('about.madeWithLove')}
             </Text>
             <Text style={[styles.copyright, { color: colors.textMuted }]}>
-              © 2025 Fit for Baby. All rights reserved.
+              {t('about.copyright')}
             </Text>
           </View>
         </View>
@@ -454,6 +428,10 @@ const styles = StyleSheet.create({
   socialLabel: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  comingSoonText: {
+    fontSize: 10,
+    marginTop: 4,
   },
   legalCard: {
     borderRadius: 16,

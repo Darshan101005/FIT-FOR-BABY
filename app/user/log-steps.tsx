@@ -1,3 +1,4 @@
+import { useLanguage } from '@/context/LanguageContext';
 import { useUserData } from '@/context/UserDataContext';
 import { cloudinaryService } from '@/services/cloudinary.service';
 import { coupleService, coupleStepsService, formatDateString } from '@/services/firestore.service';
@@ -56,6 +57,7 @@ export default function LogStepsScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { refreshDailyData } = useUserData();
+  const { t } = useLanguage();
 
   const [stepCount, setStepCount] = useState('');
   const [stepEntries, setStepEntries] = useState<StepEntry[]>([]);
@@ -176,12 +178,7 @@ export default function LogStepsScreen() {
       return;
     }
 
-    // Image is mandatory for proof
-    if (!imageUri) {
-      showToast('Please capture or select a photo as proof of your steps', 'error');
-      return;
-    }
-
+    // Image is now optional
     if (!coupleId) {
       showToast('User session not found. Please login again.', 'error');
       return;
@@ -193,40 +190,44 @@ export default function LogStepsScreen() {
     
     try {
       const stepsToAdd = parseInt(stepCount);
+      let proofImageUrl: string | null = null;
       
-      if (geminiService.isConfigured()) {
-        setIsValidating(true);
-        showToast('Verifying your step count...', 'success');
-        
-        const validation = await geminiService.validateStepCountImage(imageUri, stepsToAdd);
-        setValidationResult(validation);
-        setIsValidating(false);
-        
-        if (!validation.isValid) {
-          setIsSaving(false);
-          return;
+      // Only validate and upload image if provided
+      if (imageUri) {
+        if (geminiService.isConfigured()) {
+          setIsValidating(true);
+          showToast('Verifying your step count...', 'success');
+          
+          const validation = await geminiService.validateStepCountImage(imageUri, stepsToAdd);
+          setValidationResult(validation);
+          setIsValidating(false);
+          
+          if (!validation.isValid) {
+            setIsSaving(false);
+            return;
+          }
+          
+          if (validation.extractedStepCount) {
+            showToast(`Verified: ${validation.extractedStepCount.toLocaleString()} steps`, 'success');
+          }
         }
         
-        if (validation.extractedStepCount) {
-          showToast(`Verified: ${validation.extractedStepCount.toLocaleString()} steps`, 'success');
-        }
+        showToast('Uploading proof image...', 'success');
+        const userId = `${coupleId}_${userGender === 'male' ? 'M' : 'F'}`;
+        proofImageUrl = await cloudinaryService.uploadStepProof(
+          userId,
+          imageUri,
+          (progress) => setUploadProgress(progress)
+        );
       }
-      
-      showToast('Uploading proof image...', 'success');
-      const userId = `${coupleId}_${userGender === 'male' ? 'M' : 'F'}`;
-      const proofImageUrl = await cloudinaryService.uploadStepProof(
-        userId,
-        imageUri,
-        (progress) => setUploadProgress(progress)
-      );
       
       const entryId = await coupleStepsService.add(coupleId, userGender, {
         stepCount: stepsToAdd,
-        proofImageUrl: proofImageUrl,
-        proofType: 'gallery',
+        proofImageUrl: proofImageUrl || undefined,
+        proofType: imageUri ? 'gallery' : undefined,
         source: 'manual',
         // Save AI validation info
-        aiValidated: geminiService.isConfigured(),
+        aiValidated: imageUri ? geminiService.isConfigured() : false,
         aiExtractedCount: validationResult?.extractedStepCount || null,
         aiConfidence: validationResult?.confidence || null,
       });
@@ -239,7 +240,7 @@ export default function LogStepsScreen() {
         id: entryId,
         stepCount: stepsToAdd,
         loggedAt: new Date(),
-        proofImageUrl: proofImageUrl,
+        proofImageUrl: proofImageUrl || undefined,
       };
 
       const updatedEntries = [newEntry, ...stepEntries];
@@ -293,13 +294,13 @@ export default function LogStepsScreen() {
         totalSteps: totalSteps
       }));
       
-      showToast('Entry deleted', 'success');
+      showToast(t('log.steps.entryDeleted'), 'success');
       
       // Refresh context data
       refreshDailyData();
     } catch (error) {
       console.error('Error deleting entry:', error);
-      showToast('Failed to delete entry', 'error');
+      showToast(t('common.failedToDelete'), 'error');
     }
   };
 
@@ -353,7 +354,7 @@ export default function LogStepsScreen() {
           <Ionicons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Log Steps</Text>
+          <Text style={styles.headerTitle}>{t('log.steps.title')}</Text>
           <Text style={styles.headerSubtitle}>{formatDate()}</Text>
         </View>
       </View>
@@ -377,14 +378,14 @@ export default function LogStepsScreen() {
               </LinearGradient>
             </View>
 
-            <Text style={styles.stepTitle}>Log Your Steps</Text>
+            <Text style={styles.stepTitle}>{t('log.steps.title')}</Text>
             <Text style={styles.stepDescription}>
-              Enter your step count and upload proof photo
+              {t('log.steps.stepCounterDesc')}
             </Text>
 
-            {/* Image Upload Section - Required */}
+            {/* Image Upload Section - Optional */}
             <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Step Counter Image <Text style={{ color: COLORS.error }}>*</Text></Text>
+              <Text style={styles.inputLabel}>{t('log.steps.stepCounter')} <Text style={{ color: COLORS.textMuted, fontWeight: '400' }}>({t('feedback.other').toLowerCase() === 'other' ? 'Optional' : 'விருப்பம்'})</Text></Text>
               
               {imageUri ? (
                 <View style={styles.imagePreviewContainer}>
@@ -412,7 +413,7 @@ export default function LogStepsScreen() {
                       style={styles.uploadButtonGradient}
                     >
                       <Ionicons name="images" size={24} color="#ffffff" />
-                      <Text style={styles.uploadButtonText}>Gallery</Text>
+                      <Text style={styles.uploadButtonText}>{t('log.steps.chooseFromGallery')}</Text>
                     </LinearGradient>
                   </TouchableOpacity>
 
@@ -426,7 +427,7 @@ export default function LogStepsScreen() {
                       style={styles.uploadButtonGradient}
                     >
                       <Ionicons name="camera" size={24} color="#ffffff" />
-                      <Text style={styles.uploadButtonText}>Camera</Text>
+                      <Text style={styles.uploadButtonText}>{t('log.steps.takePhoto')}</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -435,12 +436,12 @@ export default function LogStepsScreen() {
 
             {/* Step Input Section */}
             <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Enter Step Count</Text>
+              <Text style={styles.inputLabel}>{t('log.steps.count')}</Text>
               <View style={styles.textInputContainer}>
                 <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.textSecondary} />
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Enter your step count"
+                  placeholder={t('log.steps.enterSteps')}
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="number-pad"
                   value={stepCount}
@@ -450,32 +451,32 @@ export default function LogStepsScreen() {
               </View>
             </View>
 
-            {/* Submit Button - Requires both step count and proof image */}
+            {/* Submit Button - Requires step count, image is optional */}
             <TouchableOpacity
-              style={[styles.submitButton, (!stepCount || !imageUri || isSaving || isValidating) && styles.submitButtonDisabled]}
+              style={[styles.submitButton, (!stepCount || isSaving || isValidating) && styles.submitButtonDisabled]}
               onPress={handleAddSteps}
               activeOpacity={0.85}
-              disabled={!stepCount || !imageUri || isSaving || isValidating}
+              disabled={!stepCount || isSaving || isValidating}
             >
               <LinearGradient
-                colors={(!stepCount || !imageUri || isSaving || isValidating) ? ['#94a3b8', '#64748b'] : [COLORS.accent, COLORS.accentDark]}
+                colors={(!stepCount || isSaving || isValidating) ? ['#94a3b8', '#64748b'] : [COLORS.accent, COLORS.accentDark]}
                 style={styles.submitButtonGradient}
               >
                 {isValidating ? (
                   <>
                     <Ionicons name="shield-checkmark" size={20} color="#ffffff" />
-                    <Text style={styles.submitButtonText}>Verifying...</Text>
+                    <Text style={styles.submitButtonText}>{t('common.loading')}</Text>
                   </>
                 ) : isSaving ? (
                   <Text style={styles.submitButtonText}>
                     {uploadProgress > 0 && uploadProgress < 100 
-                      ? `Uploading... ${Math.round(uploadProgress)}%` 
-                      : 'Saving...'}
+                      ? `${t('common.loading')} ${Math.round(uploadProgress)}%` 
+                      : t('common.loading')}
                   </Text>
                 ) : (
                   <>
                     <Ionicons name="add-circle" size={20} color="#ffffff" />
-                    <Text style={styles.submitButtonText}>Add Steps</Text>
+                    <Text style={styles.submitButtonText}>{t('log.steps.addSteps')}</Text>
                   </>
                 )}
               </LinearGradient>
@@ -494,12 +495,12 @@ export default function LogStepsScreen() {
               </View>
             )}
             
-            {/* Helper text when image not selected */}
-            {!imageUri && stepCount && (
-              <View style={styles.proofRequiredMessage}>
-                <Ionicons name="camera-outline" size={16} color={COLORS.error} />
-                <Text style={styles.proofRequiredText}>
-                  Please capture or select a photo as proof
+            {/* Helper text for optional image */}
+            {!imageUri && (
+              <View style={[styles.proofRequiredMessage, { backgroundColor: COLORS.primary + '10', borderColor: COLORS.primary + '30' }]}>
+                <Ionicons name="information-circle-outline" size={16} color={COLORS.primary} />
+                <Text style={[styles.proofRequiredText, { color: COLORS.primary }]}>
+                  {t('log.steps.stepCounterDesc')}
                 </Text>
               </View>
             )}
@@ -508,9 +509,9 @@ export default function LogStepsScreen() {
             {stepEntries.length > 0 && (
               <View style={styles.entriesSection}>
                 <View style={styles.entriesHeader}>
-                  <Text style={styles.inputLabel}>Today's Step Entries ({stepEntries.length})</Text>
+                  <Text style={styles.inputLabel}>{t('log.steps.todaysTotal')} ({stepEntries.length})</Text>
                   <View style={styles.totalBadge}>
-                    <Text style={styles.totalBadgeText}>Total: {getTotalSteps().toLocaleString()}</Text>
+                    <Text style={styles.totalBadgeText}>{t('home.goal')}: {getTotalSteps().toLocaleString()}</Text>
                   </View>
                 </View>
                 {stepEntries.map((entry, index) => (
@@ -521,7 +522,7 @@ export default function LogStepsScreen() {
                           <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.accent} />
                         </View>
                         <View style={styles.entryInfo}>
-                          <Text style={styles.entrySteps}>{entry.stepCount.toLocaleString()} steps</Text>
+                          <Text style={styles.entrySteps}>{entry.stepCount.toLocaleString()} {t('home.steps')}</Text>
                           <Text style={styles.entryTime}>{formatTime(entry.loggedAt)}</Text>
                         </View>
                       </View>
@@ -541,8 +542,8 @@ export default function LogStepsScreen() {
             {stepEntries.length === 0 && (
               <View style={styles.emptyState}>
                 <MaterialCommunityIcons name="shoe-print" size={48} color={COLORS.border} />
-                <Text style={styles.emptyStateText}>No steps logged yet</Text>
-                <Text style={styles.emptyStateHint}>Enter your step count to get started</Text>
+                <Text style={styles.emptyStateText}>{t('log.steps.noHistory')}</Text>
+                <Text style={styles.emptyStateHint}>{t('log.steps.enterSteps')}</Text>
               </View>
             )}
 
@@ -550,7 +551,7 @@ export default function LogStepsScreen() {
             <View style={styles.infoCard}>
               <Ionicons name="information-circle" size={24} color={COLORS.primary} />
               <Text style={styles.infoText}>
-                Enter your step count from your fitness tracker or phone. Upload a screenshot as proof for verification.
+                {t('log.steps.stepCounterDesc')}
               </Text>
             </View>
           </View>

@@ -1,4 +1,5 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { coupleService, supportRequestService } from '@/services/firestore.service';
 import { SupportRequest } from '@/types/firebase.types';
@@ -91,6 +92,7 @@ export default function ContactSupportScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors } = useTheme();
+  const { t } = useLanguage();
 
   // User data
   const [userData, setUserData] = useState<{
@@ -385,8 +387,8 @@ export default function ContactSupportScreen() {
           <Ionicons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Contact Support</Text>
-          <Text style={styles.headerSubtitle}>Request a callback or video meeting</Text>
+          <Text style={styles.headerTitle}>{t('support.title')}</Text>
+          <Text style={styles.headerSubtitle}>{t('support.subtitle')}</Text>
         </View>
       </View>
 
@@ -400,12 +402,12 @@ export default function ContactSupportScreen() {
         <View style={[styles.content, !isMobile && styles.contentDesktop]}>
           {/* New Request Card */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>New Request</Text>
-            <Text style={styles.cardSubtitle}>Submit a support request</Text>
+            <Text style={styles.cardTitle}>{t('support.newRequest')}</Text>
+            <Text style={styles.cardSubtitle}>{t('support.submitRequest')}</Text>
 
             {/* Phone Number */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Your Phone Number</Text>
+              <Text style={styles.label}>{t('support.yourPhone')}</Text>
               {loadingUserData ? (
                 <ShimmerPlaceholder width="100%" height={48} style={{ borderRadius: 12 }} />
               ) : (
@@ -415,12 +417,12 @@ export default function ContactSupportScreen() {
                       style={styles.phoneInput}
                       value={phoneNumber}
                       onChangeText={setPhoneNumber}
-                      placeholder="Enter phone number"
+                      placeholder={t('support.enterPhone')}
                       keyboardType="phone-pad"
                       autoFocus
                     />
                   ) : (
-                    <Text style={styles.phoneDisplay}>{phoneNumber || 'No phone number'}</Text>
+                    <Text style={styles.phoneDisplay}>{phoneNumber || t('support.noPhone')}</Text>
                   )}
                   <TouchableOpacity
                     style={styles.editButton}

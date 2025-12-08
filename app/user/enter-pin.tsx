@@ -1,6 +1,7 @@
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
-import { coupleService } from '@/services/firestore.service';
+import { coupleService, deviceService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -19,6 +20,17 @@ import {
 
 const isWeb = Platform.OS === 'web';
 
+// Helper to get browser name
+const getBrowserName = (): string | undefined => {
+  if (Platform.OS !== 'web') return undefined;
+  const ua = navigator?.userAgent || '';
+  if (ua.includes('Chrome')) return 'Chrome';
+  if (ua.includes('Safari')) return 'Safari';
+  if (ua.includes('Firefox')) return 'Firefox';
+  if (ua.includes('Edge')) return 'Edge';
+  return 'Browser';
+};
+
 interface ProfileData {
   name: string;
   gender: 'male' | 'female';
@@ -33,6 +45,7 @@ export default function EnterPinScreen() {
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
   const { setSessionExpiry, refreshAuthState } = useAuth();
+  const { t } = useLanguage();
 
   // State for couple data (can come from params or AsyncStorage)
   const [coupleData, setCoupleData] = useState<{
@@ -268,6 +281,30 @@ export default function EnterPinScreen() {
         
         // Update storage and redirect after animation
         await coupleService.updateLastLogin(coupleId, selectedGender);
+        
+        // Register this device
+        try {
+          const deviceInfo = {
+            deviceName: Platform.OS === 'web' 
+              ? (navigator?.userAgent?.includes('Mobile') ? 'Mobile Browser' : 'Web Browser')
+              : `${Platform.OS === 'ios' ? 'iPhone' : 'Android'} Device`,
+            deviceType: (Platform.OS === 'web' 
+              ? (navigator?.userAgent?.includes('Mobile') ? 'mobile' : 'desktop')
+              : 'mobile') as 'mobile' | 'tablet' | 'desktop' | 'web',
+            os: Platform.OS === 'web' 
+              ? (navigator?.platform || 'Web')
+              : `${Platform.OS === 'ios' ? 'iOS' : 'Android'}`,
+            osVersion: Platform.OS === 'web' ? undefined : String(Platform.Version),
+            browser: Platform.OS === 'web' ? getBrowserName() : undefined,
+            deviceModel: Platform.OS === 'web' ? undefined : Platform.OS,
+          };
+          const result = await deviceService.registerDevice(coupleId, selectedGender, deviceInfo);
+          await AsyncStorage.setItem('currentDeviceId', result.deviceId);
+          await AsyncStorage.setItem('sessionToken', result.sessionToken);
+        } catch (deviceError) {
+          console.log('Device registration error (non-critical):', deviceError);
+        }
+        
         await AsyncStorage.setItem('userRole', 'user');
         await AsyncStorage.setItem('coupleId', coupleId);
         await AsyncStorage.setItem('userGender', selectedGender);

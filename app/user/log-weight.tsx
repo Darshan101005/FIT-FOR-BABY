@@ -1,3 +1,4 @@
+import { useLanguage } from '@/context/LanguageContext';
 import { useUserData } from '@/context/UserDataContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -38,6 +39,7 @@ export default function LogWeightScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { refreshWeightHistory, refreshUserInfo } = useUserData();
+  const { language, t } = useLanguage();
 
   const [step, setStep] = useState<'log' | 'history'>('log');
   const [weight, setWeight] = useState('');
@@ -162,12 +164,12 @@ export default function LogWeightScreen() {
 
   const handleSave = async () => {
     if (!weight || parseFloat(weight) <= 0) {
-      showToast('Please enter a valid weight', 'error');
+      showToast(t('log.weight.enterValidWeight'), 'error');
       return;
     }
 
     if (!coupleId || !userGender) {
-      showToast('Session expired. Please log in again.', 'error');
+      showToast(t('error.sessionExpired'), 'error');
       console.error('Missing session data - coupleId:', coupleId, 'userGender:', userGender);
       return;
     }
@@ -200,7 +202,7 @@ export default function LogWeightScreen() {
       // Update streak for logging activity
       await coupleService.updateStreak(coupleId, userGender);
 
-      showToast('Weight logged successfully!', 'success');
+      showToast(t('log.weight.successMessage'), 'success');
       
       // Refresh context data so other pages show updated values
       refreshWeightHistory();
@@ -211,7 +213,7 @@ export default function LogWeightScreen() {
       setNotes('');
     } catch (error: any) {
       console.error('Error saving weight:', error);
-      const errorMessage = error?.message || 'Failed to save weight. Please try again.';
+      const errorMessage = error?.message || t('error.unknown');
       showToast(errorMessage, 'error');
     } finally {
       setIsSaving(false);
@@ -219,7 +221,7 @@ export default function LogWeightScreen() {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    return new Date(dateStr).toLocaleDateString(language === 'ta' ? 'ta-IN' : 'en-US', {
       month: 'short',
       day: 'numeric',
     });
@@ -230,7 +232,7 @@ export default function LogWeightScreen() {
     if (!timestamp) return '';
     try {
       const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-      return date.toLocaleString('en-IN', {
+      return date.toLocaleString(language === 'ta' ? 'ta-IN' : 'en-IN', {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
@@ -255,10 +257,10 @@ export default function LogWeightScreen() {
     
     try {
       await coupleWeightLogService.delete(coupleId, latestEntry.id);
-      showToast('Entry deleted successfully', 'success');
+      showToast(t('log.weight.deleteSuccess'), 'success');
     } catch (error) {
       console.error('Error deleting entry:', error);
-      showToast('Failed to delete entry', 'error');
+      showToast(t('log.weight.deleteFailed'), 'error');
     } finally {
       setIsDeleting(false);
     }
@@ -270,7 +272,7 @@ export default function LogWeightScreen() {
         <Ionicons name="arrow-back" size={24} color="#0f172a" />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>Weight & Measurements</Text>
+        <Text style={styles.headerTitle}>{t('log.weight.measurements')}</Text>
       </View>
     </View>
   );
@@ -287,7 +289,7 @@ export default function LogWeightScreen() {
           color={step === 'log' ? '#006dab' : '#64748b'}
         />
         <Text style={[styles.tabText, step === 'log' && styles.tabTextActive]}>
-          Log Weight
+          {t('log.weight.logWeight')}
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -300,7 +302,7 @@ export default function LogWeightScreen() {
           color={step === 'history' ? '#006dab' : '#64748b'}
         />
         <Text style={[styles.tabText, step === 'history' && styles.tabTextActive]}>
-          History
+          {t('log.weight.history')}
         </Text>
       </TouchableOpacity>
     </View>
@@ -320,7 +322,7 @@ export default function LogWeightScreen() {
         <View style={styles.dateContainer}>
           <Ionicons name="calendar-outline" size={20} color="#64748b" />
           <Text style={styles.dateText}>
-            {new Date().toLocaleDateString('en-US', {
+            {new Date().toLocaleDateString(language === 'ta' ? 'ta-IN' : 'en-US', {
               weekday: 'long',
               month: 'long',
               day: 'numeric',
@@ -336,13 +338,13 @@ export default function LogWeightScreen() {
               style={[styles.unitButton, unit === 'kg' && styles.unitButtonActive]}
               onPress={() => setUnit('kg')}
             >
-              <Text style={[styles.unitText, unit === 'kg' && styles.unitTextActive]}>kg</Text>
+              <Text style={[styles.unitText, unit === 'kg' && styles.unitTextActive]}>{t('log.weight.kg')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.unitButton, unit === 'lbs' && styles.unitButtonActive]}
               onPress={() => setUnit('lbs')}
             >
-              <Text style={[styles.unitText, unit === 'lbs' && styles.unitTextActive]}>lbs</Text>
+              <Text style={[styles.unitText, unit === 'lbs' && styles.unitTextActive]}>{t('log.weight.lbs')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -363,7 +365,7 @@ export default function LogWeightScreen() {
           {weight && parseFloat(weight) > 0 && (
             <View style={styles.bmiContainer}>
               <View style={styles.bmiRow}>
-                <Text style={styles.bmiLabel}>BMI</Text>
+                <Text style={styles.bmiLabel}>{t('log.weight.bmi')}</Text>
                 <Text style={[styles.bmiValue, { color: bmiCategory.color }]}>{bmi}</Text>
                 <View style={[styles.categoryBadge, { backgroundColor: bmiCategory.color + '20' }]}>
                   <Text style={[styles.categoryText, { color: bmiCategory.color }]}>
@@ -377,14 +379,14 @@ export default function LogWeightScreen() {
 
         {/* Height Input */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Height (cm)</Text>
+          <Text style={styles.inputLabel}>{t('log.weight.height')}</Text>
           <View style={styles.inputRow}>
             <MaterialCommunityIcons name="human-male-height" size={24} color="#64748b" />
             <TextInput
               style={styles.textInput}
               value={height}
               onChangeText={setHeight}
-              placeholder="Enter height"
+              placeholder={t('log.weight.enterHeight')}
               placeholderTextColor="#94a3b8"
               keyboardType="numeric"
             />
@@ -393,9 +395,9 @@ export default function LogWeightScreen() {
 
         {/* Waist Measurement */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Waist Circumference (cm)</Text>
+          <Text style={styles.inputLabel}>{t('log.weight.waist')}</Text>
           <Text style={styles.inputHelper}>
-            Measure at your belly button level
+            {t('log.weight.waistHelper')}
           </Text>
           <View style={styles.inputRow}>
             <MaterialCommunityIcons name="tape-measure" size={24} color="#64748b" />
@@ -403,7 +405,7 @@ export default function LogWeightScreen() {
               style={styles.textInput}
               value={waist}
               onChangeText={setWaist}
-              placeholder="Enter waist measurement"
+              placeholder={t('log.weight.enterWaist')}
               placeholderTextColor="#94a3b8"
               keyboardType="numeric"
             />
@@ -411,16 +413,16 @@ export default function LogWeightScreen() {
           {waist && whtr && (
             <View style={styles.whtrContainer}>
               <View style={styles.whtrRow}>
-                <Text style={styles.whtrLabel}>Waist-to-Height Ratio (WHtR)</Text>
+                <Text style={styles.whtrLabel}>{t('log.weight.whtr')}</Text>
                 <Text style={[styles.whtrValue, { color: whtrCategory.color }]}>{whtr}</Text>
                 <View style={[styles.categoryBadge, { backgroundColor: whtrCategory.color + '20' }]}>
                   <Text style={[styles.categoryText, { color: whtrCategory.color }]}>
-                    {whtrCategory.label}
+                    {language === 'ta' ? t(`log.weight.${whtrCategory.label.toLowerCase()}`) : whtrCategory.label}
                   </Text>
                 </View>
               </View>
               <Text style={styles.whtrInfo}>
-                WHtR &lt; 0.5 is recommended for optimal health
+                {t('log.weight.whtrInfo')}
               </Text>
             </View>
           )}
@@ -428,12 +430,12 @@ export default function LogWeightScreen() {
 
         {/* Notes */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Notes (optional)</Text>
+          <Text style={styles.inputLabel}>{t('log.weight.notes')}</Text>
           <TextInput
             style={styles.notesInput}
             value={notes}
             onChangeText={setNotes}
-            placeholder="Time of day, clothing, how you feel..."
+            placeholder={t('log.weight.notesPlaceholderWeight')}
             placeholderTextColor="#94a3b8"
             multiline
             numberOfLines={3}
@@ -454,11 +456,11 @@ export default function LogWeightScreen() {
             {isSaving ? (
               <>
                 <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.saveButtonText}>Saving...</Text>
+                <Text style={styles.saveButtonText}>{t('log.exercise.saving')}</Text>
               </>
             ) : (
               <>
-                <Text style={styles.saveButtonText}>Save Measurement</Text>
+                <Text style={styles.saveButtonText}>{t('log.weight.saveMeasurement')}</Text>
                 <Ionicons name="checkmark" size={20} color="#fff" />
               </>
             )}
@@ -473,7 +475,7 @@ export default function LogWeightScreen() {
       return (
         <View style={[styles.content, { alignItems: 'center', justifyContent: 'center', minHeight: 300 }]}>
           <ActivityIndicator size="large" color="#006dab" />
-          <Text style={{ marginTop: 16, color: '#64748b' }}>Loading history...</Text>
+          <Text style={{ marginTop: 16, color: '#64748b' }}>{t('log.weight.loadingHistory')}</Text>
         </View>
       );
     }
@@ -483,16 +485,16 @@ export default function LogWeightScreen() {
         <View style={[styles.content, { alignItems: 'center', justifyContent: 'center', minHeight: 300 }]}>
           <MaterialCommunityIcons name="scale-bathroom" size={64} color="#cbd5e1" />
           <Text style={{ marginTop: 16, fontSize: 18, fontWeight: '600', color: '#64748b' }}>
-            No weight entries yet
+            {t('log.weight.noEntriesYet')}
           </Text>
           <Text style={{ marginTop: 8, color: '#94a3b8', textAlign: 'center' }}>
-            Start logging your weight to track your progress
+            {t('log.weight.startLogging')}
           </Text>
           <TouchableOpacity
             style={{ marginTop: 24, backgroundColor: '#006dab', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
             onPress={() => setStep('log')}
           >
-            <Text style={{ color: '#fff', fontWeight: '600' }}>Log Your First Weight</Text>
+            <Text style={{ color: '#fff', fontWeight: '600' }}>{t('log.weight.logFirstWeight')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -510,30 +512,30 @@ export default function LogWeightScreen() {
             colors={['#006dab', '#005a8f']}
             style={styles.progressGradient}
           >
-            <Text style={styles.progressTitle}>Your Progress</Text>
+            <Text style={styles.progressTitle}>{t('log.weight.yourProgress')}</Text>
             <View style={styles.progressStats}>
               <View style={styles.progressStat}>
                 <Text style={styles.progressValue}>{lastEntry.weight}</Text>
-                <Text style={styles.progressLabel}>Current (kg)</Text>
+                <Text style={styles.progressLabel}>{t('log.weight.currentKg')}</Text>
               </View>
               <View style={styles.progressDivider} />
               <View style={styles.progressStat}>
                 <Text style={styles.progressValue}>{firstEntry.weight}</Text>
-                <Text style={styles.progressLabel}>Starting (kg)</Text>
+                <Text style={styles.progressLabel}>{t('log.weight.startingKg')}</Text>
               </View>
               <View style={styles.progressDivider} />
               <View style={styles.progressStat}>
                 <Text style={[styles.progressValue, { color: totalChange > 0 ? '#98be4e' : '#f59e0b' }]}>
                   {totalChange > 0 ? '-' : '+'}{Math.abs(totalChange).toFixed(1)}
                 </Text>
-                <Text style={styles.progressLabel}>Lost (kg)</Text>
+                <Text style={styles.progressLabel}>{t('log.weight.lostKg')}</Text>
               </View>
             </View>
           </LinearGradient>
         </View>
 
         {/* History List */}
-        <Text style={styles.historyTitle}>Recent Entries ({weightHistory.length})</Text>
+        <Text style={styles.historyTitle}>{t('log.weight.recentEntries')} ({weightHistory.length})</Text>
         {weightHistory.map((entry, index) => {
           const prevEntry = weightHistory[index + 1];
           const change = prevEntry ? entry.weight - prevEntry.weight : 0;
@@ -543,10 +545,10 @@ export default function LogWeightScreen() {
             <View key={entry.id} style={[styles.historyItem, isLatest && styles.historyItemLatest]}>
               <View style={styles.historyDate}>
                 <Text style={styles.historyDay}>
-                  {new Date(entry.date).toLocaleDateString('en-IN', { day: 'numeric', timeZone: 'Asia/Kolkata' })}
+                  {new Date(entry.date).getDate()}
                 </Text>
                 <Text style={styles.historyMonth}>
-                  {new Date(entry.date).toLocaleDateString('en-IN', { month: 'short', timeZone: 'Asia/Kolkata' })}
+                  {t(`months.${['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'][new Date(entry.date).getMonth()]}`)}
                 </Text>
                 {entry.loggedAt && (
                   <Text style={styles.historyTime}>
@@ -555,14 +557,14 @@ export default function LogWeightScreen() {
                 )}
                 {isLatest && (
                   <View style={styles.latestBadge}>
-                    <Text style={styles.latestBadgeText}>Latest</Text>
+                    <Text style={styles.latestBadgeText}>{t('log.weight.latest')}</Text>
                   </View>
                 )}
               </View>
               <View style={styles.historyDetails}>
                 <View style={styles.historyMain}>
                   <MaterialCommunityIcons name="scale-bathroom" size={20} color="#64748b" />
-                  <Text style={styles.historyWeight}>{entry.weight} kg</Text>
+                  <Text style={styles.historyWeight}>{entry.weight} {t('log.weight.kg')}</Text>
                   {change !== 0 && (
                     <View style={[
                       styles.changeBadge,
@@ -584,13 +586,13 @@ export default function LogWeightScreen() {
                 </View>
                 {entry.bmi && (
                   <View style={styles.historyWaist}>
-                    <Text style={styles.historyWaistText}>BMI: {entry.bmi}</Text>
+                    <Text style={styles.historyWaistText}>{t('log.weight.bmi')}: {entry.bmi}</Text>
                   </View>
                 )}
                 {entry.waist && (
                   <View style={styles.historyWaist}>
                     <MaterialCommunityIcons name="tape-measure" size={16} color="#94a3b8" />
-                    <Text style={styles.historyWaistText}>Waist: {entry.waist} cm</Text>
+                    <Text style={styles.historyWaistText}>{t('log.weight.waistCm')}: {entry.waist} {t('log.weight.cm')}</Text>
                     {entry.whtr && <Text style={styles.historyWaistText}> • WHtR: {entry.whtr}</Text>}
                   </View>
                 )}
@@ -633,23 +635,23 @@ export default function LogWeightScreen() {
           <View style={styles.modalIconContainer}>
             <Ionicons name="warning" size={48} color="#ef4444" />
           </View>
-          <Text style={styles.modalTitle}>Delete Entry?</Text>
+          <Text style={styles.modalTitle}>{t('log.weight.deleteEntryQuestion')}</Text>
           <Text style={styles.modalMessage}>
-            Are you sure you want to delete the latest weight entry? This action cannot be undone.
+            {t('log.weight.deleteConfirm')}
           </Text>
           <View style={styles.modalButtons}>
             <TouchableOpacity
               style={[styles.modalButton, styles.modalButtonCancel]}
               onPress={() => setShowDeleteModal(false)}
             >
-              <Text style={styles.modalButtonCancelText}>Cancel</Text>
+              <Text style={styles.modalButtonCancelText}>{t('log.weight.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.modalButton, styles.modalButtonDelete]}
               onPress={confirmDelete}
             >
               <Ionicons name="trash-outline" size={18} color="#fff" />
-              <Text style={styles.modalButtonDeleteText}>Delete</Text>
+              <Text style={styles.modalButtonDeleteText}>{t('log.weight.delete')}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,21 +1,23 @@
-import { adminService, coupleService } from '@/services/firestore.service';
+import { adminService, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService, questionnaireService } from '@/services/firestore.service';
 import { Couple as FirestoreCouple } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -95,6 +97,12 @@ export default function AdminUsersScreen() {
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingCouple, setDeletingCouple] = useState<{ coupleId: string; maleName: string; femaleName: string } | null>(null);
+
+  // Export modal state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportingCouple, setExportingCouple] = useState<Couple | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'csv' | 'excel'>('pdf');
 
   // Enrollment form state
   const [enrollForm, setEnrollForm] = useState({
@@ -211,17 +219,20 @@ export default function AdminUsersScreen() {
   };
 
   const filteredCouples = couples.filter(couple => {
+    // Add null safety checks
+    if (!couple || !couple.male || !couple.female) return false;
+    
     const matchesSearch = 
-      couple.coupleId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      couple.male.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      couple.female.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (couple.male.phone || '').includes(searchQuery) ||
-      (couple.female.phone || '').includes(searchQuery);
+      (couple.coupleId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (couple.male?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (couple.female?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (couple.male?.phone || '').includes(searchQuery) ||
+      (couple.female?.phone || '').includes(searchQuery);
     
     const matchesStatus = filterStatus === 'all' || 
       couple.status === filterStatus ||
-      couple.male.status === filterStatus || 
-      couple.female.status === filterStatus;
+      couple.male?.status === filterStatus || 
+      couple.female?.status === filterStatus;
     
     return matchesSearch && matchesStatus;
   });
@@ -385,7 +396,7 @@ export default function AdminUsersScreen() {
   const handleSaveEdit = async () => {
     if (!editingUser) return;
     
-    try {
+      try {
       setActionLoading(true);
       const { coupleId, gender } = editingUser;
       
@@ -419,7 +430,7 @@ export default function AdminUsersScreen() {
         };
       }
       
-      await coupleService.update(coupleId, updates);
+      await (coupleService as any).update(coupleId, updates);
       
       setShowEditModal(false);
       setEditingUser(null);
@@ -454,6 +465,544 @@ export default function AdminUsersScreen() {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  // Open export modal for a couple
+  const handleExportUser = (couple: Couple) => {
+    setExportingCouple(couple);
+    setExportFormat('pdf');
+    setShowExportModal(true);
+  };
+
+  // Generate and export user data
+  const handleExportData = async () => {
+    if (!exportingCouple) return;
+
+    setIsExporting(true);
+
+    try {
+      const couple = exportingCouple;
+      const coupleId = couple.coupleId;
+
+      // Fetch all data for both male and female
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const formatDateStr = (date: Date) => date.toISOString().split('T')[0];
+
+      // Get steps data for both
+      const maleSteps = await coupleStepsService.getByDateRange(coupleId, 'male', formatDateStr(thirtyDaysAgo), formatDateStr(today));
+      const femaleSteps = await coupleStepsService.getByDateRange(coupleId, 'female', formatDateStr(thirtyDaysAgo), formatDateStr(today));
+
+      // Get weight logs for both
+      const maleWeight = await coupleWeightLogService.getAll(coupleId, 'male');
+      const femaleWeight = await coupleWeightLogService.getAll(coupleId, 'female');
+
+      // Get exercise logs for both
+      const maleExercise = await coupleExerciseService.getByDateRange(coupleId, 'male', formatDateStr(thirtyDaysAgo), formatDateStr(today));
+      const femaleExercise = await coupleExerciseService.getByDateRange(coupleId, 'female', formatDateStr(thirtyDaysAgo), formatDateStr(today));
+
+      // Get food logs for both (last 7 days)
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const maleFood = await coupleFoodLogService.getByDateRange(coupleId, 'male', formatDateStr(sevenDaysAgo), formatDateStr(today));
+      const femaleFood = await coupleFoodLogService.getByDateRange(coupleId, 'female', formatDateStr(sevenDaysAgo), formatDateStr(today));
+
+      // Get questionnaire progress for both
+      const maleQuestionnaire = await questionnaireService.getProgress(coupleId, 'male');
+      const femaleQuestionnaire = await questionnaireService.getProgress(coupleId, 'female');
+
+      if (exportFormat === 'pdf') {
+        // Generate HTML report
+        const htmlContent = generateUserExportHTML({
+          couple,
+          maleSteps: maleSteps || [],
+          femaleSteps: femaleSteps || [],
+          maleWeight: maleWeight || [],
+          femaleWeight: femaleWeight || [],
+          maleExercise: maleExercise || [],
+          femaleExercise: femaleExercise || [],
+          maleFood: maleFood || [],
+          femaleFood: femaleFood || [],
+          maleQuestionnaire,
+          femaleQuestionnaire,
+        });
+
+        if (isWeb) {
+          const newWindow = window.open('', '_blank');
+          if (newWindow) {
+            newWindow.document.write(htmlContent);
+            newWindow.document.close();
+          }
+          showToast('Report opened in new tab. Use Print → Save as PDF', 'success');
+        } else {
+          const fileName = `${couple.coupleId}_user_data_${formatDateStr(today)}.html`;
+          const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+          await FileSystem.writeAsStringAsync(fileUri, htmlContent);
+          await Sharing.shareAsync(fileUri, { mimeType: 'text/html', dialogTitle: 'Export User Data' });
+          showToast('Report ready to share!', 'success');
+        }
+      } else if (exportFormat === 'csv') {
+        const csvContent = generateUserExportCSV({
+          couple,
+          maleSteps: maleSteps || [],
+          femaleSteps: femaleSteps || [],
+          maleWeight: maleWeight || [],
+          femaleWeight: femaleWeight || [],
+          maleExercise: maleExercise || [],
+          femaleExercise: femaleExercise || [],
+        });
+
+        if (isWeb) {
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${couple.coupleId}_user_data_${formatDateStr(today)}.csv`;
+          link.click();
+          URL.revokeObjectURL(url);
+          showToast('CSV file downloaded!', 'success');
+        } else {
+          const fileName = `${couple.coupleId}_user_data_${formatDateStr(today)}.csv`;
+          const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+          await FileSystem.writeAsStringAsync(fileUri, csvContent);
+          await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export User Data' });
+          showToast('CSV file ready to share!', 'success');
+        }
+      } else if (exportFormat === 'excel') {
+        // Generate CSV with Excel-compatible format (semicolon separated)
+        const csvContent = generateUserExportCSV({
+          couple,
+          maleSteps: maleSteps || [],
+          femaleSteps: femaleSteps || [],
+          maleWeight: maleWeight || [],
+          femaleWeight: femaleWeight || [],
+          maleExercise: maleExercise || [],
+          femaleExercise: femaleExercise || [],
+        }, ';');
+
+        if (isWeb) {
+          const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${couple.coupleId}_user_data_${formatDateStr(today)}.csv`;
+          link.click();
+          URL.revokeObjectURL(url);
+          showToast('Excel-compatible file downloaded!', 'success');
+        } else {
+          const fileName = `${couple.coupleId}_user_data_${formatDateStr(today)}.csv`;
+          const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+          await FileSystem.writeAsStringAsync(fileUri, '\ufeff' + csvContent);
+          await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export User Data' });
+          showToast('Excel file ready to share!', 'success');
+        }
+      }
+
+      setShowExportModal(false);
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast('Failed to export data. Please try again.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Generate HTML report for user export
+  const generateUserExportHTML = (data: {
+    couple: Couple;
+    maleSteps: any[];
+    femaleSteps: any[];
+    maleWeight: any[];
+    femaleWeight: any[];
+    maleExercise: any[];
+    femaleExercise: any[];
+    maleFood: any[];
+    femaleFood: any[];
+    maleQuestionnaire: any;
+    femaleQuestionnaire: any;
+  }) => {
+    const { couple, maleSteps, femaleSteps, maleWeight, femaleWeight, maleExercise, femaleExercise, maleFood, femaleFood, maleQuestionnaire, femaleQuestionnaire } = data;
+
+    const formatDate = (dateStr: string) => {
+      if (!dateStr) return 'N/A';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    };
+
+    // Calculate totals
+    const maleTotalSteps = maleSteps.reduce((sum, s) => sum + (s.steps || 0), 0);
+    const femaleTotalSteps = femaleSteps.reduce((sum, s) => sum + (s.steps || 0), 0);
+    const maleAvgSteps = maleSteps.length > 0 ? Math.round(maleTotalSteps / maleSteps.length) : 0;
+    const femaleAvgSteps = femaleSteps.length > 0 ? Math.round(femaleTotalSteps / femaleSteps.length) : 0;
+    const maleExerciseMinutes = maleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
+    const femaleExerciseMinutes = femaleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fit for Baby - User Data Report - ${couple.coupleId}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; color: #1e293b; background: #fff; line-height: 1.6; }
+    .report-container { max-width: 1000px; margin: 0 auto; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #006dab; }
+    .header-left { display: flex; align-items: center; gap: 15px; }
+    .logo { width: 60px; height: 60px; background: linear-gradient(135deg, #006dab 0%, #0088d4 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; font-weight: bold; }
+    .header-text h1 { font-size: 24px; font-weight: 700; color: #006dab; }
+    .header-text p { font-size: 13px; color: #64748b; }
+    .couple-info { background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); border-radius: 16px; padding: 24px; margin-bottom: 30px; border: 1px solid #0ea5e9; }
+    .couple-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+    .couple-avatars { display: flex; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .avatar.male { background: #006dab; color: white; }
+    .avatar.female { background: #98be4e; color: white; margin-left: -10px; }
+    .couple-id { font-size: 20px; font-weight: 700; color: #0f172a; }
+    .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+    .status-active { background: #dcfce7; color: #16a34a; }
+    .status-inactive { background: #fee2e2; color: #dc2626; }
+    .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .user-section { background: #fff; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; }
+    .user-section.male { border-left: 4px solid #006dab; }
+    .user-section.female { border-left: 4px solid #98be4e; }
+    .user-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-size: 16px; font-weight: 700; }
+    .user-details { font-size: 13px; color: #64748b; }
+    .user-details p { margin-bottom: 6px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 30px; }
+    .summary-card { padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #e2e8f0; }
+    .summary-card.steps { background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border-color: #22c55e; }
+    .summary-card.exercise { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-color: #f59e0b; }
+    .summary-value { font-size: 24px; font-weight: 800; margin-bottom: 5px; }
+    .summary-label { font-size: 11px; color: #64748b; font-weight: 500; }
+    .section { margin-bottom: 30px; }
+    .section-title { font-size: 18px; font-weight: 700; color: #006dab; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12px; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .data-table thead tr { background: linear-gradient(135deg, #006dab 0%, #0088d4 100%); }
+    .data-table th { color: white; padding: 10px 8px; text-align: left; font-weight: 600; }
+    .data-table td { padding: 8px; border-bottom: 1px solid #e2e8f0; }
+    .data-table tbody tr:nth-child(even) { background: #f8fafc; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #e2e8f0; text-align: center; color: #64748b; font-size: 12px; }
+    .print-btn { background: linear-gradient(135deg, #006dab 0%, #0088d4 100%); color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 20px; }
+    @media print { .no-print { display: none; } body { padding: 20px; } }
+    @media (max-width: 768px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } .info-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="report-container">
+    <div class="header">
+      <div class="header-left">
+        <div class="logo">FFB</div>
+        <div class="header-text">
+          <h1>User Data Report</h1>
+          <p>Fit for Baby - Complete Health Data</p>
+        </div>
+      </div>
+      <div style="text-align: right; font-size: 13px; color: #64748b;">
+        <strong>Generated:</strong><br>
+        ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+      </div>
+    </div>
+
+    <div class="couple-info">
+      <div class="couple-header">
+        <div class="couple-avatars">
+          <div class="avatar male">♂</div>
+          <div class="avatar female">♀</div>
+        </div>
+        <div>
+          <span class="couple-id">${couple.coupleId}</span>
+          <span class="status-badge status-${couple.status}">${couple.status}</span>
+        </div>
+      </div>
+      <p style="font-size: 14px; color: #64748b; margin-bottom: 8px;">${couple.male.name} & ${couple.female.name}</p>
+      <p style="font-size: 12px; color: #94a3b8;">Enrolled: ${couple.enrollmentDate}</p>
+      
+      <div class="info-grid" style="margin-top: 20px;">
+        <div class="user-section male">
+          <div class="user-header" style="color: #006dab;">♂ ${couple.male.name} (${couple.male.id || couple.coupleId + '_M'})</div>
+          <div class="user-details">
+            <p><strong>Email:</strong> ${couple.male.email || 'N/A'}</p>
+            <p><strong>Phone:</strong> ${couple.male.phone || 'N/A'}</p>
+            <p><strong>Age:</strong> ${couple.male.age ? couple.male.age + ' years' : 'N/A'}</p>
+            <p><strong>DOB:</strong> ${couple.male.dateOfBirth ? formatDate(couple.male.dateOfBirth) : 'N/A'}</p>
+            <p><strong>Weight:</strong> ${couple.male.weight ? couple.male.weight + ' kg' : 'N/A'}</p>
+            <p><strong>Height:</strong> ${couple.male.height ? couple.male.height + ' cm' : 'N/A'}</p>
+            <p><strong>BMI:</strong> ${couple.male.bmi || 'N/A'}</p>
+            ${couple.male.address ? `<p><strong>Address:</strong> ${[couple.male.address.addressLine1, couple.male.address.city, couple.male.address.state, couple.male.address.pincode].filter(Boolean).join(', ')}</p>` : ''}
+            <p><strong>Password Set:</strong> ${couple.male.isPasswordReset ? 'Yes ✓' : 'No'}</p>
+            <p><strong>PIN Set:</strong> ${couple.male.isPinSet ? 'Yes ✓' : 'No'}</p>
+          </div>
+        </div>
+        <div class="user-section female">
+          <div class="user-header" style="color: #7da33e;">♀ ${couple.female.name} (${couple.female.id || couple.coupleId + '_F'})</div>
+          <div class="user-details">
+            <p><strong>Email:</strong> ${couple.female.email || 'N/A'}</p>
+            <p><strong>Phone:</strong> ${couple.female.phone || 'N/A'}</p>
+            <p><strong>Age:</strong> ${couple.female.age ? couple.female.age + ' years' : 'N/A'}</p>
+            <p><strong>DOB:</strong> ${couple.female.dateOfBirth ? formatDate(couple.female.dateOfBirth) : 'N/A'}</p>
+            <p><strong>Weight:</strong> ${couple.female.weight ? couple.female.weight + ' kg' : 'N/A'}</p>
+            <p><strong>Height:</strong> ${couple.female.height ? couple.female.height + ' cm' : 'N/A'}</p>
+            <p><strong>BMI:</strong> ${couple.female.bmi || 'N/A'}</p>
+            ${couple.female.address ? `<p><strong>Address:</strong> ${[couple.female.address.addressLine1, couple.female.address.city, couple.female.address.state, couple.female.address.pincode].filter(Boolean).join(', ')}</p>` : ''}
+            <p><strong>Password Set:</strong> ${couple.female.isPasswordReset ? 'Yes ✓' : 'No'}</p>
+            <p><strong>PIN Set:</strong> ${couple.female.isPinSet ? 'Yes ✓' : 'No'}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card steps">
+        <div class="summary-value" style="color: #16a34a;">${maleAvgSteps.toLocaleString()}</div>
+        <div class="summary-label">♂ Avg Daily Steps</div>
+      </div>
+      <div class="summary-card steps">
+        <div class="summary-value" style="color: #16a34a;">${femaleAvgSteps.toLocaleString()}</div>
+        <div class="summary-label">♀ Avg Daily Steps</div>
+      </div>
+      <div class="summary-card exercise">
+        <div class="summary-value" style="color: #d97706;">${maleExerciseMinutes}</div>
+        <div class="summary-label">♂ Exercise Min (30d)</div>
+      </div>
+      <div class="summary-card exercise">
+        <div class="summary-value" style="color: #d97706;">${femaleExerciseMinutes}</div>
+        <div class="summary-label">♀ Exercise Min (30d)</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">📊 Steps Log (Last 30 Days)</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+          <h4 style="color: #006dab; margin-bottom: 10px;">♂ ${couple.male.name}</h4>
+          ${maleSteps.length > 0 ? `
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Steps</th><th>Goal</th></tr></thead>
+            <tbody>
+              ${maleSteps.slice(0, 15).map(s => `<tr><td>${formatDate(s.date)}</td><td>${(s.steps || 0).toLocaleString()}</td><td>${(s.goal || 10000).toLocaleString()}</td></tr>`).join('')}
+            </tbody>
+          </table>` : '<p style="color: #94a3b8;">No data</p>'}
+        </div>
+        <div>
+          <h4 style="color: #7da33e; margin-bottom: 10px;">♀ ${couple.female.name}</h4>
+          ${femaleSteps.length > 0 ? `
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Steps</th><th>Goal</th></tr></thead>
+            <tbody>
+              ${femaleSteps.slice(0, 15).map(s => `<tr><td>${formatDate(s.date)}</td><td>${(s.steps || 0).toLocaleString()}</td><td>${(s.goal || 10000).toLocaleString()}</td></tr>`).join('')}
+            </tbody>
+          </table>` : '<p style="color: #94a3b8;">No data</p>'}
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">⚖️ Weight Log</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+          <h4 style="color: #006dab; margin-bottom: 10px;">♂ ${couple.male.name}</h4>
+          ${maleWeight.length > 0 ? `
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Weight (kg)</th><th>Notes</th></tr></thead>
+            <tbody>
+              ${maleWeight.slice(0, 10).map(w => `<tr><td>${formatDate(w.date)}</td><td>${w.weight}</td><td>${w.notes || '-'}</td></tr>`).join('')}
+            </tbody>
+          </table>` : '<p style="color: #94a3b8;">No data</p>'}
+        </div>
+        <div>
+          <h4 style="color: #7da33e; margin-bottom: 10px;">♀ ${couple.female.name}</h4>
+          ${femaleWeight.length > 0 ? `
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Weight (kg)</th><th>Notes</th></tr></thead>
+            <tbody>
+              ${femaleWeight.slice(0, 10).map(w => `<tr><td>${formatDate(w.date)}</td><td>${w.weight}</td><td>${w.notes || '-'}</td></tr>`).join('')}
+            </tbody>
+          </table>` : '<p style="color: #94a3b8;">No data</p>'}
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">🏃 Exercise Log (Last 30 Days)</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+          <h4 style="color: #006dab; margin-bottom: 10px;">♂ ${couple.male.name}</h4>
+          ${maleExercise.length > 0 ? `
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Type</th><th>Duration</th><th>Calories</th></tr></thead>
+            <tbody>
+              ${maleExercise.slice(0, 10).map(e => `<tr><td>${formatDate(e.date)}</td><td>${e.exerciseType || e.type || 'Exercise'}</td><td>${e.duration || 0} min</td><td>${e.caloriesBurned || '-'}</td></tr>`).join('')}
+            </tbody>
+          </table>` : '<p style="color: #94a3b8;">No data</p>'}
+        </div>
+        <div>
+          <h4 style="color: #7da33e; margin-bottom: 10px;">♀ ${couple.female.name}</h4>
+          ${femaleExercise.length > 0 ? `
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Type</th><th>Duration</th><th>Calories</th></tr></thead>
+            <tbody>
+              ${femaleExercise.slice(0, 10).map(e => `<tr><td>${formatDate(e.date)}</td><td>${e.exerciseType || e.type || 'Exercise'}</td><td>${e.duration || 0} min</td><td>${e.caloriesBurned || '-'}</td></tr>`).join('')}
+            </tbody>
+          </table>` : '<p style="color: #94a3b8;">No data</p>'}
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">🍽️ Food Log (Last 7 Days)</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+          <h4 style="color: #006dab; margin-bottom: 10px;">♂ ${couple.male.name} (${maleFood.length} entries)</h4>
+          ${maleFood.length > 0 ? `
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Meal</th><th>Food</th><th>Cal</th></tr></thead>
+            <tbody>
+              ${maleFood.slice(0, 10).map(f => `<tr><td>${formatDate(f.date)}</td><td>${f.mealType || 'Meal'}</td><td>${f.foodName || f.name || 'Food'}</td><td>${f.calories || '-'}</td></tr>`).join('')}
+            </tbody>
+          </table>` : '<p style="color: #94a3b8;">No data</p>'}
+        </div>
+        <div>
+          <h4 style="color: #7da33e; margin-bottom: 10px;">♀ ${couple.female.name} (${femaleFood.length} entries)</h4>
+          ${femaleFood.length > 0 ? `
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Meal</th><th>Food</th><th>Cal</th></tr></thead>
+            <tbody>
+              ${femaleFood.slice(0, 10).map(f => `<tr><td>${formatDate(f.date)}</td><td>${f.mealType || 'Meal'}</td><td>${f.foodName || f.name || 'Food'}</td><td>${f.calories || '-'}</td></tr>`).join('')}
+            </tbody>
+          </table>` : '<p style="color: #94a3b8;">No data</p>'}
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">📋 Questionnaire Progress</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div style="background: #f8fafc; padding: 16px; border-radius: 10px; border-left: 4px solid #006dab;">
+          <h4 style="color: #006dab; margin-bottom: 10px;">♂ ${couple.male.name}</h4>
+          <p><strong>Status:</strong> ${maleQuestionnaire?.isComplete ? '✅ Completed' : '⏳ In Progress'}</p>
+          <p><strong>Progress:</strong> ${maleQuestionnaire?.progress || 0}%</p>
+          <p><strong>Answers:</strong> ${maleQuestionnaire?.answers ? Object.keys(maleQuestionnaire.answers).length : 0}</p>
+        </div>
+        <div style="background: #f8fafc; padding: 16px; border-radius: 10px; border-left: 4px solid #98be4e;">
+          <h4 style="color: #7da33e; margin-bottom: 10px;">♀ ${couple.female.name}</h4>
+          <p><strong>Status:</strong> ${femaleQuestionnaire?.isComplete ? '✅ Completed' : '⏳ In Progress'}</p>
+          <p><strong>Progress:</strong> ${femaleQuestionnaire?.progress || 0}%</p>
+          <p><strong>Answers:</strong> ${femaleQuestionnaire?.answers ? Object.keys(femaleQuestionnaire.answers).length : 0}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p style="font-weight: 600; color: #006dab; margin-bottom: 5px;">Fit for Baby - Health Monitoring System</p>
+      <p>Complete user data report for ${couple.coupleId}</p>
+      <p>Generated on ${new Date().toLocaleString()}</p>
+    </div>
+
+    <div class="no-print" style="text-align: center; margin-top: 30px;">
+      <button onclick="window.print()" class="print-btn">🖨️ Print / Save as PDF</button>
+    </div>
+  </div>
+</body>
+</html>`;
+  };
+
+  // Generate CSV for user export
+  const generateUserExportCSV = (data: {
+    couple: Couple;
+    maleSteps: any[];
+    femaleSteps: any[];
+    maleWeight: any[];
+    femaleWeight: any[];
+    maleExercise: any[];
+    femaleExercise: any[];
+  }, separator: string = ',') => {
+    const { couple, maleSteps, femaleSteps, maleWeight, femaleWeight, maleExercise, femaleExercise } = data;
+    const s = separator;
+    
+    let csv = '';
+    
+    // Header Info
+    csv += `Fit for Baby - User Data Export\n`;
+    csv += `Generated${s}${new Date().toLocaleString()}\n`;
+    csv += `\n`;
+    
+    // Couple Info
+    csv += `COUPLE INFORMATION\n`;
+    csv += `Couple ID${s}${couple.coupleId}\n`;
+    csv += `Status${s}${couple.status}\n`;
+    csv += `Enrolled${s}${couple.enrollmentDate}\n`;
+    csv += `\n`;
+    
+    // Male User Info
+    csv += `MALE USER - ${couple.male.name}\n`;
+    csv += `ID${s}${couple.male.id || couple.coupleId + '_M'}\n`;
+    csv += `Email${s}${couple.male.email || 'N/A'}\n`;
+    csv += `Phone${s}${couple.male.phone || 'N/A'}\n`;
+    csv += `Age${s}${couple.male.age || 'N/A'}\n`;
+    csv += `Weight${s}${couple.male.weight ? couple.male.weight + ' kg' : 'N/A'}\n`;
+    csv += `Height${s}${couple.male.height ? couple.male.height + ' cm' : 'N/A'}\n`;
+    csv += `BMI${s}${couple.male.bmi || 'N/A'}\n`;
+    csv += `\n`;
+    
+    // Female User Info
+    csv += `FEMALE USER - ${couple.female.name}\n`;
+    csv += `ID${s}${couple.female.id || couple.coupleId + '_F'}\n`;
+    csv += `Email${s}${couple.female.email || 'N/A'}\n`;
+    csv += `Phone${s}${couple.female.phone || 'N/A'}\n`;
+    csv += `Age${s}${couple.female.age || 'N/A'}\n`;
+    csv += `Weight${s}${couple.female.weight ? couple.female.weight + ' kg' : 'N/A'}\n`;
+    csv += `Height${s}${couple.female.height ? couple.female.height + ' cm' : 'N/A'}\n`;
+    csv += `BMI${s}${couple.female.bmi || 'N/A'}\n`;
+    csv += `\n`;
+    
+    // Steps Data
+    csv += `STEPS DATA (MALE)\n`;
+    csv += `Date${s}Steps${s}Goal\n`;
+    maleSteps.forEach(step => {
+      csv += `${step.date}${s}${step.steps || 0}${s}${step.goal || 10000}\n`;
+    });
+    csv += `\n`;
+    
+    csv += `STEPS DATA (FEMALE)\n`;
+    csv += `Date${s}Steps${s}Goal\n`;
+    femaleSteps.forEach(step => {
+      csv += `${step.date}${s}${step.steps || 0}${s}${step.goal || 10000}\n`;
+    });
+    csv += `\n`;
+    
+    // Weight Data
+    csv += `WEIGHT DATA (MALE)\n`;
+    csv += `Date${s}Weight (kg)${s}Notes\n`;
+    maleWeight.forEach(w => {
+      csv += `${w.date}${s}${w.weight}${s}${(w.notes || '').replace(/,/g, ' ')}\n`;
+    });
+    csv += `\n`;
+    
+    csv += `WEIGHT DATA (FEMALE)\n`;
+    csv += `Date${s}Weight (kg)${s}Notes\n`;
+    femaleWeight.forEach(w => {
+      csv += `${w.date}${s}${w.weight}${s}${(w.notes || '').replace(/,/g, ' ')}\n`;
+    });
+    csv += `\n`;
+    
+    // Exercise Data
+    csv += `EXERCISE DATA (MALE)\n`;
+    csv += `Date${s}Type${s}Duration (min)${s}Calories\n`;
+    maleExercise.forEach(e => {
+      csv += `${e.date}${s}${e.exerciseType || e.type || 'Exercise'}${s}${e.duration || 0}${s}${e.caloriesBurned || ''}\n`;
+    });
+    csv += `\n`;
+    
+    csv += `EXERCISE DATA (FEMALE)\n`;
+    csv += `Date${s}Type${s}Duration (min)${s}Calories\n`;
+    femaleExercise.forEach(e => {
+      csv += `${e.date}${s}${e.exerciseType || e.type || 'Exercise'}${s}${e.duration || 0}${s}${e.caloriesBurned || ''}\n`;
+    });
+    
+    return csv;
   };
 
   // Header with search
@@ -544,7 +1093,25 @@ export default function AdminUsersScreen() {
                   {couple.status}
                 </Text>
               </View>
-
+              {/* Export Button */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: COLORS.primary + '15',
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                  marginLeft: 8,
+                }}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleExportUser(couple);
+                }}
+              >
+                <Ionicons name="download-outline" size={14} color={COLORS.primary} />
+                <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.primary, marginLeft: 4 }}>Export</Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.coupleNames}>
               {couple.male.name} & {couple.female.name}
@@ -1458,6 +2025,114 @@ export default function AdminUsersScreen() {
     );
   };
 
+  // Export Modal
+  const renderExportModal = () => {
+    if (!exportingCouple) return null;
+    
+    return (
+      <Modal
+        visible={showExportModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowExportModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            {/* Export Icon */}
+            <View style={[styles.deleteIconCircle, { backgroundColor: COLORS.primary + '15' }]}>
+              <Ionicons name="download" size={40} color={COLORS.primary} />
+            </View>
+            
+            <Text style={styles.deleteTitle}>Export User Data</Text>
+            <Text style={styles.deleteSubtitle}>
+              Export all data for couple {exportingCouple.coupleId}
+            </Text>
+            <Text style={styles.deleteNames}>
+              {exportingCouple.male.name} & {exportingCouple.female.name}
+            </Text>
+            
+            {/* Data Included */}
+            <View style={{ backgroundColor: COLORS.background, padding: 12, borderRadius: 10, marginTop: 16, width: '100%' }}>
+              <Text style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 6, fontWeight: '600' }}>DATA INCLUDED:</Text>
+              <Text style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 }}>
+                • Personal information{'\n'}
+                • Steps history (30 days){'\n'}
+                • Weight logs{'\n'}
+                • Exercise logs (30 days){'\n'}
+                • Food logs (7 days){'\n'}
+                • Questionnaire progress
+              </Text>
+            </View>
+            
+            {/* Export Format Selection */}
+            <View style={{ marginTop: 20, width: '100%' }}>
+              <Text style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 10, fontWeight: '600' }}>SELECT FORMAT:</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {(['pdf', 'csv', 'excel'] as const).map(format => (
+                  <TouchableOpacity
+                    key={format}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      paddingHorizontal: 8,
+                      borderRadius: 10,
+                      backgroundColor: exportFormat === format ? COLORS.primary : COLORS.background,
+                      borderWidth: 1,
+                      borderColor: exportFormat === format ? COLORS.primary : COLORS.border,
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setExportFormat(format)}
+                  >
+                    <Ionicons 
+                      name={format === 'pdf' ? 'document-text' : format === 'csv' ? 'grid' : 'document'} 
+                      size={20} 
+                      color={exportFormat === format ? '#fff' : COLORS.textSecondary} 
+                    />
+                    <Text style={{
+                      fontSize: 12,
+                      fontWeight: '600',
+                      color: exportFormat === format ? '#fff' : COLORS.textSecondary,
+                      marginTop: 4,
+                      textTransform: 'uppercase',
+                    }}>
+                      {format}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={[styles.deleteButtonRow, { marginTop: 24 }]}>
+              <TouchableOpacity
+                style={[styles.deleteButton, styles.deleteButtonCancel]}
+                onPress={() => {
+                  setShowExportModal(false);
+                  setExportingCouple(null);
+                }}
+              >
+                <Text style={[styles.deleteButtonText, { color: COLORS.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteButton, { backgroundColor: COLORS.primary }]}
+                onPress={handleExportData}
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="download" size={18} color="#fff" />
+                    <Text style={[styles.deleteButtonText, { color: '#fff' }]}>Export</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -1536,6 +2211,7 @@ export default function AdminUsersScreen() {
       {renderTempPasswordModal()}
       {renderEditModal()}
       {renderDeleteModal()}
+      {renderExportModal()}
       {toast.visible && renderToast()}
       
       {/* Loading overlay for actions */}
@@ -2189,6 +2865,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  // Generic modal buttons used in edit modal footer
+  modalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    gap: 8,
+  },
+  modalButtonOutline: {
+    backgroundColor: COLORS.borderLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  modalButtonPrimary: {
+    backgroundColor: COLORS.primary,
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 
   // Empty State

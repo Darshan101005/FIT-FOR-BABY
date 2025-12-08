@@ -1,10 +1,15 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
+import { useUserData } from '@/context/UserDataContext';
+import { feedbackService } from '@/services/firestore.service';
+import { FeedbackCategory as FeedbackCategoryType } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
+    ActivityIndicator,
     Animated,
     KeyboardAvoidingView,
     Platform,
@@ -20,7 +25,7 @@ import {
 const isWeb = Platform.OS === 'web';
 
 interface FeedbackCategory {
-  id: string;
+  id: FeedbackCategoryType;
   icon: string;
   label: string;
   color: string;
@@ -47,11 +52,12 @@ export default function FeedbackScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
+  const { userInfo } = useUserData();
+  const { t } = useLanguage();
 
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<FeedbackCategoryType | null>(null);
   const [rating, setRating] = useState<number | null>(null);
   const [feedbackText, setFeedbackText] = useState('');
-  const [email, setEmail] = useState('john.doe@example.com');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -73,7 +79,7 @@ export default function FeedbackScreen() {
     }, 2500);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedCategory) {
       showToast('Please select a category', 'error');
       return;
@@ -87,13 +93,34 @@ export default function FeedbackScreen() {
       return;
     }
 
+    if (!userInfo) {
+      showToast('User information not available', 'error');
+      return;
+    }
+
     setIsSubmitting(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      await feedbackService.submit({
+        coupleId: userInfo.coupleId,
+        coupleName: `${userInfo.name} & ${userInfo.partnerName}`,
+        userId: userInfo.userId,
+        userName: userInfo.name,
+        userEmail: userInfo.email,
+        userGender: userInfo.gender,
+        category: selectedCategory,
+        rating: rating,
+        message: feedbackText.trim(),
+      });
+      
       setIsSubmitting(false);
       setSubmitted(true);
-    }, 1500);
+      showToast('Feedback submitted successfully!', 'success');
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      setIsSubmitting(false);
+      showToast('Failed to submit feedback. Please try again.', 'error');
+    }
   };
 
   const resetForm = () => {
@@ -109,10 +136,10 @@ export default function FeedbackScreen() {
         <Ionicons name="checkmark-circle" size={80} color="#22c55e" />
       </View>
       <Text style={[styles.successTitle, { color: colors.text }]}>
-        Thank You! 🎉
+        {t('feedback.successTitle')}
       </Text>
       <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
-        Your feedback has been submitted successfully. We appreciate you taking the time to help us improve Fit for Baby.
+        {t('feedback.successMessage')}
       </Text>
       <View style={styles.successActions}>
         <TouchableOpacity
@@ -120,14 +147,14 @@ export default function FeedbackScreen() {
           onPress={resetForm}
         >
           <Ionicons name="create-outline" size={20} color="#fff" />
-          <Text style={styles.successButtonText}>Submit Another</Text>
+          <Text style={styles.successButtonText}>{t('feedback.submitAnother')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.successButtonOutline, { borderColor: colors.border }]}
           onPress={() => router.back()}
         >
           <Text style={[styles.successButtonOutlineText, { color: colors.text }]}>
-            Go Back
+            {t('feedback.goBack')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -168,11 +195,11 @@ export default function FeedbackScreen() {
               <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                 <Ionicons name="arrow-back" size={24} color="#fff" />
               </TouchableOpacity>
-              <Text style={styles.headerTitle}>Send Feedback</Text>
+              <Text style={styles.headerTitle}>{t('feedback.title')}</Text>
               <View style={{ width: 40 }} />
             </View>
             <Text style={styles.headerSubtitle}>
-              We'd love to hear from you! Your feedback helps us improve.
+              {t('feedback.subtitle')}
             </Text>
           </LinearGradient>
 
@@ -184,7 +211,7 @@ export default function FeedbackScreen() {
                 {/* Category Selection */}
                 <View style={styles.section}>
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    What's this about?
+                    {t('feedback.category')}
                   </Text>
                   <View style={styles.categoryGrid}>
                     {feedbackCategories.map((category) => (
@@ -228,7 +255,7 @@ export default function FeedbackScreen() {
                 {/* Rating */}
                 <View style={styles.section}>
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    How's your experience?
+                    {t('feedback.rating')}
                   </Text>
                   <View style={[styles.ratingCard, { backgroundColor: colors.cardBackground }]}>
                     <View style={styles.ratingRow}>
@@ -259,12 +286,12 @@ export default function FeedbackScreen() {
                 {/* Feedback Text */}
                 <View style={styles.section}>
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    Tell us more
+                    {t('feedback.details')}
                   </Text>
                   <View style={[styles.textAreaContainer, { backgroundColor: colors.cardBackground }]}>
                     <TextInput
                       style={[styles.textArea, { color: colors.text }]}
-                      placeholder="Share your thoughts, suggestions, or report issues..."
+                      placeholder={t('feedback.detailsPlaceholder')}
                       placeholderTextColor={colors.textMuted}
                       value={feedbackText}
                       onChangeText={setFeedbackText}
@@ -278,25 +305,19 @@ export default function FeedbackScreen() {
                   </View>
                 </View>
 
-                {/* Email */}
+                {/* Email (Display Only) */}
                 <View style={styles.section}>
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    Contact Email
+                    {t('feedback.contactEmail')}
                   </Text>
                   <View style={[styles.emailContainer, { backgroundColor: colors.cardBackground }]}>
                     <Ionicons name="mail-outline" size={20} color={colors.textMuted} />
-                    <TextInput
-                      style={[styles.emailInput, { color: colors.text }]}
-                      placeholder="Your email address"
-                      placeholderTextColor={colors.textMuted}
-                      value={email}
-                      onChangeText={setEmail}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                    />
+                    <Text style={[styles.emailInput, { color: colors.text }]}>
+                      {userInfo?.email || t('common.noData')}
+                    </Text>
                   </View>
                   <Text style={[styles.emailHint, { color: colors.textMuted }]}>
-                    We'll only use this to follow up on your feedback
+                    {t('feedback.emailHint')}
                   </Text>
                 </View>
 
@@ -311,11 +332,11 @@ export default function FeedbackScreen() {
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (
-                    <Text style={styles.submitButtonText}>Submitting...</Text>
+                    <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <>
                       <Ionicons name="send" size={20} color="#fff" />
-                      <Text style={styles.submitButtonText}>Submit Feedback</Text>
+                      <Text style={styles.submitButtonText}>{t('feedback.submit')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -324,7 +345,7 @@ export default function FeedbackScreen() {
                 <View style={[styles.privacyNote, { backgroundColor: isDarkMode ? colors.cardBackground : '#f8fafc' }]}>
                   <Ionicons name="shield-checkmark" size={18} color={colors.textMuted} />
                   <Text style={[styles.privacyText, { color: colors.textMuted }]}>
-                    Your feedback is confidential and helps us improve the app for everyone.
+                    {t('feedback.privacyNote')}
                   </Text>
                 </View>
               </>

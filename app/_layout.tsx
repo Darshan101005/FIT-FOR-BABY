@@ -1,12 +1,13 @@
 import PWAInstallBanner from '@/components/PWAInstallBanner';
 import { AppProvider } from '@/context/AppContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { LanguageProvider } from '@/context/LanguageContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { initPWA } from '@/services/pwa.service';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
@@ -14,12 +15,6 @@ const isWeb = Platform.OS === 'web';
 function LoadingScreen() {
   return (
     <View style={styles.loadingContainer}>
-      <Image
-        source={require('../assets/logos/fit_for_baby_horizontal.png')}
-        style={styles.logo}
-        resizeMode="contain"
-      />
-      <Text style={styles.loadingTitle}>Fit for Baby</Text>
       <ActivityIndicator size="large" color="#006dab" style={styles.spinner} />
       <Text style={styles.loadingText}>Loading...</Text>
     </View>
@@ -74,7 +69,9 @@ export default function RootLayout() {
     <AppProvider>
       <AuthProvider>
         <ThemeProvider>
-          <RootNavigator />
+          <LanguageProvider>
+            <RootNavigator />
+          </LanguageProvider>
         </ThemeProvider>
       </AuthProvider>
     </AppProvider>
@@ -87,17 +84,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
-  },
-  logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 16,
-  },
-  loadingTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#006dab',
-    marginBottom: 24,
   },
   spinner: {
     marginBottom: 16,

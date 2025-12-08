@@ -1,6 +1,6 @@
 import { useAuth } from '@/context/AuthContext';
 import { loginWithEmail } from '@/services/firebase';
-import { adminService, coupleService } from '@/services/firestore.service';
+import { adminService, coupleService, deviceService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -8,19 +8,30 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
+
+// Helper to get browser name
+const getBrowserName = (): string | undefined => {
+  if (Platform.OS !== 'web') return undefined;
+  const ua = navigator?.userAgent || '';
+  if (ua.includes('Chrome')) return 'Chrome';
+  if (ua.includes('Safari')) return 'Safari';
+  if (ua.includes('Firefox')) return 'Firefox';
+  if (ua.includes('Edge')) return 'Edge';
+  return 'Browser';
+};
 
 // Login modes: individual (with password) or shared (quick access with PIN)
 type LoginMode = 'individual' | 'shared';
@@ -459,6 +470,29 @@ export default function LoginScreen() {
     // Update last login
     await coupleService.updateLastLogin(couple.id, gender);
     
+    // Register this device
+    try {
+      const deviceInfo = {
+        deviceName: Platform.OS === 'web' 
+          ? (navigator?.userAgent?.includes('Mobile') ? 'Mobile Browser' : 'Web Browser')
+          : `${Platform.OS === 'ios' ? 'iPhone' : 'Android'} Device`,
+        deviceType: (Platform.OS === 'web' 
+          ? (navigator?.userAgent?.includes('Mobile') ? 'mobile' : 'desktop')
+          : 'mobile') as 'mobile' | 'tablet' | 'desktop' | 'web',
+        os: Platform.OS === 'web' 
+          ? (navigator?.platform || 'Web')
+          : `${Platform.OS === 'ios' ? 'iOS' : 'Android'}`,
+        osVersion: Platform.OS === 'web' ? undefined : String(Platform.Version),
+        browser: Platform.OS === 'web' ? getBrowserName() : undefined,
+        deviceModel: Platform.OS === 'web' ? undefined : Platform.OS,
+      };
+      const result = await deviceService.registerDevice(couple.id, gender, deviceInfo);
+      await AsyncStorage.setItem('currentDeviceId', result.deviceId);
+      await AsyncStorage.setItem('sessionToken', result.sessionToken);
+    } catch (deviceError) {
+      console.log('Device registration error (non-critical):', deviceError);
+    }
+    
     // Set session expiry based on rememberMe
     await setSessionExpiry(rememberMe);
     
@@ -666,7 +700,7 @@ export default function LoginScreen() {
                 {loginMode === 'individual' && (
                   <TouchableOpacity 
                     style={styles.forgotPasswordButton} 
-                    onPress={() => router.push('/reset-password')} 
+                    onPress={() => router.push('/forgot-password')} 
                     activeOpacity={0.7}
                   >
                     <Text style={styles.forgotPasswordText}>Forgot Password?</Text>

@@ -1,5 +1,6 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import SkeletonLoader from '@/components/ui/SkeletonLoader';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { broadcastService, chatService } from '@/services/firestore.service';
@@ -51,46 +52,7 @@ interface FAQItem {
   answer: string;
 }
 
-const mockFAQs: FAQItem[] = [
-  {
-    id: '1',
-    question: 'How do I sync with my partner?',
-    answer: 'Go to Profile → Partner Settings → Tap "Connect Partner" → Share the generated code with your partner. They enter the code on their device to connect.',
-  },
-  {
-    id: '2',
-    question: 'How do I log my daily food intake?',
-    answer: 'Go to the Home screen and tap "Log Food". You can search for foods, scan barcodes, or add custom meals. All entries are saved to your daily log.',
-  },
-  {
-    id: '3',
-    question: 'How do I set weight goals?',
-    answer: 'Navigate to Profile → Goals → Weight Goal. Enter your target weight and timeline. The app will calculate a safe and healthy plan for you.',
-  },
-  {
-    id: '4',
-    question: 'How do I book an appointment with a counsellor?',
-    answer: 'Go to Appointments from the home screen, select an available slot, choose your preferred counsellor, and confirm your booking.',
-  },
-  {
-    id: '5',
-    question: 'How do I track my walking progress?',
-    answer: 'Your steps are automatically tracked if you allow health permissions. View your progress in the Progress section on the home screen.',
-  },
-  {
-    id: '6',
-    question: 'Can I export my health data?',
-    answer: 'Yes! Go to Profile → Settings → Export Data. You can download your data as a PDF or share it directly with your healthcare provider.',
-  },
-];
-
-// Initial welcome message when user starts a new chat
-const getWelcomeMessage = (): Message => ({
-  id: '1',
-  text: 'Hello! Welcome to Fit for Baby support. How can we help you today?',
-  sender: 'support',
-  timestamp: new Date(),
-});
+// FAQs will be generated with translations inside the component
 
 export default function MessagesScreen() {
   const router = useRouter();
@@ -98,6 +60,25 @@ export default function MessagesScreen() {
   const isMobile = screenWidth < 768;
   const scrollViewRef = useRef<ScrollView>(null);
   const { colors } = useTheme();
+  const { language, t } = useLanguage();
+  
+  // Initial welcome message when user starts a new chat
+  const getWelcomeMessage = (): Message => ({
+    id: '1',
+    text: t('messages.welcomeMessage'),
+    sender: 'support',
+    timestamp: new Date(),
+  });
+  
+  // Get FAQs with translations
+  const getFAQs = (): FAQItem[] => [
+    { id: '1', question: t('faq.1.question'), answer: t('faq.1.answer') },
+    { id: '2', question: t('faq.2.question'), answer: t('faq.2.answer') },
+    { id: '3', question: t('faq.3.question'), answer: t('faq.3.answer') },
+    { id: '4', question: t('faq.4.question'), answer: t('faq.4.answer') },
+    { id: '5', question: t('faq.5.question'), answer: t('faq.5.answer') },
+    { id: '6', question: t('faq.6.question'), answer: t('faq.6.answer') },
+  ];
 
   // Get cached data from context
   const { 
@@ -357,13 +338,13 @@ export default function MessagesScreen() {
       <View style={styles.headerCenter}>
         {view === 'threads' ? (
           <>
-            <Text style={styles.headerTitle}>Messages</Text>
-            <Text style={styles.headerSubtitle}>Chat with support & counsellors</Text>
+            <Text style={styles.headerTitle}>{t('messages.title')}</Text>
+            <Text style={styles.headerSubtitle}>{t('messages.chatWithSupportCouncellors')}</Text>
           </>
         ) : view === 'faq' ? (
           <>
-            <Text style={styles.headerTitle}>FAQ</Text>
-            <Text style={styles.headerSubtitle}>Frequently Asked Questions</Text>
+            <Text style={styles.headerTitle}>{language === 'ta' ? 'அடிக்கடி கேட்கப்படும் கேள்விகள்' : 'FAQ'}</Text>
+            <Text style={styles.headerSubtitle}>{language === 'ta' ? 'அடிக்கடி கேட்கப்படும் கேள்விகள்' : 'Frequently Asked Questions'}</Text>
           </>
         ) : (
           <>
@@ -386,7 +367,7 @@ export default function MessagesScreen() {
               <View>
                 <Text style={styles.headerTitle}>{selectedThread?.title}</Text>
                 <Text style={styles.onlineStatus}>
-                  {isTyping ? 'Typing...' : 'Usually replies within 1 hour'}
+                  {isTyping ? (language === 'ta' ? 'தட்டச்சு செய்கிறது...' : 'Typing...') : (language === 'ta' ? 'வழக்கமாக 1 மணி நேரத்தில் பதிலளிக்கும்' : 'Usually replies within 1 hour')}
                 </Text>
               </View>
             </View>
@@ -420,8 +401,8 @@ export default function MessagesScreen() {
             />
           </View>
           <View style={styles.contactSupportText}>
-            <Text style={styles.contactSupportTitle}>Contact Support</Text>
-            <Text style={styles.contactSupportSubtitle}>Request a call or video meeting</Text>
+            <Text style={styles.contactSupportTitle}>{t('messages.contactSupport')}</Text>
+            <Text style={styles.contactSupportSubtitle}>{t('messages.requestCallVideo')}</Text>
           </View>
           <View style={styles.contactSupportArrow}>
             <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
@@ -430,7 +411,7 @@ export default function MessagesScreen() {
       </TouchableOpacity>
 
       {/* Conversations */}
-      <Text style={styles.sectionTitle}>Conversations</Text>
+      <Text style={styles.sectionTitle}>{t('messages.conversations')}</Text>
       
       {/* Nursing Department Chat - only show if there are messages */}
       {isLoadingChat ? (
@@ -461,7 +442,7 @@ export default function MessagesScreen() {
           </View>
           <View style={styles.threadContent}>
             <View style={[styles.threadHeader, isMobile && styles.threadHeaderMobile]}>
-              <Text style={[styles.threadTitle, isMobile && styles.threadTitleMobile]} numberOfLines={1}>Chat with Nursing Department</Text>
+              <Text style={[styles.threadTitle, isMobile && styles.threadTitleMobile]} numberOfLines={1}>{t('messages.chatWithNursing')}</Text>
               <Text style={[styles.threadTime, isMobile && styles.threadTimeMobile]}>
                 {nursingChat?.lastMessageAt ? formatChatTime(nursingChat.lastMessageAt) : ''}
               </Text>
@@ -488,8 +469,8 @@ export default function MessagesScreen() {
             <Ionicons name="chatbubbles-outline" size={28} color="#006dab" />
           </View>
           <View style={styles.startChatContent}>
-            <Text style={styles.startChatTitle}>Start a Conversation</Text>
-            <Text style={styles.startChatSubtitle}>Chat with our nursing team for support</Text>
+            <Text style={styles.startChatTitle}>{t('messages.startConversation')}</Text>
+            <Text style={styles.startChatSubtitle}>{t('messages.chatForSupport')}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
         </TouchableOpacity>
@@ -498,7 +479,7 @@ export default function MessagesScreen() {
       {/* Broadcasts / Announcements Section */}
       <View style={styles.broadcastsSection}>
         <View style={styles.broadcastsHeader}>
-          <Text style={styles.sectionTitle}>Announcements</Text>
+          <Text style={styles.sectionTitle}>{t('messages.announcements')}</Text>
           {unreadBroadcastCount > 0 && (
             <View style={styles.broadcastBadge}>
               <Text style={styles.broadcastBadgeText}>{unreadBroadcastCount}</Text>
@@ -514,8 +495,8 @@ export default function MessagesScreen() {
         ) : broadcasts.length === 0 ? (
           <View style={styles.noBroadcastsCard}>
             <Ionicons name="notifications-off-outline" size={32} color="#94a3b8" />
-            <Text style={styles.noBroadcastsText}>No announcements yet</Text>
-            <Text style={styles.noBroadcastsSubtext}>Important updates will appear here</Text>
+            <Text style={styles.noBroadcastsText}>{t('messages.noAnnouncements')}</Text>
+            <Text style={styles.noBroadcastsSubtext}>{t('messages.updatesHere')}</Text>
           </View>
         ) : (
           broadcasts.map((broadcast) => (
@@ -570,14 +551,14 @@ export default function MessagesScreen() {
       </View>
 
       {/* Technical Support Options */}
-      <Text style={styles.sectionTitle}>Technical Support</Text>
+      <Text style={styles.sectionTitle}>{t('messages.technicalSupport')}</Text>
       
       <View style={styles.helpOptions}>
         <TouchableOpacity style={styles.helpOption} onPress={handleCallSupport}>
           <View style={[styles.helpIcon, { backgroundColor: '#dcfce7' }]}>
             <Ionicons name="call" size={24} color="#22c55e" />
           </View>
-          <Text style={styles.helpLabel}>CONTACT US</Text>
+          <Text style={styles.helpLabel}>{t('messages.contactUs')}</Text>
           <Text style={styles.helpDetail}>9884671395</Text>
         </TouchableOpacity>
         
@@ -585,7 +566,7 @@ export default function MessagesScreen() {
           <View style={[styles.helpIcon, { backgroundColor: '#dbeafe' }]}>
             <Ionicons name="mail" size={24} color="#3b82f6" />
           </View>
-          <Text style={styles.helpLabel}>EMAIL US</Text>
+          <Text style={styles.helpLabel}>{t('messages.emailUs')}</Text>
           <Text style={styles.helpDetail}>e0323040@sriher.edu.in</Text>
         </TouchableOpacity>
       </View>
@@ -596,12 +577,12 @@ export default function MessagesScreen() {
           <View style={styles.faqContent}>
             <MaterialCommunityIcons name="frequently-asked-questions" size={32} color="#fff" />
             <View style={styles.faqText}>
-              <Text style={styles.faqTitle}>Have a question?</Text>
-              <Text style={styles.faqSubtitle}>Check our FAQ for quick answers</Text>
+              <Text style={styles.faqTitle}>{t('messages.haveQuestion')}</Text>
+              <Text style={styles.faqSubtitle}>{t('messages.checkFaq')}</Text>
             </View>
           </View>
           <TouchableOpacity style={styles.faqButton} onPress={() => setView('faq')}>
-            <Text style={styles.faqButtonText}>View FAQ</Text>
+            <Text style={styles.faqButtonText}>{t('messages.viewFaq')}</Text>
             <Ionicons name="arrow-forward" size={16} color="#006dab" />
           </TouchableOpacity>
         </LinearGradient>
@@ -611,10 +592,10 @@ export default function MessagesScreen() {
 
   const renderFAQ = () => (
     <View style={styles.content}>
-      <Text style={styles.faqPageTitle}>Frequently Asked Questions</Text>
-      <Text style={styles.faqPageSubtitle}>Tap on a question to see the answer</Text>
+      <Text style={styles.faqPageTitle}>{t('messages.faqTitle')}</Text>
+      <Text style={styles.faqPageSubtitle}>{t('messages.faqSubtitle')}</Text>
       
-      {mockFAQs.map((faq) => (
+      {getFAQs().map((faq) => (
         <TouchableOpacity
           key={faq.id}
           style={styles.faqItem}
@@ -638,12 +619,12 @@ export default function MessagesScreen() {
       ))}
       
       <View style={styles.faqFooter}>
-        <Text style={styles.faqFooterText}>Still have questions?</Text>
+        <Text style={styles.faqFooterText}>{t('messages.stillHaveQuestions')}</Text>
         <TouchableOpacity 
           style={styles.faqContactButton}
           onPress={() => setView('threads')}
         >
-          <Text style={styles.faqContactButtonText}>Chat with Support</Text>
+          <Text style={styles.faqContactButtonText}>{t('messages.chatWithSupport')}</Text>
           <Ionicons name="chatbubble-outline" size={16} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -668,7 +649,7 @@ export default function MessagesScreen() {
         {/* Date divider */}
         <View style={styles.dateDivider}>
           <View style={styles.dateLine} />
-          <Text style={styles.dateText}>Today</Text>
+          <Text style={styles.dateText}>{t('common.today')}</Text>
           <View style={styles.dateLine} />
         </View>
 
@@ -750,7 +731,7 @@ export default function MessagesScreen() {
             style={styles.textInput}
             value={newMessage}
             onChangeText={setNewMessage}
-            placeholder="Type a message..."
+            placeholder={t('messages.typeMessage')}
             placeholderTextColor="#94a3b8"
             multiline
             maxLength={500}

@@ -1,4 +1,5 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -65,6 +66,7 @@ export default function PartnerSettingsScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
+  const { t } = useLanguage();
   
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
@@ -131,7 +133,7 @@ export default function PartnerSettingsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Partner Settings</Text>
+        <Text style={styles.headerTitle}>{t('partner.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
       
@@ -145,7 +147,7 @@ export default function PartnerSettingsScreen() {
                 {mockUser.name.split(' ').map(n => n[0]).join('')}
               </Text>
             </View>
-            <Text style={styles.avatarLabel}>You</Text>
+            <Text style={styles.avatarLabel}>{t('partner.you')}</Text>
           </View>
           
           {/* Heart Connection */}
@@ -166,7 +168,7 @@ export default function PartnerSettingsScreen() {
         
         <View style={styles.coupleIdContainer}>
           <MaterialCommunityIcons name="identifier" size={16} color="rgba(255,255,255,0.8)" />
-          <Text style={styles.coupleIdText}>Couple ID: {mockPartner.odisId}</Text>
+          <Text style={styles.coupleIdText}>{t('partner.coupleId')}: {mockPartner.odisId}</Text>
         </View>
       </View>
     </LinearGradient>
@@ -227,7 +229,7 @@ export default function PartnerSettingsScreen() {
         onPress={handleSendMessage}
       >
         <Ionicons name="chatbubble-outline" size={18} color="#fff" />
-        <Text style={styles.messageButtonText}>Send Message</Text>
+        <Text style={styles.messageButtonText}>{t('partner.sendMessage')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -373,7 +375,7 @@ export default function PartnerSettingsScreen() {
 
           {/* Couple Journey Stats */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Your Journey Together</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('partner.journeyTogether')}</Text>
             <View style={[styles.statsCard, { backgroundColor: colors.cardBackground }]}>
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
@@ -381,7 +383,7 @@ export default function PartnerSettingsScreen() {
                     <Ionicons name="calendar" size={20} color="#22c55e" />
                   </View>
                   <Text style={[styles.statValue, { color: colors.text }]}>57</Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Days Together</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('partner.daysTogether')}</Text>
                 </View>
                 <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
                 <View style={styles.statItem}>
@@ -389,7 +391,7 @@ export default function PartnerSettingsScreen() {
                     <MaterialCommunityIcons name="shoe-print" size={20} color="#3b82f6" />
                   </View>
                   <Text style={[styles.statValue, { color: colors.text }]}>24</Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Couple Walks</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('partner.coupleWalks')}</Text>
                 </View>
                 <View style={[styles.statDivider, { backgroundColor: colors.borderLight }]} />
                 <View style={styles.statItem}>
@@ -397,7 +399,7 @@ export default function PartnerSettingsScreen() {
                     <Ionicons name="trophy" size={20} color="#f59e0b" />
                   </View>
                   <Text style={[styles.statValue, { color: colors.text }]}>12</Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Goals Achieved</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('partner.goalsAchieved')}</Text>
                 </View>
               </View>
             </View>

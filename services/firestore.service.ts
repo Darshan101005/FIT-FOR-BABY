@@ -3,26 +3,26 @@
 // ============================================
 
 import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
-import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DoctorVisit, DoctorVisitStatus, ExerciseLog, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, WeightLog } from '@/types/firebase.types';
+import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DeviceStatus, DoctorVisit, DoctorVisitStatus, ExerciseLog, Feedback, FeedbackCategory, FeedbackStatus, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, UserDevice, WeightLog } from '@/types/firebase.types';
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    deleteField,
-    doc,
-    getDoc,
-    getDocs,
-    increment,
-    limit,
-    onSnapshot,
-    orderBy,
-    query,
-    setDoc,
-    Timestamp,
-    Unsubscribe,
-    updateDoc,
-    where,
-    writeBatch
+  addDoc,
+  collection,
+  deleteDoc,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  increment,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  Timestamp,
+  Unsubscribe,
+  updateDoc,
+  where,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -628,7 +628,17 @@ export const coupleService = {
       return onSnapshot(couplesRef, 
         (snapshot) => {
           // Empty collection is valid - not an error
-          const couples = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const couples = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            // Filter out malformed couples without male/female data
+            .filter((couple: any) => {
+              return couple && 
+                     couple.coupleId && 
+                     couple.male && 
+                     couple.female &&
+                     typeof couple.male === 'object' &&
+                     typeof couple.female === 'object';
+            });
           // Sort client-side by coupleId (C_001, C_002, etc.)
           couples.sort((a: any, b: any) => {
             if (!a.coupleId || !b.coupleId) return 0;
@@ -3524,6 +3534,359 @@ export const questionnaireService = {
 };
 
 // ============================================
+// FEEDBACK SERVICE
+// ============================================
+
+export const feedbackService = {
+  // Submit feedback from user
+  async submit(data: {
+    coupleId: string;
+    coupleName: string;
+    userId: string;
+    userName: string;
+    userEmail: string;
+    userGender: 'male' | 'female';
+    category: FeedbackCategory;
+    rating: number;
+    message: string;
+  }): Promise<string> {
+    const feedbackRef = collection(db, COLLECTIONS.FEEDBACKS);
+    const docRef = await addDoc(feedbackRef, {
+      ...data,
+      status: 'pending' as FeedbackStatus,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    
+    // Update the document with its ID
+    await updateDoc(docRef, { id: docRef.id });
+    
+    return docRef.id;
+  },
+
+  // Get all feedbacks (for admin)
+  async getAll(): Promise<Feedback[]> {
+    const feedbackRef = collection(db, COLLECTIONS.FEEDBACKS);
+    const q = query(feedbackRef, orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Feedback);
+  },
+
+  // Get pending feedbacks count (for admin badge)
+  async getPendingCount(): Promise<number> {
+    const feedbackRef = collection(db, COLLECTIONS.FEEDBACKS);
+    const q = query(feedbackRef, where('status', '==', 'pending'));
+    const snapshot = await getDocs(q);
+    return snapshot.size;
+  },
+
+  // Get feedbacks by status
+  async getByStatus(status: FeedbackStatus): Promise<Feedback[]> {
+    const feedbackRef = collection(db, COLLECTIONS.FEEDBACKS);
+    const q = query(
+      feedbackRef, 
+      where('status', '==', status),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Feedback);
+  },
+
+  // Update feedback status (admin)
+  async updateStatus(
+    feedbackId: string, 
+    status: FeedbackStatus, 
+    adminNotes?: string,
+    resolvedBy?: string
+  ): Promise<void> {
+    const feedbackRef = doc(db, COLLECTIONS.FEEDBACKS, feedbackId);
+    const updateData: Record<string, any> = {
+      status,
+      updatedAt: now(),
+    };
+    
+    if (adminNotes) {
+      updateData.adminNotes = adminNotes;
+    }
+    
+    if (status === 'resolved' && resolvedBy) {
+      updateData.resolvedBy = resolvedBy;
+      updateData.resolvedAt = now();
+    }
+    
+    await updateDoc(feedbackRef, updateData);
+  },
+
+  // Subscribe to feedbacks (real-time)
+  subscribeToFeedbacks(
+    callback: (feedbacks: Feedback[]) => void,
+    statusFilter?: FeedbackStatus
+  ): Unsubscribe {
+    const feedbackRef = collection(db, COLLECTIONS.FEEDBACKS);
+    let q;
+    
+    if (statusFilter) {
+      q = query(
+        feedbackRef,
+        where('status', '==', statusFilter),
+        orderBy('createdAt', 'desc')
+      );
+    } else {
+      q = query(feedbackRef, orderBy('createdAt', 'desc'));
+    }
+    
+    return onSnapshot(q, (snapshot) => {
+      const feedbacks = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Feedback);
+      callback(feedbacks);
+    });
+  },
+
+  // Delete feedback
+  async delete(feedbackId: string): Promise<void> {
+    const feedbackRef = doc(db, COLLECTIONS.FEEDBACKS, feedbackId);
+    await deleteDoc(feedbackRef);
+  },
+};
+
+// ============================================
+// DEVICE SERVICE - User Device Management
+// Path: /couples/{coupleId}/devices/{deviceId}
+// ============================================
+
+export const deviceService = {
+  // Generate a unique device session token
+  generateSessionToken(): string {
+    return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+  },
+
+  // Register or update device when user logs in
+  async registerDevice(
+    coupleId: string, 
+    gender: 'male' | 'female',
+    deviceInfo: Omit<UserDevice, 'id' | 'firstLoginAt' | 'lastActiveAt' | 'status' | 'isCurrentDevice' | 'coupleId' | 'userGender'>
+  ): Promise<{ deviceId: string; sessionToken: string }> {
+    const devicesRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'devices');
+    const sessionToken = this.generateSessionToken();
+    
+    try {
+      // Get all devices for this user and find if this device exists
+      const userDevicesQuery = query(devicesRef, where('userGender', '==', gender));
+      const userDevices = await getDocs(userDevicesQuery);
+      
+      // Find existing device by matching device name and os
+      let existingDevice: any = null;
+      userDevices.docs.forEach(deviceDoc => {
+        const data = deviceDoc.data();
+        if (data.deviceName === deviceInfo.deviceName && data.os === deviceInfo.os) {
+          existingDevice = { id: deviceDoc.id, ref: deviceDoc.ref, data };
+        }
+      });
+      
+      if (existingDevice) {
+        // Update existing device
+        await updateDoc(existingDevice.ref, {
+          ...deviceInfo,
+          sessionToken,
+          status: 'active' as DeviceStatus,
+          isCurrentDevice: true,
+          lastActiveAt: now(),
+        });
+        
+        // Mark other devices of this user as not current
+        const batch = writeBatch(db);
+        userDevices.docs.forEach(deviceDoc => {
+          if (deviceDoc.id !== existingDevice.id) {
+            batch.update(deviceDoc.ref, { isCurrentDevice: false });
+          }
+        });
+        if (userDevices.docs.length > 1) {
+          await batch.commit();
+        }
+        
+        return { deviceId: existingDevice.id, sessionToken };
+      } else {
+        // Create new device entry
+        const newDevice: Omit<UserDevice, 'id'> = {
+          ...deviceInfo,
+          sessionToken,
+          status: 'active',
+          isCurrentDevice: true,
+          firstLoginAt: now(),
+          lastActiveAt: now(),
+          coupleId,
+          userGender: gender,
+        };
+        
+        const docRef = await addDoc(devicesRef, newDevice);
+        
+        // Mark other devices of this user as not current
+        const batch = writeBatch(db);
+        userDevices.docs.forEach(deviceDoc => {
+          batch.update(deviceDoc.ref, { isCurrentDevice: false });
+        });
+        if (userDevices.docs.length > 0) {
+          await batch.commit();
+        }
+        
+        return { deviceId: docRef.id, sessionToken };
+      }
+    } catch (error) {
+      console.error('Error in registerDevice:', error);
+      // If query fails (e.g., no index), try simple add
+      const newDevice: Omit<UserDevice, 'id'> = {
+        ...deviceInfo,
+        sessionToken,
+        status: 'active',
+        isCurrentDevice: true,
+        firstLoginAt: now(),
+        lastActiveAt: now(),
+        coupleId,
+        userGender: gender,
+      };
+      
+      const docRef = await addDoc(devicesRef, newDevice);
+      return { deviceId: docRef.id, sessionToken };
+    }
+  },
+
+  // Get all devices for a user (filtered by gender)
+  async getDevices(coupleId: string, gender: 'male' | 'female'): Promise<UserDevice[]> {
+    const devicesRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'devices');
+    const q = query(devicesRef, where('userGender', '==', gender));
+    const snapshot = await getDocs(q);
+    const devices = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as UserDevice);
+    // Sort by lastActiveAt descending in JavaScript to avoid composite index requirement
+    return devices.sort((a, b) => {
+      const aTime = a.lastActiveAt?.toMillis?.() || 0;
+      const bTime = b.lastActiveAt?.toMillis?.() || 0;
+      return bTime - aTime;
+    });
+  },
+
+  // Update device last active time
+  async updateLastActive(coupleId: string, gender: 'male' | 'female', deviceId: string): Promise<void> {
+    const deviceRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'devices', deviceId);
+    await updateDoc(deviceRef, {
+      lastActiveAt: now(),
+      status: 'active' as DeviceStatus,
+    });
+  },
+
+  // Logout a specific device (remote logout)
+  async logoutDevice(coupleId: string, gender: 'male' | 'female', deviceId: string): Promise<void> {
+    const deviceRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'devices', deviceId);
+    await updateDoc(deviceRef, {
+      status: 'logged_out' as DeviceStatus,
+      isCurrentDevice: false,
+      sessionToken: null,
+      loggedOutAt: now(),
+    });
+  },
+
+  // Logout all other devices (keep only current)
+  async logoutAllOtherDevices(coupleId: string, gender: 'male' | 'female', currentDeviceId: string): Promise<number> {
+    const devicesRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'devices');
+    const q = query(devicesRef, where('userGender', '==', gender));
+    const snapshot = await getDocs(q);
+    
+    let count = 0;
+    const batch = writeBatch(db);
+    
+    snapshot.docs.forEach(deviceDoc => {
+      if (deviceDoc.id !== currentDeviceId && deviceDoc.data().status === 'active') {
+        batch.update(deviceDoc.ref, {
+          status: 'logged_out' as DeviceStatus,
+          isCurrentDevice: false,
+          sessionToken: null,
+          loggedOutAt: now(),
+        });
+        count++;
+      }
+    });
+    
+    await batch.commit();
+    return count;
+  },
+
+  // Remove a device entry completely
+  async removeDevice(coupleId: string, gender: 'male' | 'female', deviceId: string): Promise<void> {
+    const deviceRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'devices', deviceId);
+    await deleteDoc(deviceRef);
+  },
+
+  // Subscribe to devices for real-time updates
+  subscribeToDevices(
+    coupleId: string, 
+    gender: 'male' | 'female', 
+    callback: (devices: UserDevice[]) => void
+  ): Unsubscribe {
+    const devicesRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'devices');
+    const q = query(devicesRef, where('userGender', '==', gender));
+    
+    return onSnapshot(q, (snapshot) => {
+      const devices = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as UserDevice);
+      // Sort by lastActiveAt descending
+      devices.sort((a, b) => {
+        const aTime = a.lastActiveAt?.toMillis?.() || 0;
+        const bTime = b.lastActiveAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+      callback(devices);
+    });
+  },
+
+  // Check if session is still valid (for auth guard)
+  async validateSession(
+    coupleId: string, 
+    gender: 'male' | 'female', 
+    deviceId: string, 
+    sessionToken: string
+  ): Promise<boolean> {
+    const deviceRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'devices', deviceId);
+    const deviceDoc = await getDoc(deviceRef);
+    
+    if (!deviceDoc.exists()) return false;
+    
+    const device = deviceDoc.data() as UserDevice;
+    return device.sessionToken === sessionToken && device.status === 'active';
+  },
+
+  // Subscribe to current device status for real-time logout detection
+  subscribeToDeviceStatus(
+    coupleId: string,
+    gender: 'male' | 'female',
+    deviceId: string,
+    onLoggedOut: () => void
+  ): Unsubscribe {
+    const deviceRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'devices', deviceId);
+    let isFirstSnapshot = true;
+    let previousStatus: string | null = null;
+    
+    return onSnapshot(deviceRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        // Device was deleted - only trigger if not first snapshot
+        if (!isFirstSnapshot) {
+          onLoggedOut();
+        }
+        isFirstSnapshot = false;
+        return;
+      }
+      
+      const device = snapshot.data() as UserDevice;
+      const currentStatus = device.status;
+      
+      // Only trigger if status CHANGED to logged_out (not on initial load)
+      if (!isFirstSnapshot && previousStatus === 'active' && currentStatus === 'logged_out') {
+        onLoggedOut();
+      }
+      
+      previousStatus = currentStatus;
+      isFirstSnapshot = false;
+    });
+  },
+};
+
+// ============================================
 // EXPORT ALL SERVICES
 // ============================================
 
@@ -3548,6 +3911,8 @@ export const firestoreServices = {
   broadcast: broadcastService,
   chat: chatService,
   questionnaire: questionnaireService,
+  feedback: feedbackService,
+  device: deviceService,
 };
 
 export default firestoreServices;

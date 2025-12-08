@@ -1,5 +1,6 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { HomePageSkeleton } from '@/components/ui/SkeletonLoader';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { formatDateString } from '@/services/firestore.service';
@@ -28,6 +29,12 @@ import Svg, { Circle, G } from 'react-native-svg';
 const isWeb = Platform.OS === 'web';
 const STEPS_STORAGE_KEY = '@fitforbaby_steps_today';
 
+// Day index keys for translation
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const DAY_KEYS_FULL = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const MONTH_KEYS_FULL = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+
 // Generate dates for selector (3 days before, today, 3 days after)
 const generateDates = (isMobile: boolean = false) => {
   const dates = [];
@@ -44,7 +51,10 @@ const generateDates = (isMobile: boolean = false) => {
     dates.push({
       date: date,
       day: date.getDate(),
-      weekday: date.toLocaleDateString('en-US', { weekday: 'short' }),
+      dayKey: DAY_KEYS[date.getDay()],
+      dayKeyFull: DAY_KEYS_FULL[date.getDay()],
+      monthKey: MONTH_KEYS[date.getMonth()],
+      monthKeyFull: MONTH_KEYS_FULL[date.getMonth()],
       isToday: i === 0,
       isFuture: i > 0,
       isPast: i < 0,
@@ -58,6 +68,7 @@ export default function UserHomeScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
+  const { t } = useLanguage();
   
   // Get cached data from context - NO MORE LOADING ON EVERY PAGE SWITCH!
   const { 
@@ -197,16 +208,16 @@ export default function UserHomeScreen() {
 
   // Helper function to format time ago
   const formatTimeAgo = (timestamp: any) => {
-    if (!timestamp) return 'Recently';
+    if (!timestamp) return t('home.recently');
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
 
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    return 'Just now';
+    if (days > 0) return `${days}${t('home.daysAgo')}`;
+    if (hours > 0) return `${hours}${t('home.hoursAgo')}`;
+    return t('home.justNow');
   };
 
   // Convert broadcasts to notification format
@@ -219,13 +230,13 @@ export default function UserHomeScreen() {
           broadcast.priority === 'important' ? 'important' : 'broadcast',
   }));
 
-  // Today's Tips data
+  // Today's Tips data - uses translations
   const todaysTips = [
-    { id: 1, icon: 'water', color: '#06b6d4', tip: 'Stay hydrated! Drink at least 8 glasses of water today.' },
-    { id: 2, icon: 'walk', color: '#22c55e', tip: 'A 30-minute walk with your partner can boost your mood and health.' },
-    { id: 3, icon: 'nutrition', color: '#f59e0b', tip: 'Include more leafy greens and fruits in your meals today.' },
-    { id: 4, icon: 'bed', color: '#8b5cf6', tip: 'Aim for 7-8 hours of quality sleep for better fertility.' },
-    { id: 5, icon: 'heart', color: '#ef4444', tip: 'Practice deep breathing exercises to reduce stress levels.' },
+    { id: 1, icon: 'water', color: '#06b6d4', tip: t('home.stayHydrated') },
+    { id: 2, icon: 'walk', color: '#22c55e', tip: t('home.walkWithPartner') },
+    { id: 3, icon: 'nutrition', color: '#f59e0b', tip: t('home.leafyGreens') },
+    { id: 4, icon: 'bed', color: '#8b5cf6', tip: t('home.qualitySleep') },
+    { id: 5, icon: 'heart', color: '#ef4444', tip: t('home.deepBreathing') },
   ];
 
   // Get a random tip based on the day
@@ -262,15 +273,13 @@ export default function UserHomeScreen() {
   };
 
   const formatCurrentDate = () => {
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      month: 'long', 
-      day: 'numeric',
-      year: 'numeric'
-    };
     // Use the selected date from the date selector
-    const selectedDate = dates[selectedDateIndex]?.date || new Date();
-    return selectedDate.toLocaleDateString('en-US', options);
+    const selectedItem = dates[selectedDateIndex];
+    if (!selectedItem) {
+      const now = new Date();
+      return `${t(`daysFull.${DAY_KEYS_FULL[now.getDay()]}`)}, ${t(`appointments.monthFull.${MONTH_KEYS[now.getMonth()]}`)} ${now.getDate()}, ${now.getFullYear()}`;
+    }
+    return `${t(`daysFull.${selectedItem.dayKeyFull}`)}, ${t(`appointments.monthFull.${selectedItem.monthKey}`)} ${selectedItem.day}, ${selectedItem.date.getFullYear()}`;
   };
 
   // Circular progress component
@@ -312,7 +321,7 @@ export default function UserHomeScreen() {
           <Text style={[styles.stepsValue, { color: colors.text }]}>
             {todayProgress.steps.current.toLocaleString()}
           </Text>
-          <Text style={[styles.stepsLabel, { color: colors.textSecondary }]}>Steps</Text>
+          <Text style={[styles.stepsLabel, { color: colors.textSecondary }]}>{t('home.steps')}</Text>
         </View>
       </View>
     );
@@ -359,10 +368,10 @@ export default function UserHomeScreen() {
               </TouchableOpacity>
               <View>
                 <Text style={[styles.greeting, { color: colors.text }]}>
-                  Hello, {userInfo?.name || 'User'}! 👋
+                  {t('home.hello')}, {userInfo?.name || 'User'}! 👋
                 </Text>
                 <Text style={[styles.coupleId, { color: colors.textSecondary }]}>
-                  Couple ID: {userInfo?.coupleId || ''}
+                  {t('home.coupleId')}: {userInfo?.coupleId || ''}
                 </Text>
               </View>
             </View>
@@ -408,7 +417,7 @@ export default function UserHomeScreen() {
                   item.isToday && { color: 'rgba(255,255,255,0.8)' },
                   item.isFuture && { color: colors.textSecondary, opacity: 0.4 },
                 ]}>
-                  {item.weekday}
+                  {t(`days.${item.dayKey}`)}
                 </Text>
                 <Text style={[
                   styles.dateDay,
@@ -434,7 +443,7 @@ export default function UserHomeScreen() {
               <View style={[styles.targetBadge, { backgroundColor: isDarkMode ? '#1a3329' : '#e8f5d6' }]}>
                 <Ionicons name="flag" size={14} color="#98be4e" />
                 <Text style={[styles.targetText, { color: '#98be4e' }]}>
-                  Goal: {todayProgress.steps.target.toLocaleString()} steps
+                  {t('home.goal')}: {todayProgress.steps.target.toLocaleString()} {t('home.steps')}
                 </Text>
               </View>
             </View>
@@ -447,7 +456,7 @@ export default function UserHomeScreen() {
                 activeOpacity={0.8}
               >
                 <MaterialCommunityIcons name="shoe-print" size={20} color="#ffffff" />
-                <Text style={styles.logStepsButtonText}>Log Step Count</Text>
+                <Text style={styles.logStepsButtonText}>{t('home.logStepCount')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -455,7 +464,7 @@ export default function UserHomeScreen() {
           {/* Quick Actions - Only show for today */}
           {isSelectedDateToday && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('home.quickActions')}</Text>
               <View style={styles.quickActionsRow}>
                 <TouchableOpacity
                   style={[styles.quickActionCard, { backgroundColor: colors.cardBackground }]}
@@ -465,7 +474,7 @@ export default function UserHomeScreen() {
                   <View style={[styles.quickActionIcon, { backgroundColor: isDarkMode ? '#1a3329' : '#e8f5d6' }]}>
                     <Ionicons name="restaurant" size={22} color="#98be4e" />
                   </View>
-                  <Text style={[styles.quickActionLabel, { color: colors.text }]}>Log Food</Text>
+                  <Text style={[styles.quickActionLabel, { color: colors.text }]}>{t('home.logFood')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -476,7 +485,7 @@ export default function UserHomeScreen() {
                   <View style={[styles.quickActionIcon, { backgroundColor: isDarkMode ? '#1a2d3d' : '#e0f2fe' }]}>
                     <Ionicons name="fitness" size={22} color="#006dab" />
                   </View>
-                  <Text style={[styles.quickActionLabel, { color: colors.text }]}>Log Exercise</Text>
+                  <Text style={[styles.quickActionLabel, { color: colors.text }]}>{t('home.logExercise')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -487,7 +496,7 @@ export default function UserHomeScreen() {
                   <View style={[styles.quickActionIcon, { backgroundColor: isDarkMode ? '#2d2a1a' : '#fef3c7' }]}>
                     <Ionicons name="scale" size={22} color="#f59e0b" />
                   </View>
-                  <Text style={[styles.quickActionLabel, { color: colors.text }]}>Log Weight</Text>
+                  <Text style={[styles.quickActionLabel, { color: colors.text }]}>{t('home.logWeight')}</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -495,7 +504,7 @@ export default function UserHomeScreen() {
 
           {/* Activity Section - Shows data for selected date */}
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {isSelectedDateToday ? "Today's Activity" : `${dates[selectedDateIndex]?.weekday} ${dates[selectedDateIndex]?.day} Activity`}
+            {isSelectedDateToday ? t('home.todaysActivity') : `${t(`days.${dates[selectedDateIndex]?.dayKey}`)} ${dates[selectedDateIndex]?.day} ${t('home.activity')}`}
           </Text>
           <View style={styles.activityGrid}>
             {/* Exercise Minutes */}
@@ -506,10 +515,10 @@ export default function UserHomeScreen() {
               <View style={styles.activityInfo}>
                 <Text style={[styles.activityValue, { color: colors.text }]} numberOfLines={1}>
                   {todayProgress.exerciseMinutes}
-                  <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> min</Text>
+                  <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> {t('home.min')}</Text>
                 </Text>
                 <Text style={[styles.activityLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-                  Exercise {!todayProgress.exerciseGoalMet && `/ ${todayProgress.exerciseGoal}m`}
+                  {t('home.exercise')} {!todayProgress.exerciseGoalMet && `/ ${todayProgress.exerciseGoal}m`}
                 </Text>
               </View>
               {todayProgress.exerciseGoalMet && (
@@ -527,9 +536,9 @@ export default function UserHomeScreen() {
               <View style={styles.activityInfo}>
                 <Text style={[styles.activityValue, { color: colors.text }]} numberOfLines={1}>
                   {todayProgress.foodLogged}
-                  <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> meals</Text>
+                  <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> {t('home.meals')}</Text>
                 </Text>
-                <Text style={[styles.activityLabel, { color: colors.textSecondary }]} numberOfLines={1}>Food Logged</Text>
+                <Text style={[styles.activityLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('home.foodLogged')}</Text>
               </View>
             </View>
 
@@ -541,10 +550,10 @@ export default function UserHomeScreen() {
               <View style={styles.activityInfo}>
                 <Text style={[styles.activityValue, { color: colors.text }]} numberOfLines={1}>
                   {todayProgress.caloriesBurnt}
-                  <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> kcal</Text>
+                  <Text style={[styles.activityUnit, { color: colors.textSecondary }]}> {t('home.kcal')}</Text>
                 </Text>
                 <Text style={[styles.activityLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-                  Calories Burnt {!todayProgress.caloriesGoalMet && `/ ${todayProgress.caloriesGoal}`}
+                  {t('home.caloriesBurnt')} {!todayProgress.caloriesGoalMet && `/ ${todayProgress.caloriesGoal}`}
                 </Text>
               </View>
               {todayProgress.caloriesGoalMet && (
@@ -564,8 +573,8 @@ export default function UserHomeScreen() {
                 <MaterialCommunityIcons name="food-variant" size={22} color="#f59e0b" />
               </View>
               <View style={styles.activityInfo}>
-                <Text style={[styles.activityValue, { color: colors.text }]} numberOfLines={1}>Diet Plan</Text>
-                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>View</Text>
+                <Text style={[styles.activityValue, { color: colors.text }]} numberOfLines={1}>{t('home.dietPlan')}</Text>
+                <Text style={[styles.activityLabel, { color: colors.textSecondary }]}>{t('home.view')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} style={styles.activityArrow} />
             </TouchableOpacity>
@@ -589,13 +598,13 @@ export default function UserHomeScreen() {
               </View>
               <View style={styles.streakTextContent}>
                 <Text style={[styles.streakLabel, { color: colors.text }]}>
-                  Day Streak
+                  {t('home.dayStreak')}
                 </Text>
                 <Text style={[styles.streakMotivation, { color: colors.textSecondary }]}>
                   {streakData.currentStreak === 0 
-                    ? "Log today to start your streak!" 
+                    ? t('home.startStreak')
                     : streakData.currentStreak === 1 
-                      ? "Great start! Keep it going!" 
+                      ? t('home.greatStart')
                       : `${streakData.currentStreak} days of healthy logging!`}
                 </Text>
               </View>
@@ -603,14 +612,14 @@ export default function UserHomeScreen() {
             
             {streakData.longestStreak > 0 && streakData.longestStreak > streakData.currentStreak && (
               <View style={[styles.bestStreakRow, { borderTopColor: colors.borderLight }]}>
-                <Text style={[styles.bestStreakLabel, { color: colors.textSecondary }]}>Best Streak:</Text>
-                <Text style={[styles.bestStreakValue, { color: colors.primary }]}>{streakData.longestStreak} days 🏅</Text>
+                <Text style={[styles.bestStreakLabel, { color: colors.textSecondary }]}>{t('home.bestStreak')}:</Text>
+                <Text style={[styles.bestStreakValue, { color: colors.primary }]}>{streakData.longestStreak} {t('home.days')} 🏅</Text>
               </View>
             )}
           </View>
 
           {/* Today's Tip Card */}
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Today's Tip</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('home.todaysTip')}</Text>
           <View style={[styles.tipCard, { backgroundColor: colors.cardBackground }]}>
             <View style={[styles.tipIconContainer, { backgroundColor: dailyTip.color + '20' }]}>
               <Ionicons name={dailyTip.icon as any} size={28} color={dailyTip.color} />
@@ -628,13 +637,19 @@ export default function UserHomeScreen() {
           {/* Upcoming Nursing Department Visits */}
           {upcomingNursingVisits.length > 0 && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Upcoming Nursing Visits</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('home.upcomingNursingVisits')}</Text>
               <View style={styles.nursingVisitsContainer}>
                 {upcomingNursingVisits.slice(0, 3).map((visit, index) => {
                   const visitDate = new Date(visit.date);
-                  const dayName = visitDate.toLocaleDateString('en-US', { weekday: 'short' });
-                  const monthName = visitDate.toLocaleDateString('en-US', { month: 'short' });
+                  const dayOfWeek = visitDate.getDay();
+                  const monthIndex = visitDate.getMonth();
                   const dayNum = visitDate.getDate();
+                  
+                  // Get translated day and month names
+                  const dayKeys = ['days.sun', 'days.mon', 'days.tue', 'days.wed', 'days.thu', 'days.fri', 'days.sat'];
+                  const monthKeys = ['months.jan', 'months.feb', 'months.mar', 'months.apr', 'months.may', 'months.jun', 'months.jul', 'months.aug', 'months.sep', 'months.oct', 'months.nov', 'months.dec'];
+                  const dayName = t(dayKeys[dayOfWeek]);
+                  const monthName = t(monthKeys[monthIndex]);
                   
                   return (
                     <TouchableOpacity
@@ -649,7 +664,7 @@ export default function UserHomeScreen() {
                       </View>
                       <View style={styles.nursingVisitInfo}>
                         <Text style={[styles.nursingVisitTitle, { color: colors.text }]}>
-                          {visit.purpose || 'Nursing Department Visit'}
+                          {visit.purpose || t('home.nursingDeptVisit')}
                         </Text>
                         <View style={styles.nursingVisitMeta}>
                           <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
@@ -659,7 +674,7 @@ export default function UserHomeScreen() {
                         </View>
                         {visit.visitNumber && (
                           <View style={styles.nursingVisitBadge}>
-                            <Text style={styles.nursingVisitBadgeText}>Visit #{visit.visitNumber}</Text>
+                            <Text style={styles.nursingVisitBadgeText}>{t('home.visit')} #{visit.visitNumber}</Text>
                           </View>
                         )}
                       </View>
@@ -673,7 +688,7 @@ export default function UserHomeScreen() {
                     onPress={() => router.push('/user/appointments' as any)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.viewAllText}>View all {upcomingNursingVisits.length} visits</Text>
+                    <Text style={styles.viewAllText}>{t('home.viewAllVisits')} {upcomingNursingVisits.length} {t('home.visits')}</Text>
                     <Ionicons name="arrow-forward" size={16} color="#006dab" />
                   </TouchableOpacity>
                 )}
@@ -706,7 +721,7 @@ export default function UserHomeScreen() {
         <View style={styles.sidebarHeader}>
           <View style={styles.sidebarHeaderLeft}>
             <Ionicons name="notifications" size={22} color="#006dab" />
-            <Text style={[styles.sidebarTitle, { color: colors.text }]}>Reminders</Text>
+            <Text style={[styles.sidebarTitle, { color: colors.text }]}>{t('home.reminders')}</Text>
           </View>
           <TouchableOpacity onPress={closeNotificationSidebar}>
             <Ionicons name="close" size={24} color={colors.text} />
@@ -718,10 +733,10 @@ export default function UserHomeScreen() {
             <View style={styles.emptyNotifications}>
               <Ionicons name="notifications-off-outline" size={48} color={colors.textSecondary} />
               <Text style={[styles.emptyNotificationsText, { color: colors.textSecondary }]}>
-                No new reminders
+                {t('home.noNewReminders')}
               </Text>
               <Text style={[styles.emptyNotificationsSubtext, { color: colors.textSecondary }]}>
-                Announcements from admins will appear here
+                {t('home.announcementsAppearHere')}
               </Text>
             </View>
           ) : (
@@ -769,7 +784,7 @@ export default function UserHomeScreen() {
                 activeOpacity={0.7}
               >
                 <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                <Text style={styles.clearAllText}>Clear All Reminders</Text>
+                <Text style={styles.clearAllText}>{t('home.clearAllReminders')}</Text>
               </TouchableOpacity>
             </>
           )}

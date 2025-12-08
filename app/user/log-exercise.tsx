@@ -1,3 +1,4 @@
+import { useLanguage } from '@/context/LanguageContext';
 import { useUserData } from '@/context/UserDataContext';
 import { coupleExerciseService, coupleService, globalSettingsService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -120,6 +121,7 @@ export default function LogExerciseScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { refreshDailyData } = useUserData();
+  const { language, t } = useLanguage();
 
   const [step, setStep] = useState<'type' | 'details' | 'summary'>('type');
   const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null);
@@ -218,11 +220,11 @@ export default function LogExerciseScreen() {
 
   const handleContinue = () => {
     if (!duration || parseInt(duration) <= 0) {
-      showToast('Please enter a valid duration', 'error');
+      showToast(t('log.exercise.enterValidDuration'), 'error');
       return;
     }
     if (selectedExercise?.requiresSteps && (!steps || parseInt(steps) <= 0)) {
-      showToast('Please enter step count for Couple Walking', 'error');
+      showToast(t('log.exercise.enterValidSteps'), 'error');
       return;
     }
     setStep('summary');
@@ -230,7 +232,7 @@ export default function LogExerciseScreen() {
 
   const handleSave = async () => {
     if (!selectedExercise || !coupleId) {
-      showToast('Session error. Please try again.', 'error');
+      showToast(t('error.sessionError') || 'Session error. Please try again.', 'error');
       return;
     }
 
@@ -259,13 +261,16 @@ export default function LogExerciseScreen() {
       let goalMessage = '';
       if (goalSettings) {
         if (selectedExercise.id === 'couple-walking' && parseInt(duration) >= goalSettings.coupleWalkingMinutes) {
-          goalMessage = ' 🎉 Daily walking goal achieved!';
+          goalMessage = language === 'ta' ? ' 🎉 தினசரி நடைப்பயிற்சி இலக்கு அடைந்தது!' : ' 🎉 Daily walking goal achieved!';
         } else if (selectedExercise.id === 'high-knees' && parseInt(duration) >= goalSettings.highKneesMinutes) {
-          goalMessage = ' 🎉 High knees goal achieved!';
+          goalMessage = language === 'ta' ? ' 🎉 ஹை நீஸ் இலக்கு அடைந்தது!' : ' 🎉 High knees goal achieved!';
         }
       }
 
-      showToast(`Exercise logged! ${caloriesBurned} cal burned.${goalMessage}`, 'success');
+      const successMsg = language === 'ta' 
+        ? `உடற்பயிற்சி பதிவானது! ${caloriesBurned} கலோரி எரிந்தது.${goalMessage}`
+        : `Exercise logged! ${caloriesBurned} cal burned.${goalMessage}`;
+      showToast(successMsg, 'success');
       
       // Refresh context data so home page shows updated values
       refreshDailyData();
@@ -275,7 +280,7 @@ export default function LogExerciseScreen() {
       }, 2000);
     } catch (error) {
       console.error('Error saving exercise:', error);
-      showToast('Failed to save exercise. Please try again.', 'error');
+      showToast(t('log.exercise.saveFailed'), 'error');
     } finally {
       setIsSaving(false);
     }
@@ -287,9 +292,9 @@ export default function LogExerciseScreen() {
         <Ionicons name="arrow-back" size={24} color="#0f172a" />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>Log Exercise</Text>
+        <Text style={styles.headerTitle}>{t('log.exercise.title')}</Text>
         {selectedExercise && (
-          <Text style={styles.headerSubtitle}>{selectedExercise.name}</Text>
+          <Text style={styles.headerSubtitle}>{language === 'ta' ? selectedExercise.nameTamil : selectedExercise.name}</Text>
         )}
       </View>
     </View>
@@ -297,9 +302,9 @@ export default function LogExerciseScreen() {
 
   const renderExerciseSelection = () => (
     <View style={styles.content}>
-      <Text style={styles.stepTitle}>Choose Exercise Type</Text>
+      <Text style={styles.stepTitle}>{t('log.exercise.chooseType')}</Text>
       <Text style={styles.stepDescription}>
-        What activity did you do today?
+        {t('log.exercise.whatActivity')}
       </Text>
       <View style={styles.exerciseGrid}>
         {exerciseTypes.map((exercise) => (
@@ -315,12 +320,14 @@ export default function LogExerciseScreen() {
             >
               <Image source={exercise.image} style={styles.exerciseImage} resizeMode="cover" />
             </LinearGradient>
-            <Text style={styles.exerciseLabel}>{exercise.name}</Text>
-            <Text style={styles.exerciseLabelTamil}>{exercise.nameTamil}</Text>
+            <Text style={styles.exerciseLabel}>{language === 'ta' ? exercise.nameTamil : exercise.name}</Text>
+            {language !== 'ta' && (
+              <Text style={styles.exerciseLabelTamil}>{exercise.nameTamil}</Text>
+            )}
             {exercise.isCouple && (
               <View style={[styles.targetBadge, { backgroundColor: '#fef3c7' }]}>
                 <Text style={[styles.targetBadgeText, { color: '#d97706' }]}>
-                  👫 With Partner
+                  👫 {t('log.exercise.withPartner')}
                 </Text>
               </View>
             )}
@@ -343,14 +350,16 @@ export default function LogExerciseScreen() {
             <Image source={selectedExercise.image} style={styles.selectedExerciseImage} resizeMode="cover" />
           </LinearGradient>
           <View>
-            <Text style={styles.selectedName}>{selectedExercise.name}</Text>
-            <Text style={styles.selectedNameTamil}>{selectedExercise.nameTamil}</Text>
+            <Text style={styles.selectedName}>{language === 'ta' ? selectedExercise.nameTamil : selectedExercise.name}</Text>
+            {language !== 'ta' && (
+              <Text style={styles.selectedNameTamil}>{selectedExercise.nameTamil}</Text>
+            )}
           </View>
         </View>
 
         {/* Duration */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Duration (minutes)</Text>
+          <Text style={styles.inputLabel}>{t('log.exercise.duration')}</Text>
           <View style={styles.durationContainer}>
             <TouchableOpacity
               style={styles.durationButton}
@@ -388,7 +397,7 @@ export default function LogExerciseScreen() {
                     duration === mins.toString() && styles.quickDurationTextActive,
                   ]}
                 >
-                  {mins} min
+                  {mins} {t('log.exercise.min')}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -397,7 +406,7 @@ export default function LogExerciseScreen() {
 
         {/* Intensity */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Intensity Level</Text>
+          <Text style={styles.inputLabel}>{t('log.exercise.intensityLevel')}</Text>
           <View style={styles.intensityOptions}>
             {intensityLevels.map((level) => (
               <TouchableOpacity
@@ -414,7 +423,7 @@ export default function LogExerciseScreen() {
                     intensity === level.id && styles.intensityTextActive,
                   ]}
                 >
-                  {level.label}
+                  {t(`log.exercise.${level.id}`)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -424,26 +433,26 @@ export default function LogExerciseScreen() {
         {/* Steps - Mandatory for Couple Walking only */}
         {selectedExercise.requiresSteps && (
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Step Count <Text style={styles.requiredStar}>*</Text></Text>
+            <Text style={styles.inputLabel}>{t('log.exercise.stepCount')} <Text style={styles.requiredStar}>*</Text></Text>
             <View style={styles.stepsInputContainer}>
               <MaterialCommunityIcons name="shoe-print" size={20} color="#64748b" />
               <TextInput
                 style={styles.stepsInput}
                 value={steps}
                 onChangeText={setSteps}
-                placeholder="Enter step count"
+                placeholder={t('log.exercise.enterStepCount')}
                 placeholderTextColor="#94a3b8"
                 keyboardType="numeric"
               />
             </View>
-            <Text style={styles.inputHint}>Required for Couple Walking exercise</Text>
+            <Text style={styles.inputHint}>{t('log.exercise.requiredForCoupleWalking')}</Text>
           </View>
         )}
 
         {/* Partner Participation (for couple exercises) */}
         {selectedExercise.isCouple && (
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Partner Participated?</Text>
+            <Text style={styles.inputLabel}>{t('log.exercise.partnerParticipated')}</Text>
             <View style={styles.partnerOptions}>
               <TouchableOpacity
                 style={[
@@ -463,7 +472,7 @@ export default function LogExerciseScreen() {
                     partnerParticipated && styles.partnerOptionTextActive,
                   ]}
                 >
-                  Yes, together!
+                  {t('log.exercise.yesTogether')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -484,7 +493,7 @@ export default function LogExerciseScreen() {
                     !partnerParticipated && styles.partnerOptionTextActive,
                   ]}
                 >
-                  Solo
+                  {t('log.exercise.solo')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -493,11 +502,11 @@ export default function LogExerciseScreen() {
 
         {/* Perceived Exertion */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>How hard did you work? (1-10)</Text>
+          <Text style={styles.inputLabel}>{t('log.exercise.howHardWork')}</Text>
           <View style={styles.exertionContainer}>
             <View style={styles.exertionLabels}>
-              <Text style={styles.exertionLabelText}>Easy</Text>
-              <Text style={styles.exertionLabelText}>Hard</Text>
+              <Text style={styles.exertionLabelText}>{t('log.exercise.easy')}</Text>
+              <Text style={styles.exertionLabelText}>{t('log.exercise.hard')}</Text>
             </View>
             <View style={styles.exertionButtons}>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
@@ -525,12 +534,12 @@ export default function LogExerciseScreen() {
 
         {/* Notes */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Notes (optional)</Text>
+          <Text style={styles.inputLabel}>{t('log.exercise.notesOptional')}</Text>
           <TextInput
             style={styles.notesInput}
             value={notes}
             onChangeText={setNotes}
-            placeholder="Weather, location, how you felt..."
+            placeholder={t('log.exercise.notesPlaceholder')}
             placeholderTextColor="#94a3b8"
             multiline
             numberOfLines={3}
@@ -546,7 +555,7 @@ export default function LogExerciseScreen() {
             colors={['#006dab', '#005a8f']}
             style={styles.continueButtonGradient}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.continueButtonText}>{t('log.exercise.continue')}</Text>
             <Ionicons name="arrow-forward" size={20} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
@@ -558,13 +567,12 @@ export default function LogExerciseScreen() {
     if (!selectedExercise) return null;
 
     const calories = calculateCalories();
-    const intensityLabel = intensityLevels.find(i => i.id === intensity)?.label || '';
 
     return (
       <View style={styles.content}>
-        <Text style={styles.stepTitle}>Exercise Summary</Text>
+        <Text style={styles.stepTitle}>{t('log.exercise.summary')}</Text>
         <Text style={styles.stepDescription}>
-          {new Date().toLocaleDateString('en-US', { 
+          {new Date().toLocaleDateString(language === 'ta' ? 'ta-IN' : 'en-US', { 
             weekday: 'long', 
             month: 'long', 
             day: 'numeric' 
@@ -578,8 +586,8 @@ export default function LogExerciseScreen() {
           >
             <Image source={selectedExercise.image} style={styles.summaryExerciseImage} resizeMode="cover" />
             <View style={styles.summaryHeaderText}>
-              <Text style={[styles.summaryExerciseName, { color: selectedExercise.iconColor }]}>{selectedExercise.name}</Text>
-              <Text style={[styles.summaryDuration, { color: selectedExercise.iconColor, opacity: 0.8 }]}>{duration} minutes • {intensityLabel}</Text>
+              <Text style={[styles.summaryExerciseName, { color: selectedExercise.iconColor }]}>{language === 'ta' ? selectedExercise.nameTamil : selectedExercise.name}</Text>
+              <Text style={[styles.summaryDuration, { color: selectedExercise.iconColor, opacity: 0.8 }]}>{duration} {t('log.exercise.minutes')} • {t(`log.exercise.${intensity}`)}</Text>
             </View>
           </LinearGradient>
 
@@ -587,19 +595,19 @@ export default function LogExerciseScreen() {
             <View style={styles.summaryStat}>
               <MaterialCommunityIcons name="fire" size={24} color="#ef4444" />
               <Text style={styles.summaryStatValue}>{calories}</Text>
-              <Text style={styles.summaryStatLabel}>Calories</Text>
+              <Text style={styles.summaryStatLabel}>{t('log.exercise.calories')}</Text>
             </View>
             {steps && (
               <View style={styles.summaryStat}>
                 <MaterialCommunityIcons name="shoe-print" size={24} color="#22c55e" />
                 <Text style={styles.summaryStatValue}>{steps}</Text>
-                <Text style={styles.summaryStatLabel}>Steps</Text>
+                <Text style={styles.summaryStatLabel}>{t('log.exercise.steps')}</Text>
               </View>
             )}
             <View style={styles.summaryStat}>
               <MaterialCommunityIcons name="speedometer" size={24} color="#f59e0b" />
               <Text style={styles.summaryStatValue}>{perceivedExertion}/10</Text>
-              <Text style={styles.summaryStatLabel}>Effort</Text>
+              <Text style={styles.summaryStatLabel}>{t('log.exercise.effort')}</Text>
             </View>
           </View>
 
@@ -611,14 +619,14 @@ export default function LogExerciseScreen() {
                 color={partnerParticipated ? '#22c55e' : '#64748b'}
               />
               <Text style={styles.partnerStatusText}>
-                {partnerParticipated ? 'Exercised with partner' : 'Exercised solo'}
+                {partnerParticipated ? t('log.exercise.exercisedWithPartner') : t('log.exercise.exercisedSolo')}
               </Text>
             </View>
           )}
 
           {notes && (
             <View style={styles.notesPreview}>
-              <Text style={styles.notesPreviewLabel}>Notes:</Text>
+              <Text style={styles.notesPreviewLabel}>{t('log.exercise.notes')}</Text>
               <Text style={styles.notesPreviewText}>{notes}</Text>
             </View>
           )}
@@ -630,7 +638,7 @@ export default function LogExerciseScreen() {
             onPress={() => setStep('details')}
           >
             <Ionicons name="pencil" size={20} color="#006dab" />
-            <Text style={styles.editButtonText}>Edit</Text>
+            <Text style={styles.editButtonText}>{t('log.exercise.edit')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -643,11 +651,11 @@ export default function LogExerciseScreen() {
               {isSaving ? (
                 <>
                   <ActivityIndicator size="small" color="#fff" />
-                  <Text style={styles.saveButtonText}>Saving...</Text>
+                  <Text style={styles.saveButtonText}>{t('log.exercise.saving')}</Text>
                 </>
               ) : (
                 <>
-                  <Text style={styles.saveButtonText}>Save Exercise</Text>
+                  <Text style={styles.saveButtonText}>{t('log.exercise.save')}</Text>
                   <Ionicons name="checkmark-circle" size={22} color="#fff" />
                 </>
               )}

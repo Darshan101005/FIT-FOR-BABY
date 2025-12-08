@@ -1,3 +1,4 @@
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { broadcastService, chatService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,8 +18,8 @@ const BROADCASTS_READ_KEY = 'broadcasts_last_read_timestamp';
 
 interface TabItem {
   name: string;
-  label: string;
-  mobileLabel?: string;
+  labelKey: string; // Translation key
+  mobileLabelKey?: string; // Translation key for mobile
   icon: keyof typeof Ionicons.glyphMap;
   iconFilled: keyof typeof Ionicons.glyphMap;
   route: string;
@@ -28,29 +29,29 @@ interface TabItem {
 const tabs: TabItem[] = [
   {
     name: 'home',
-    label: 'Home',
+    labelKey: 'nav.home',
     icon: 'home-outline',
     iconFilled: 'home',
     route: '/user/home',
   },
   {
     name: 'progress',
-    label: 'Progress',
+    labelKey: 'nav.progress',
     icon: 'stats-chart-outline',
     iconFilled: 'stats-chart',
     route: '/user/progress',
   },
   {
     name: 'appointments',
-    label: 'Appointments',
-    mobileLabel: 'Schedule',
+    labelKey: 'nav.appointments',
+    mobileLabelKey: 'nav.schedule',
     icon: 'calendar-outline',
     iconFilled: 'calendar',
     route: '/user/appointments',
   },
   {
     name: 'messages',
-    label: 'Messages',
+    labelKey: 'nav.messages',
     icon: 'chatbubbles-outline',
     iconFilled: 'chatbubbles',
     route: '/user/messages',
@@ -58,7 +59,7 @@ const tabs: TabItem[] = [
   },
   {
     name: 'profile',
-    label: 'Profile',
+    labelKey: 'nav.profile',
     icon: 'person-outline',
     iconFilled: 'person',
     route: '/user/profile',
@@ -71,6 +72,7 @@ export default function BottomNavBar() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const [unreadBroadcastCount, setUnreadBroadcastCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
@@ -193,7 +195,7 @@ export default function BottomNavBar() {
                 { color: colors.textMuted },
                 active && { color: colors.primary, fontWeight: '600' }
               ]}>
-                {isMobile && tab.mobileLabel ? tab.mobileLabel : tab.label}
+                {isMobile && tab.mobileLabelKey ? t(tab.mobileLabelKey) : t(tab.labelKey)}
               </Text>
               {active && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
             </TouchableOpacity>

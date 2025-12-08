@@ -1,9 +1,10 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
     Linking,
     Platform,
@@ -130,6 +131,7 @@ export default function HelpCenterScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
+  const { language, t } = useLanguage();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -166,10 +168,10 @@ export default function HelpCenterScreen() {
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Help Center</Text>
+            <Text style={styles.headerTitle}>{t('help.title')}</Text>
             <View style={{ width: 40 }} />
           </View>
-          <Text style={styles.headerSubtitle}>How can we help you today?</Text>
+          <Text style={styles.headerSubtitle}>{language === 'ta' ? 'இன்று உங்களுக்கு எவ்வாறு உதவ முடியும்?' : 'How can we help you today?'}</Text>
         </LinearGradient>
 
         <View style={[styles.content, isMobile && styles.contentMobile]}>
@@ -178,7 +180,7 @@ export default function HelpCenterScreen() {
             <Ionicons name="search" size={20} color={colors.textMuted} />
             <TextInput
               style={[styles.searchInput, { color: colors.text }]}
-              placeholder="Search for help..."
+              placeholder={t('help.searchPlaceholder')}
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -192,7 +194,7 @@ export default function HelpCenterScreen() {
 
           {/* Quick Actions */}
           <View style={styles.quickActions}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Contact Us</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('help.contactUs')}</Text>
             <View style={styles.contactGrid}>
               {contactOptions.map((option) => (
                 <TouchableOpacity
@@ -214,7 +216,7 @@ export default function HelpCenterScreen() {
 
           {/* Category Filter */}
           <View style={styles.categorySection}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>FAQ Categories</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('help.faqCategories')}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -256,13 +258,13 @@ export default function HelpCenterScreen() {
           {/* FAQs */}
           <View style={styles.faqSection}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Frequently Asked Questions
+              {t('help.faq')}
             </Text>
             
             {filteredFAQs.length === 0 ? (
               <View style={[styles.emptyState, { backgroundColor: colors.cardBackground }]}>
                 <Ionicons name="search-outline" size={48} color={colors.textMuted} />
-                <Text style={[styles.emptyTitle, { color: colors.text }]}>No results found</Text>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>{t('help.noResults')}</Text>
                 <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                   Try adjusting your search or category filter
                 </Text>
@@ -314,16 +316,16 @@ export default function HelpCenterScreen() {
           <View style={[styles.needHelpCard, { backgroundColor: isDarkMode ? colors.primaryLight : '#eff6ff' }]}>
             <Ionicons name="help-buoy" size={32} color={colors.primary} />
             <View style={styles.needHelpContent}>
-              <Text style={[styles.needHelpTitle, { color: colors.text }]}>Still need help?</Text>
+              <Text style={[styles.needHelpTitle, { color: colors.text }]}>{t('help.stillNeedHelp')}</Text>
               <Text style={[styles.needHelpSubtitle, { color: colors.textSecondary }]}>
-                Our support team is ready to assist you
+                {t('help.reachOut')}
               </Text>
             </View>
             <TouchableOpacity
               style={[styles.needHelpButton, { backgroundColor: colors.primary }]}
               onPress={() => router.push('/user/messages' as any)}
             >
-              <Text style={styles.needHelpButtonText}>Message Us</Text>
+              <Text style={styles.needHelpButtonText}>{t('help.messageUs')}</Text>
             </TouchableOpacity>
           </View>
         </View>

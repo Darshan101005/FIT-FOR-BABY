@@ -1,4 +1,5 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { coupleFoodLogService, coupleService } from '@/services/firestore.service';
@@ -46,6 +47,7 @@ export default function LogFoodScreen() {
   const isMobile = screenWidth < 768;
   const { colors } = useTheme();
   const { refreshDailyData } = useUserData();
+  const { language, t } = useLanguage();
 
   const [step, setStep] = useState<'meal' | 'category' | 'food' | 'quantity' | 'summary'>('meal');
   const [selectedMealTime, setSelectedMealTime] = useState<string | null>(null);
@@ -405,9 +407,9 @@ export default function LogFoodScreen() {
         <Ionicons name="arrow-back" size={24} color="#0f172a" />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>Log Food</Text>
+        <Text style={styles.headerTitle}>{t('log.food.title')}</Text>
         {selectedMealTime && (
-          <Text style={styles.headerSubtitle}>{currentMealLabel}</Text>
+          <Text style={styles.headerSubtitle}>{language === 'ta' ? mealTimes.find(m => m.id === selectedMealTime)?.labelTamil || currentMealLabel : currentMealLabel}</Text>
         )}
       </View>
       {selectedFoods.length > 0 && step !== 'summary' && (
@@ -432,9 +434,9 @@ export default function LogFoodScreen() {
 
   const renderMealTimeSelection = () => (
     <View style={styles.content}>
-      <Text style={styles.stepTitle}>Select Meal Time</Text>
+      <Text style={styles.stepTitle}>{t('log.food.selectMealTime')}</Text>
       <Text style={styles.stepDescription}>
-        When did you have this meal?
+        {t('log.food.whenMeal')}
       </Text>
       
       <View style={styles.mealTimeGridNew}>
@@ -456,7 +458,7 @@ export default function LogFoodScreen() {
               <View style={[styles.mealIconPlain, { backgroundColor: colors.icon + '20' }]}>
                 <Ionicons name={meal.icon as any} size={26} color={colors.icon} />
               </View>
-              <Text style={styles.mealLabelPlain}>{meal.label}</Text>
+              <Text style={styles.mealLabelPlain}>{language === 'ta' && meal.labelTamil ? meal.labelTamil : meal.label}</Text>
               <Text style={styles.mealTimePlain}>{meal.time}</Text>
               {isSelected && (
                 <View style={[styles.mealCheckmark, { backgroundColor: colors.icon }]}>
@@ -472,9 +474,9 @@ export default function LogFoodScreen() {
 
   const renderCategorySelection = () => (
     <View style={styles.content}>
-      <Text style={styles.stepTitle}>Select Category</Text>
+      <Text style={styles.stepTitle}>{t('log.food.selectCategory')}</Text>
       <Text style={styles.stepDescription}>
-        What type of food did you have?
+        {language === 'ta' ? 'என்ன வகையான உணவு சாப்பிட்டீர்கள்?' : 'What type of food did you have?'}
       </Text>
       <View style={styles.categoryGrid}>
         {foodCategories.map((category) => (
@@ -504,7 +506,7 @@ export default function LogFoodScreen() {
         <Ionicons name="search" size={20} color="#94a3b8" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search foods..."
+          placeholder={t('log.food.searchFoods')}
           placeholderTextColor="#94a3b8"
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -536,7 +538,7 @@ export default function LogFoodScreen() {
           <Text style={[
             styles.categoryTabText,
             selectedFilterCategory === 'all' && styles.categoryTabTextActive
-          ]}>All</Text>
+          ]}>{t('log.food.allCategories')}</Text>
         </TouchableOpacity>
         {(() => {
           const filteredCategories = foodCategories.filter(cat => cat.id !== 'others' && availableCategories.includes(cat.id as FoodItemData['category']));
@@ -559,7 +561,7 @@ export default function LogFoodScreen() {
             <Text style={[
               styles.categoryTabText,
               selectedFilterCategory === category.id && styles.categoryTabTextActive
-            ]}>{category.label}</Text>
+            ]}>{language === 'ta' && category.labelTamil ? category.labelTamil : category.label}</Text>
           </TouchableOpacity>
         ));
         })()}
@@ -567,7 +569,7 @@ export default function LogFoodScreen() {
 
       {/* Food count display for debugging */}
       <Text style={styles.resultCount}>
-        {filteredFoods.length} foods {selectedFilterCategory !== 'all' ? `in ${foodCategories.find(c => c.id === selectedFilterCategory)?.label}` : 'total'}
+        {filteredFoods.length} {language === 'ta' ? 'உணவுகள்' : 'foods'} {selectedFilterCategory !== 'all' ? `${language === 'ta' ? 'இல்' : 'in'} ${language === 'ta' ? foodCategories.find(c => c.id === selectedFilterCategory)?.labelTamil : foodCategories.find(c => c.id === selectedFilterCategory)?.label}` : (language === 'ta' ? 'மொத்தம்' : 'total')}
       </Text>
 
       <ScrollView 
@@ -577,9 +579,9 @@ export default function LogFoodScreen() {
         {filteredFoods.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="search-outline" size={48} color="#94a3b8" />
-            <Text style={styles.emptyStateText}>No foods found</Text>
+            <Text style={styles.emptyStateText}>{language === 'ta' ? 'உணவுகள் கிடைக்கவில்லை' : 'No foods found'}</Text>
             <Text style={styles.emptyStateSubtext}>
-              Try a different category or search term
+              {language === 'ta' ? 'வேறு வகை அல்லது தேடல் வார்த்தையை முயற்சிக்கவும்' : 'Try a different category or search term'}
             </Text>
           </View>
         ) : (
@@ -591,10 +593,10 @@ export default function LogFoodScreen() {
               activeOpacity={0.7}
             >
               <View style={styles.foodInfo}>
-                <Text style={styles.foodName}>{food.name}</Text>
-                <Text style={styles.foodNameTamil}>{food.nameTamil}</Text>
+                <Text style={styles.foodName}>{language === 'ta' ? food.nameTamil : food.name}</Text>
+                {language !== 'ta' && <Text style={styles.foodNameTamil}>{food.nameTamil}</Text>}
                 <Text style={styles.foodCalories}>
-                  {food.caloriesPer100g} cal/100g • {food.subCategory}
+                  {food.caloriesPer100g} {t('log.food.cal')}/100g • {food.subCategory}
                 </Text>
               </View>
               <Ionicons name="add-circle" size={28} color="#006dab" />
@@ -639,12 +641,12 @@ export default function LogFoodScreen() {
     return (
       <View style={styles.content}>
         <View style={styles.selectedFoodHeader}>
-          <Text style={styles.selectedFoodName}>{currentFood.name}</Text>
-          <Text style={styles.selectedFoodTamil}>{currentFood.nameTamil}</Text>
+          <Text style={styles.selectedFoodName}>{language === 'ta' ? currentFood.nameTamil : currentFood.name}</Text>
+          {language !== 'ta' && <Text style={styles.selectedFoodTamil}>{currentFood.nameTamil}</Text>}
         </View>
 
         <View style={styles.servingSection}>
-          <Text style={styles.sectionLabel}>Serving Size</Text>
+          <Text style={styles.sectionLabel}>{t('log.food.servingSize')}</Text>
           <View style={styles.servingOptions}>
             {currentFood.commonServings.map((serving, index) => (
               <TouchableOpacity
@@ -693,11 +695,11 @@ export default function LogFoodScreen() {
         {/* Custom Serving Input - Two Fields */}
         {isCustomServing && (
           <View style={styles.customServingSection}>
-            <Text style={styles.sectionLabel}>Custom Serving Details</Text>
+            <Text style={styles.sectionLabel}>{t('log.food.customServingDetails')}</Text>
             
             {/* Serving Count Input */}
             <Text style={styles.customInputLabel}>
-              Number of servings ({currentFood.servingUnit})
+              {language === 'ta' ? `பரிமாறல்களின் எண்ணிக்கை (${currentFood.servingUnit})` : `Number of servings (${currentFood.servingUnit})`}
             </Text>
             <View style={styles.customServingInputContainer}>
               <TextInput
@@ -719,13 +721,13 @@ export default function LogFoodScreen() {
             
             {/* Total Grams Display - READ ONLY */}
             <Text style={styles.customInputLabel}>
-              Total grams (auto-calculated)
+              {language === 'ta' ? 'மொத்த கிராம் (தானாக கணக்கிடப்பட்டது)' : 'Total grams (auto-calculated)'}
             </Text>
             <View style={[styles.customServingInputContainer, { marginTop: 8, backgroundColor: '#f8fafc' }]}>
               <Text style={[styles.customServingInput, { color: '#006dab', fontWeight: '700' }]}>
                 {customServingGrams || '0'}
               </Text>
-              <Text style={styles.customServingUnit}>grams</Text>
+              <Text style={styles.customServingUnit}>{t('log.food.grams')}</Text>
             </View>
             
             {/* Helper Text */}
@@ -738,7 +740,7 @@ export default function LogFoodScreen() {
         )}
 
         <View style={styles.quantitySection}>
-          <Text style={styles.sectionLabel}>Quantity</Text>
+          <Text style={styles.sectionLabel}>{t('log.food.quantity')}</Text>
           <View style={styles.quantityControls}>
             <TouchableOpacity
               style={styles.quantityButton}
@@ -759,45 +761,45 @@ export default function LogFoodScreen() {
           {isCustomServing ? (
             customServingCount && customServingGrams && (
               <View style={styles.totalCalculationBox}>
-                <Text style={styles.totalCalculationLabel}>Total Amount:</Text>
+                <Text style={styles.totalCalculationLabel}>{language === 'ta' ? 'மொத்த அளவு:' : 'Total Amount:'}</Text>
                 <Text style={styles.totalCalculationValue}>
-                  {customServingCount} {currentFood.servingUnit} × {currentQuantity} qty = {parseFloat(customServingCount) * currentQuantity} {currentFood.servingUnit}
+                  {customServingCount} {currentFood.servingUnit} × {currentQuantity} {language === 'ta' ? 'எண்' : 'qty'} = {parseFloat(customServingCount) * currentQuantity} {currentFood.servingUnit}
                 </Text>
               </View>
             )
           ) : (
             <View style={styles.totalCalculationBox}>
-              <Text style={styles.totalCalculationLabel}>Total Amount:</Text>
+              <Text style={styles.totalCalculationLabel}>{language === 'ta' ? 'மொத்த அளவு:' : 'Total Amount:'}</Text>
               <Text style={styles.totalCalculationValue}>
-                1 serving × {currentQuantity} qty = {currentQuantity} servings
+                1 {language === 'ta' ? 'பரிமாறல்' : 'serving'} × {currentQuantity} {language === 'ta' ? 'எண்' : 'qty'} = {currentQuantity} {language === 'ta' ? 'பரிமாறல்கள்' : 'servings'}
               </Text>
             </View>
           )}
         </View>
 
         <View style={styles.nutritionCard}>
-          <Text style={styles.nutritionTitle}>Nutrition Info</Text>
+          <Text style={styles.nutritionTitle}>{language === 'ta' ? 'ஊட்டச்சத்து தகவல்' : 'Nutrition Info'}</Text>
           {isCustomServing && (!customServingCount || !customServingGrams) ? (
             <Text style={styles.nutritionPlaceholder}>
-              Enter both serving count and grams to see nutrition info
+              {language === 'ta' ? 'ஊட்டச்சத்து தகவலைப் பார்க்க பரிமாற எண்ணிக்கை மற்றும் கிராம் இரண்டையும் உள்ளிடவும்' : 'Enter both serving count and grams to see nutrition info'}
             </Text>
           ) : (
             <View style={styles.nutritionGrid}>
               <View style={styles.nutritionItem}>
                 <Text style={styles.nutritionValue}>{nutrition.calories}</Text>
-                <Text style={styles.nutritionLabel}>Calories</Text>
+                <Text style={styles.nutritionLabel}>{t('log.food.calories')}</Text>
               </View>
               <View style={styles.nutritionItem}>
                 <Text style={styles.nutritionValue}>{nutrition.protein}g</Text>
-                <Text style={styles.nutritionLabel}>Protein</Text>
+                <Text style={styles.nutritionLabel}>{t('log.food.protein')}</Text>
               </View>
               <View style={styles.nutritionItem}>
                 <Text style={styles.nutritionValue}>{nutrition.carbs}g</Text>
-                <Text style={styles.nutritionLabel}>Carbs</Text>
+                <Text style={styles.nutritionLabel}>{t('log.food.carbs')}</Text>
               </View>
               <View style={styles.nutritionItem}>
                 <Text style={styles.nutritionValue}>{nutrition.fat}g</Text>
-                <Text style={styles.nutritionLabel}>Fat</Text>
+                <Text style={styles.nutritionLabel}>{t('log.food.fat')}</Text>
               </View>
             </View>
           )}
@@ -810,7 +812,7 @@ export default function LogFoodScreen() {
         >
           <View style={styles.addButtonContent}>
             <Ionicons name="add" size={24} color="#fff" />
-            <Text style={styles.addButtonText}>Add to Meal</Text>
+            <Text style={styles.addButtonText}>{t('log.food.addToMeal')}</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -819,9 +821,9 @@ export default function LogFoodScreen() {
 
   const renderSummary = () => (
     <View style={styles.content}>
-      <Text style={styles.stepTitle}>Meal Summary</Text>
+      <Text style={styles.stepTitle}>{t('log.food.mealSummary')}</Text>
       <Text style={styles.stepDescription}>
-        {currentMealLabel} • {new Date().toLocaleDateString()}
+        {language === 'ta' && mealTimes.find(m => m.id === selectedMealTime)?.labelTamil ? mealTimes.find(m => m.id === selectedMealTime)?.labelTamil : currentMealLabel} • {new Date().toLocaleDateString(language === 'ta' ? 'ta-IN' : 'en-US')}
       </Text>
 
       <ScrollView style={styles.summaryList}>
@@ -879,23 +881,23 @@ export default function LogFoodScreen() {
       </ScrollView>
 
       <View style={styles.totalCard}>
-        <Text style={styles.totalTitle}>Total Nutrition</Text>
+        <Text style={styles.totalTitle}>{t('log.food.totalNutrition')}</Text>
         <View style={styles.totalGrid}>
           <View style={styles.totalItem}>
             <Text style={styles.totalValue}>{totalNutrition.calories}</Text>
-            <Text style={styles.totalLabel}>Calories</Text>
+            <Text style={styles.totalLabel}>{t('log.food.calories')}</Text>
           </View>
           <View style={styles.totalItem}>
             <Text style={styles.totalValue}>{totalNutrition.protein.toFixed(1)}g</Text>
-            <Text style={styles.totalLabel}>Protein</Text>
+            <Text style={styles.totalLabel}>{t('log.food.protein')}</Text>
           </View>
           <View style={styles.totalItem}>
             <Text style={styles.totalValue}>{totalNutrition.carbs.toFixed(1)}g</Text>
-            <Text style={styles.totalLabel}>Carbs</Text>
+            <Text style={styles.totalLabel}>{t('log.food.carbs')}</Text>
           </View>
           <View style={styles.totalItem}>
             <Text style={styles.totalValue}>{totalNutrition.fat.toFixed(1)}g</Text>
-            <Text style={styles.totalLabel}>Fat</Text>
+            <Text style={styles.totalLabel}>{t('log.food.fat')}</Text>
           </View>
         </View>
       </View>
@@ -906,7 +908,7 @@ export default function LogFoodScreen() {
           onPress={() => setStep('food')}
         >
           <Ionicons name="add" size={20} color="#006dab" />
-          <Text style={styles.addMoreButtonText}>Add More</Text>
+          <Text style={styles.addMoreButtonText}>{language === 'ta' ? 'மேலும் சேர்' : 'Add More'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -919,11 +921,11 @@ export default function LogFoodScreen() {
             {isSaving ? (
               <>
                 <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.saveButtonText}>Saving...</Text>
+                <Text style={styles.saveButtonText}>{t('log.food.savingMeal')}</Text>
               </>
             ) : (
               <>
-                <Text style={styles.saveButtonText}>Save Meal</Text>
+                <Text style={styles.saveButtonText}>{t('log.food.logMeal')}</Text>
                 <Ionicons name="checkmark-circle" size={22} color="#fff" />
               </>
             )}

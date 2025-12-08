@@ -1,3 +1,4 @@
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/firestore.service';
 import { Chat, ChatMessage } from '@/types/firebase.types';
@@ -83,6 +84,7 @@ const ShimmerBlock = ({ width, height, style }: { width: number | string; height
 
 export default function ChatScreen() {
   const { isDarkMode } = useTheme();
+  const { t } = useLanguage();
   const { width: screenWidth } = useWindowDimensions();
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);

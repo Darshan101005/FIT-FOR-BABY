@@ -153,6 +153,14 @@ service cloud.firestore {
       }
     }
     
+    // User Feedbacks collection
+    match /feedbacks/{feedbackId} {
+      allow read: if true; // Admins can read all feedbacks
+      allow create: if true; // Users can submit feedback
+      allow update: if true; // Admins can update status
+      allow delete: if true; // Admins can delete feedback
+    }
+    
     // Couples collection (user onboarding)
     match /couples/{coupleId} {
       // Admins can read, create, update, delete couples
@@ -210,6 +218,11 @@ service cloud.firestore {
         allow read: if true; // Users can read their own progress, admins can view all
         allow create, update: if true; // Users can save their progress
         allow delete: if true; // Allow reset functionality
+      }
+      
+      // Devices subcollection (device management for users)
+      match /devices/{deviceId} {
+        allow read, write: if true; // Users can manage their devices
       }
     }
   }

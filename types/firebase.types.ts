@@ -842,6 +842,7 @@ export const COLLECTIONS = {
   FAQS: 'faqs',
   BROADCASTS: 'broadcasts',
   CHATS: 'chats',
+  FEEDBACKS: 'feedbacks',
   
   // Subcollections (under users)
   STEPS: 'steps',
@@ -858,6 +859,83 @@ export const COLLECTIONS = {
   // Subcollections (under chats)
   CHAT_MESSAGES: 'messages',
 } as const;
+
+// ============================================
+// FEEDBACK
+// Path: /feedbacks/{feedbackId}
+// ============================================
+
+export type FeedbackCategory = 'bug' | 'feature' | 'improvement' | 'question' | 'other';
+export type FeedbackStatus = 'pending' | 'reviewed' | 'resolved';
+
+export interface Feedback {
+  id: string;
+  
+  // User info
+  coupleId: string;
+  coupleName: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userGender: 'male' | 'female';
+  
+  // Feedback content
+  category: FeedbackCategory;
+  rating: number; // 1-5
+  message: string;
+  
+  // Status
+  status: FeedbackStatus;
+  adminNotes?: string;
+  resolvedBy?: string;
+  resolvedAt?: Timestamp;
+  
+  // Timestamps
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// ============================================
+// USER DEVICE
+// Path: /couples/{coupleId}/{gender}/devices/{deviceId}
+// ============================================
+
+export type DeviceType = 'mobile' | 'tablet' | 'desktop' | 'web';
+export type DeviceStatus = 'active' | 'inactive' | 'logged_out';
+
+export interface UserDevice {
+  id: string;
+  
+  // Device info
+  deviceName: string;
+  deviceType: DeviceType;
+  deviceModel?: string;
+  os: string;
+  osVersion?: string;
+  browser?: string; // For web
+  
+  // App info
+  appVersion?: string;
+  buildNumber?: string;
+  expoGoVersion?: string;
+  
+  // Session info
+  pushToken?: string;
+  sessionToken?: string; // Unique token for this device session
+  
+  // Status
+  status: DeviceStatus;
+  isCurrentDevice: boolean;
+  
+  // Timestamps
+  firstLoginAt: Timestamp;
+  lastActiveAt: Timestamp;
+  loggedOutAt?: Timestamp;
+  
+  // User reference
+  coupleId: string;
+  userGender: 'male' | 'female';
+}
 
 // ============================================
 // BROADCAST MESSAGE

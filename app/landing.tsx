@@ -1,9 +1,9 @@
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 const isWeb = Platform.OS === 'web';
 
@@ -153,41 +153,41 @@ const LandingScreen: React.FC = () => {
           <View style={styles.featuresGrid}>
             <View style={styles.featureCard}>
               <LinearGradient colors={['#EFF6FF', '#DBEAFE']} style={styles.featureIconContainer}>
-                <MaterialCommunityIcons name="chart-line-variant" size={36} color="#006dab" />
+                <MaterialCommunityIcons name="shoe-print" size={36} color="#006dab" />
               </LinearGradient>
-              <Text style={styles.featureTitle}>Health Tracking</Text>
+              <Text style={styles.featureTitle}>Daily Progress Tracking</Text>
               <Text style={styles.featureDescription}>
-                Monitor your health metrics and baby's development week by week
+                Log your steps, weight, and exercise with AI-powered photo verification
               </Text>
             </View>
 
             <View style={styles.featureCard}>
               <LinearGradient colors={['#F0FDF4', '#DCFCE7']} style={styles.featureIconContainer}>
-                <MaterialCommunityIcons name="doctor" size={36} color="#10B981" />
+                <MaterialCommunityIcons name="food-apple" size={36} color="#10B981" />
               </LinearGradient>
-              <Text style={styles.featureTitle}>Expert Support</Text>
+              <Text style={styles.featureTitle}>Diet Plan & Nutrition</Text>
               <Text style={styles.featureDescription}>
-                Connect with healthcare professionals whenever you need guidance
+                Get personalized diet plans and track your daily food intake
               </Text>
             </View>
 
             <View style={styles.featureCard}>
               <LinearGradient colors={['#FEF3C7', '#FDE68A']} style={styles.featureIconContainer}>
-                <MaterialCommunityIcons name="responsive" size={36} color="#D97706" />
+                <MaterialCommunityIcons name="calendar-clock" size={36} color="#D97706" />
               </LinearGradient>
-              <Text style={styles.featureTitle}>Easy Access</Text>
+              <Text style={styles.featureTitle}>Appointments & Chat</Text>
               <Text style={styles.featureDescription}>
-                Access your health information anytime, anywhere on any device
+                Schedule visits and communicate directly with healthcare providers
               </Text>
             </View>
 
             <View style={styles.featureCard}>
-              <LinearGradient colors={['#F5F3FF', '#EDE9FE']} style={styles.featureIconContainer}>
-                <MaterialCommunityIcons name="security" size={36} color="#7C3AED" />
+              <LinearGradient colors={['#FCE7F3', '#FBCFE8']} style={styles.featureIconContainer}>
+                <MaterialCommunityIcons name="account-heart" size={36} color="#EC4899" />
               </LinearGradient>
-              <Text style={styles.featureTitle}>Secure & Private</Text>
+              <Text style={styles.featureTitle}>Couple Partnership</Text>
               <Text style={styles.featureDescription}>
-                Your health data is protected with industry-standard security
+                Track your pregnancy journey together with your partner
               </Text>
             </View>
           </View>
@@ -201,10 +201,10 @@ const LandingScreen: React.FC = () => {
             <View style={styles.timelineItem}>
               <View style={styles.timelineCardLeft}>
                 <View style={styles.timelineCardHeader}>
-                  <MaterialCommunityIcons name="account-plus" size={28} color="#0EA5E9" />
-                  <Text style={styles.timelineCardTitle}>Sign Up</Text>
+                  <MaterialCommunityIcons name="login" size={28} color="#0EA5E9" />
+                  <Text style={styles.timelineCardTitle}>Login & Setup</Text>
                 </View>
-                <Text style={styles.timelineCardDescription}>Create your account in seconds and set up your profile.</Text>
+                <Text style={styles.timelineCardDescription}>Sign in with your credentials provided by your healthcare team. Set up your PIN for quick access.</Text>
               </View>
               <LinearGradient colors={['#0EA5E9', '#06B6D4']} style={styles.timelineDot}>
                 <Text style={styles.timelineDotText}>1</Text>
@@ -219,20 +219,20 @@ const LandingScreen: React.FC = () => {
               </LinearGradient>
               <View style={styles.timelineCardRight}>
                 <View style={styles.timelineCardHeader}>
-                  <MaterialCommunityIcons name="chart-line" size={28} color="#10B981" />
-                  <Text style={styles.timelineCardTitle}>Track Progress</Text>
+                  <MaterialCommunityIcons name="shoe-print" size={28} color="#10B981" />
+                  <Text style={styles.timelineCardTitle}>Log Daily Activity</Text>
                 </View>
-                <Text style={styles.timelineCardDescription}>Log your health data and monitor baby's development.</Text>
+                <Text style={styles.timelineCardDescription}>Track your steps, weight, exercise, and meals daily. Upload photos for AI-powered verification.</Text>
               </View>
             </View>
 
             <View style={styles.timelineItem}>
               <View style={styles.timelineCardLeft}>
                 <View style={styles.timelineCardHeader}>
-                  <MaterialCommunityIcons name="doctor" size={28} color="#7C3AED" />
-                  <Text style={styles.timelineCardTitle}>Get Support</Text>
+                  <MaterialCommunityIcons name="calendar-check" size={28} color="#7C3AED" />
+                  <Text style={styles.timelineCardTitle}>Schedule Appointments</Text>
                 </View>
-                <Text style={styles.timelineCardDescription}>Connect with healthcare professionals whenever needed.</Text>
+                <Text style={styles.timelineCardDescription}>Book nursing visits and chat with your healthcare providers directly through the app.</Text>
               </View>
               <LinearGradient colors={['#0EA5E9', '#06B6D4']} style={styles.timelineDot}>
                 <Text style={styles.timelineDotText}>3</Text>
@@ -247,10 +247,10 @@ const LandingScreen: React.FC = () => {
               </LinearGradient>
               <View style={styles.timelineCardRight}>
                 <View style={styles.timelineCardHeader}>
-                  <MaterialCommunityIcons name="bell-ring" size={28} color="#F59E0B" />
-                  <Text style={styles.timelineCardTitle}>Stay Informed</Text>
+                  <MaterialCommunityIcons name="trophy" size={28} color="#F59E0B" />
+                  <Text style={styles.timelineCardTitle}>Track Your Progress</Text>
                 </View>
-                <Text style={styles.timelineCardDescription}>Receive personalized tips and reminders throughout.</Text>
+                <Text style={styles.timelineCardDescription}>View your weekly stats, earn achievements, and maintain your streak with your partner.</Text>
               </View>
             </View>
           </View>
@@ -310,10 +310,10 @@ const LandingScreen: React.FC = () => {
 
             <View style={styles.footerColumn}>
               <Text style={styles.footerHeading}>About</Text>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/our-mission')}>
                 <Text style={styles.footerLink}>Our Mission</Text>
               </TouchableOpacity>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/team')}>
                 <Text style={styles.footerLink}>Team</Text>
               </TouchableOpacity>
             </View>
@@ -326,33 +326,33 @@ const LandingScreen: React.FC = () => {
               <TouchableOpacity onPress={() => router.push('/login')}>
                 <Text style={styles.footerLink}>Login</Text>
               </TouchableOpacity>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/features')}>
                 <Text style={styles.footerLink}>Features</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.footerColumn}>
               <Text style={styles.footerHeading}>Support</Text>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/help-center')}>
                 <Text style={styles.footerLink}>Help Center</Text>
               </TouchableOpacity>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/contact-us')}>
                 <Text style={styles.footerLink}>Contact Us</Text>
               </TouchableOpacity>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/faqs')}>
                 <Text style={styles.footerLink}>FAQs</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.footerColumn}>
               <Text style={styles.footerHeading}>Legal</Text>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/privacy-policy')}>
                 <Text style={styles.footerLink}>Privacy Policy</Text>
               </TouchableOpacity>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/terms-of-service')}>
                 <Text style={styles.footerLink}>Terms of Service</Text>
               </TouchableOpacity>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/cookie-policy')}>
                 <Text style={styles.footerLink}>Cookie Policy</Text>
               </TouchableOpacity>
             </View>

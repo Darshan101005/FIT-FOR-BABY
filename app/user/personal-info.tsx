@@ -1,5 +1,6 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { PersonalInfoSkeleton } from '@/components/ui/SkeletonLoader';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { coupleService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -72,6 +73,7 @@ export default function PersonalInfoScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
+  const { t } = useLanguage();
   
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
@@ -160,7 +162,7 @@ export default function PersonalInfoScreen() {
           }
         } catch (error) {
           console.error('Error loading user data:', error);
-          showToast('Failed to load profile data', 'error');
+          showToast(t('personal.failedToLoadProfile'), 'error');
         } finally {
           setLoading(false);
         }
@@ -201,19 +203,19 @@ export default function PersonalInfoScreen() {
       
       // Validation
       if (field === 'email' && tempValue && !tempValue.includes('@')) {
-        showToast('Please enter a valid email address', 'error');
+        showToast(t('personal.validEmailError'), 'error');
         return;
       }
       if (field === 'phone' && tempValue && tempValue.replace(/\D/g, '').length < 10) {
-        showToast('Please enter a valid phone number', 'error');
+        showToast(t('personal.validPhoneError'), 'error');
         return;
       }
       if (field === 'pincode' && tempValue && !/^\d{6}$/.test(tempValue)) {
-        showToast('Pincode must be 6 digits', 'error');
+        showToast(t('personal.pincodeError'), 'error');
         return;
       }
       if (field === 'addressLine1' && (!tempValue || !tempValue.trim())) {
-        showToast('Address Line 1 is required', 'error');
+        showToast(t('personal.addressRequired'), 'error');
         return;
       }
       
@@ -235,10 +237,10 @@ export default function PersonalInfoScreen() {
       
       setEditingField(null);
       setTempValue(null);
-      showToast(`Updated successfully`, 'success');
+      showToast(t('personal.updatedSuccess'), 'success');
     } catch (error: any) {
       console.error('Save error:', error);
-      showToast(error.message || 'Failed to save', 'error');
+      showToast(error.message || t('personal.failedToSave'), 'error');
     }
   };
 
@@ -264,10 +266,10 @@ export default function PersonalInfoScreen() {
         
         setUserData(prev => ({ ...prev, dateOfBirth: dateString }));
         setShowDobPicker(false);
-        showToast('Date of birth updated', 'success');
+        showToast(t('personal.dobUpdated'), 'success');
       } catch (error) {
         console.error('Save DOB error:', error);
-        showToast('Failed to update date of birth', 'error');
+        showToast(t('personal.dobUpdateFailed'), 'error');
       }
     }
   };
@@ -276,7 +278,7 @@ export default function PersonalInfoScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      showToast('Permission to access gallery is required', 'error');
+      showToast(t('personal.galleryPermission'), 'error');
       return;
     }
     
@@ -289,7 +291,7 @@ export default function PersonalInfoScreen() {
     
     if (!result.canceled && result.assets[0]) {
       setProfilePhoto(result.assets[0].uri);
-      showToast('Profile photo updated', 'success');
+      showToast(t('personal.profilePhotoUpdated'), 'success');
       // TODO: Upload to Firebase Storage and save URL
     }
   };
@@ -326,7 +328,7 @@ export default function PersonalInfoScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Personal Information</Text>
+        <Text style={styles.headerTitle}>{t('personal.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
       
@@ -356,7 +358,7 @@ export default function PersonalInfoScreen() {
         <Text style={styles.userName}>{userData.name || 'User'}</Text>
         <View style={styles.userIdBadge}>
           <MaterialCommunityIcons name="identifier" size={16} color="#fff" />
-          <Text style={styles.userIdText}>User ID: {userData.userId}</Text>
+          <Text style={styles.userIdText}>{t('personal.userId')}: {userData.userId}</Text>
         </View>
       </View>
     </LinearGradient>
@@ -416,7 +418,7 @@ export default function PersonalInfoScreen() {
                 autoFocus
               />
             ) : (
-              <Text style={[styles.fieldValue, { color: colors.text }]}>{value || 'Not set'}</Text>
+              <Text style={[styles.fieldValue, { color: colors.text }]}>{value || t('personal.notSet')}</Text>
             )}
           </View>
           {!isEditing && (
@@ -436,14 +438,14 @@ export default function PersonalInfoScreen() {
               onPress={handleCancelEdit}
             >
               <Ionicons name="close" size={16} color={colors.textSecondary} />
-              <Text style={[styles.editFieldCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+              <Text style={[styles.editFieldCancelText, { color: colors.textSecondary }]}>{t('personal.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.editFieldSaveBtn, { backgroundColor: colors.accent }]}
               onPress={() => handleSaveField(fieldKey)}
             >
               <Ionicons name="checkmark" size={16} color="#fff" />
-              <Text style={styles.editFieldSaveText}>Save</Text>
+              <Text style={styles.editFieldSaveText}>{t('personal.save')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -473,7 +475,7 @@ export default function PersonalInfoScreen() {
             <View style={[styles.statePickerHeader, { borderBottomColor: colors.borderLight }]}>
               <View style={styles.statePickerHeaderLeft}>
                 <Ionicons name="map-outline" size={22} color={colors.primary} />
-                <Text style={[styles.statePickerTitle, { color: colors.text }]}>Select State</Text>
+                <Text style={[styles.statePickerTitle, { color: colors.text }]}>{t('personal.selectState')}</Text>
               </View>
               <TouchableOpacity 
                 style={[styles.statePickerCloseBtn, { backgroundColor: colors.inputBackground }]}
@@ -491,7 +493,7 @@ export default function PersonalInfoScreen() {
               <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
               <TextInput
                 style={[styles.stateSearchInput, { color: colors.text }]}
-                placeholder="Search state..."
+                placeholder={t('personal.searchState')}
                 placeholderTextColor={colors.textMuted}
                 value={stateSearchQuery}
                 onChangeText={setStateSearchQuery}
@@ -507,7 +509,7 @@ export default function PersonalInfoScreen() {
             {/* Results Count */}
             <View style={styles.stateResultsCount}>
               <Text style={[styles.stateResultsText, { color: colors.textSecondary }]}>
-                {filteredStates.length} {filteredStates.length === 1 ? 'state' : 'states'} found
+                {filteredStates.length} {filteredStates.length === 1 ? t('personal.stateFound') : t('personal.statesFound')}
               </Text>
             </View>
             
@@ -547,9 +549,9 @@ export default function PersonalInfoScreen() {
                           await coupleService.updateUserField(userData.coupleId, userGender, {
                             [`${userGender}.address`]: newAddress,
                           });
-                          showToast('State updated', 'success');
+                          showToast(t('personal.stateUpdated'), 'success');
                         } catch (error) {
-                          showToast('Failed to save', 'error');
+                          showToast(t('personal.failedToSave'), 'error');
                         }
                       }}
                       activeOpacity={0.7}
@@ -572,7 +574,7 @@ export default function PersonalInfoScreen() {
                       </View>
                       {isSelected && (
                         <View style={[styles.stateSelectedBadge, { backgroundColor: colors.primary }]}>
-                          <Text style={styles.stateSelectedBadgeText}>Selected</Text>
+                          <Text style={styles.stateSelectedBadgeText}>{t('personal.selected')}</Text>
                         </View>
                       )}
                     </TouchableOpacity>
@@ -593,15 +595,15 @@ export default function PersonalInfoScreen() {
         <View style={[styles.sectionIcon, { backgroundColor: '#f59e0b15' }]}> 
           <Ionicons name="location-outline" size={18} color="#f59e0b" />
         </View>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Address</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('personal.address')}</Text>
       </View>
       <View style={[styles.sectionContent, { backgroundColor: colors.cardBackground, padding: 20 }]}> 
-        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Country</Text>
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('personal.country')}</Text>
   <View style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, marginBottom: 16, flexDirection: 'row', alignItems: 'center' }]}> 
           <Ionicons name="flag-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-          <Text style={{ color: colors.text, fontSize: 16 }}>🇮🇳 India</Text>
+          <Text style={{ color: colors.text, fontSize: 16 }}>🇮🇳 {t('personal.india')}</Text>
         </View>
-        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Address Line 1</Text>
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('personal.addressLine1')}</Text>
         <TextInput
           style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border, marginBottom: 16 }]}
           placeholder="House/Flat No, Building Name"
@@ -609,7 +611,7 @@ export default function PersonalInfoScreen() {
           value={userData.address.addressLine1}
           onChangeText={text => setUserData(prev => ({ ...prev, address: { ...prev.address, addressLine1: text } }))}
         />
-        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Address Line 2</Text>
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('personal.addressLine2')}</Text>
         <TextInput
           style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border, marginBottom: 16 }]}
           placeholder="Street, Area, Landmark"
@@ -617,7 +619,7 @@ export default function PersonalInfoScreen() {
           value={userData.address.addressLine2}
           onChangeText={text => setUserData(prev => ({ ...prev, address: { ...prev.address, addressLine2: text } }))}
         />
-        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>City</Text>
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('personal.city')}</Text>
         <TextInput
           style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border, marginBottom: 16 }]}
           placeholder="Enter city name"
@@ -625,7 +627,7 @@ export default function PersonalInfoScreen() {
           value={userData.address.city}
           onChangeText={text => setUserData(prev => ({ ...prev, address: { ...prev.address, city: text } }))}
         />
-        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>State</Text>
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('personal.state')}</Text>
         <TouchableOpacity
           style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, marginBottom: 16, flexDirection: 'row', alignItems: 'center' }]}
           onPress={() => setShowStatePicker(true)}
@@ -633,11 +635,11 @@ export default function PersonalInfoScreen() {
         >
           <Ionicons name="map-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
           <Text style={{ color: userData.address.state ? colors.text : colors.textMuted, fontSize: 16 }}>
-            {userData.address.state || 'Select state'}
+            {userData.address.state || t('personal.selectState')}
           </Text>
           <Ionicons name="chevron-down" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
-        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Pincode</Text>
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t('personal.pincode')}</Text>
         <TextInput
           style={[styles.dobTextInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border, marginBottom: 24 }]}
           placeholder="6-digit pincode"
@@ -655,13 +657,13 @@ export default function PersonalInfoScreen() {
               await coupleService.updateUserField(userData.coupleId, userGender, {
                 [`${userGender}.address`]: userData.address,
               });
-              showToast('Address updated', 'success');
+              showToast(t('personal.addressUpdated'), 'success');
             } catch (error) {
-              showToast('Failed to save', 'error');
+              showToast(t('personal.failedToSave'), 'error');
             }
           }}
         >
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Save Address</Text>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{t('personal.saveAddress')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -697,7 +699,7 @@ export default function PersonalInfoScreen() {
           <View style={[styles.sectionIcon, { backgroundColor: '#ef444415' }]}>
             <Ionicons name="people-outline" size={18} color="#ef4444" />
           </View>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Partner Details</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('personal.partnerDetails')}</Text>
         </View>
         <View style={[styles.partnerCard, { backgroundColor: colors.cardBackground }]}>
           <View style={styles.partnerHeader}>
@@ -710,9 +712,9 @@ export default function PersonalInfoScreen() {
               </View>
             </View>
             <View style={styles.partnerInfo}>
-              <Text style={[styles.partnerName, { color: colors.text }]}>{userData.partner.name || 'Partner'}</Text>
+              <Text style={[styles.partnerName, { color: colors.text }]}>{userData.partner.name || t('personal.partner')}</Text>
               <Text style={[styles.partnerId, { color: colors.textSecondary }]}>
-                User ID: {userData.partner.userId || 'Not set'}
+                {t('personal.userId')}: {userData.partner.userId || t('personal.notSet')}
               </Text>
             </View>
           </View>
@@ -738,7 +740,7 @@ export default function PersonalInfoScreen() {
             ) : null}
             {!userData.partner.email && !userData.partner.phone && (
               <Text style={[styles.partnerDetailText, { color: colors.textMuted }]}>
-                No contact information available
+                {t('personal.noContactInfo')}
               </Text>
             )}
           </View>
@@ -791,11 +793,11 @@ export default function PersonalInfoScreen() {
 
           <View style={[styles.content, isMobile && styles.contentMobile]}>
             {/* User Identification */}
-            {renderSection('Identification', 'card-outline', colors.primary, (
+            {renderSection(t('personal.identification'), 'card-outline', colors.primary, (
               <>
                 <View style={styles.idRow}>
                   <View style={styles.idItemFull}>
-                    <Text style={[styles.idLabel, { color: colors.textSecondary }]}>Couple ID</Text>
+                    <Text style={[styles.idLabel, { color: colors.textSecondary }]}>{t('personal.coupleId')}</Text>
                     <View style={[styles.idValueContainer, { backgroundColor: colors.inputBackground }]}>
                       <MaterialCommunityIcons name="identifier" size={18} color={colors.primary} />
                       <Text style={[styles.idValue, { color: colors.text }]}>{userData.coupleId}</Text>
@@ -806,13 +808,13 @@ export default function PersonalInfoScreen() {
             ))}
 
             {/* Basic Information (Non-editable) */}
-            {renderSection('Basic Information', 'person-outline', '#8b5cf6', (
+            {renderSection(t('personal.basicInfo'), 'person-outline', '#8b5cf6', (
               <>
-                {renderInfoField('Full Name', userData.name, 'person-circle-outline', '#8b5cf6')}
+                {renderInfoField(t('personal.fullName'), userData.name, 'person-circle-outline', '#8b5cf6')}
                 <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
                 {renderInfoField(
-                  'Gender', 
-                  userData.gender === 'male' ? 'Male' : 'Female', 
+                  t('personal.gender'), 
+                  userData.gender === 'male' ? t('personal.male') : t('personal.female'), 
                   getGenderIcon(userData.gender), 
                   getGenderColor(userData.gender)
                 )}
@@ -829,7 +831,7 @@ export default function PersonalInfoScreen() {
                       <Ionicons name="calendar-outline" size={20} color="#f59e0b" />
                     </View>
                     <View style={styles.fieldContent}>
-                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Date of Birth</Text>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('personal.dateOfBirth')}</Text>
                       <Text style={[styles.fieldValue, { color: colors.text }]}>
                         {userData.dateOfBirth 
                           ? new Date(userData.dateOfBirth).toLocaleDateString('en-GB', {
@@ -837,7 +839,7 @@ export default function PersonalInfoScreen() {
                               month: '2-digit',
                               year: 'numeric',
                             })
-                          : 'Select date of birth'
+                          : t('personal.selectDateOfBirth')
                         }
                       </Text>
                     </View>
@@ -857,11 +859,11 @@ export default function PersonalInfoScreen() {
                     >
                       <View style={styles.dobModalOverlay}>
                         <View style={[styles.dobModalContent, { backgroundColor: colors.cardBackground }]}>
-                          <Text style={[styles.dobModalTitle, { color: colors.text }]}>Select Date of Birth</Text>
+                          <Text style={[styles.dobModalTitle, { color: colors.text }]}>{t('personal.selectDateOfBirth')}</Text>
                           
                           {/* Single Input - Type or Pick Calendar */}
                           <Text style={[styles.dobInputLabel, { color: colors.textSecondary, marginBottom: 8 }]}>
-                            Select a date of birth
+                            {t('personal.selectDateOfBirth')}
                           </Text>
                           <input
                             type="date"
@@ -892,7 +894,7 @@ export default function PersonalInfoScreen() {
                                 setTempValue(null);
                               }}
                             >
-                              <Text style={[styles.dobModalCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+                              <Text style={[styles.dobModalCancelText, { color: colors.textSecondary }]}>{t('personal.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={[styles.dobModalSaveBtn, { backgroundColor: colors.primary }]}
@@ -901,7 +903,7 @@ export default function PersonalInfoScreen() {
                                   const parsedDate = new Date(tempValue);
                                   
                                   if (isNaN(parsedDate.getTime())) {
-                                    showToast('Please select a valid date', 'error');
+                                    showToast(t('personal.selectValidDate'), 'error');
                                     return;
                                   }
                                   
@@ -913,16 +915,16 @@ export default function PersonalInfoScreen() {
                                     setUserData(prev => ({ ...prev, dateOfBirth: tempValue }));
                                     setShowDobPicker(false);
                                     setTempValue(null);
-                                    showToast('Date of birth updated', 'success');
+                                    showToast(t('personal.dobUpdated'), 'success');
                                   } catch (error) {
-                                    showToast('Failed to save', 'error');
+                                    showToast(t('personal.failedToSave'), 'error');
                                   }
                                 } else {
-                                  showToast('Please select or enter a valid date', 'error');
+                                  showToast(t('personal.selectOrEnterValidDate'), 'error');
                                 }
                               }}
                             >
-                              <Text style={styles.dobModalSaveText}>Save</Text>
+                              <Text style={styles.dobModalSaveText}>{t('personal.save')}</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -948,27 +950,27 @@ export default function PersonalInfoScreen() {
                 <View style={[styles.sectionIcon, { backgroundColor: '#22c55e15' }]}>
                   <Ionicons name="chatbox-ellipses-outline" size={18} color="#22c55e" />
                 </View>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Contact Information</Text>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('personal.contactInformation')}</Text>
               </View>
               <View style={[styles.sectionContent, { backgroundColor: colors.cardBackground }]}>
                 {renderEditableField(
                   'email',
-                  'Email Address', 
+                  t('personal.emailAddress'), 
                   userData.email,
                   'mail-outline', 
                   '#3b82f6',
                   'email-address',
-                  'Enter email address'
+                  t('personal.enterEmail')
                 )}
                 <View style={[styles.fieldDivider, { backgroundColor: colors.borderLight }]} />
                 {renderEditableField(
                   'phone',
-                  'Phone Number', 
+                  t('personal.phoneNumber'), 
                   userData.phone,
                   'call-outline', 
                   '#22c55e',
                   'phone-pad',
-                  'Enter phone number'
+                  t('personal.enterPhone')
                 )}
               </View>
             </View>
@@ -986,8 +988,7 @@ export default function PersonalInfoScreen() {
             <View style={[styles.infoNote, { backgroundColor: isDarkMode ? colors.primaryLight : '#eff6ff' }]}>
               <Ionicons name="information-circle" size={20} color={colors.primary} />
               <Text style={[styles.infoNoteText, { color: colors.textSecondary }]}>
-                Name, Gender, and IDs are managed by your study administrator. 
-                Contact support if you need to update these details.
+                {t('personal.infoNote')}
               </Text>
             </View>
           </View>

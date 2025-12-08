@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "fit-for-baby-new",
-    "slug": "fit-for-baby-new",
+    "name": "Fit-For-Baby",
+    "slug": "fit-for-baby",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "fitforbabynew",
+    "scheme": "fitforbaby",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {

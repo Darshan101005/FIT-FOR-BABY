@@ -1,5 +1,6 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { ProgressPageSkeleton } from '@/components/ui/SkeletonLoader';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { CoupleWeightLog, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService, formatDateString, globalSettingsService } from '@/services/firestore.service';
@@ -57,17 +58,12 @@ interface Achievement {
   requirement: string;
 }
 
-const timeRanges = [
-  { id: 'week', label: 'This Week' },
-  { id: 'month', label: 'This Month' },
-  { id: '3months', label: 'Past 3 Months' },
-];
-
 export default function ProgressScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors } = useTheme();
+  const { t, language } = useLanguage();
 
   // Get cached data from context
   const { 
@@ -141,21 +137,21 @@ export default function ProgressScreen() {
       weightData.push({
         date: firstLog.date,
         weight: firstLog.weight,
-        label: 'Start',
+        label: t('progress.start'),
       });
       
       if (cachedWeightHistory.length > 1) {
         weightData.push({
           date: latestLog.date,
           weight: latestLog.weight,
-          label: 'Current',
+          label: t('progress.current'),
         });
       }
       
       setWeightHistory(weightData);
       setCombinedWeightLost(Math.max(0, firstLog.weight - latestLog.weight));
     }
-  }, [cachedWeightHistory]);
+  }, [cachedWeightHistory, t]);
 
   useEffect(() => {
     // Only show content once we have actual data, not just initialized flag
@@ -165,63 +161,73 @@ export default function ProgressScreen() {
     }
   }, [hasLoadedFull]);
 
-  // Achievements state
-  const [achievements, setAchievements] = useState<Achievement[]>([
+  // Achievements with translations - using useMemo to re-compute when language changes
+  const getInitialAchievements = (): Achievement[] => [
     {
       id: '7-day-streak',
-      title: '7-Day Streak',
-      description: 'Logged activity daily',
+      title: t('achievement.7DayStreak.title'),
+      description: t('achievement.7DayStreak.desc'),
       emoji: '🔥',
       backgroundColor: '#fef3c7',
       isUnlocked: false,
-      requirement: 'Log activity for 7 consecutive days',
+      requirement: t('achievement.7DayStreak.req'),
     },
     {
       id: '10k-steps',
-      title: '10K Steps',
-      description: 'Reached goal 3 times',
+      title: t('achievement.10kSteps.title'),
+      description: t('achievement.10kSteps.desc'),
       emoji: '👟',
       backgroundColor: '#e8f5d6',
       isUnlocked: false,
-      requirement: 'Hit 10,000 steps in a day 3 times',
+      requirement: t('achievement.10kSteps.req'),
     },
     {
       id: 'partner-goals',
-      title: 'Partner Goals',
-      description: 'Complete couple walks',
+      title: t('achievement.partnerGoals.title'),
+      description: t('achievement.partnerGoals.desc'),
       image: require('../../assets/images/couple.jpg'),
       backgroundColor: '#ede9fe',
       isUnlocked: false,
-      requirement: 'Complete 4 couple walks together',
+      requirement: t('achievement.partnerGoals.req'),
     },
     {
       id: '5kg-lost',
-      title: '5kg Lost',
-      description: 'Milestone reached!',
+      title: t('achievement.5kgLost.title'),
+      description: t('achievement.5kgLost.desc'),
       emoji: '⚖️',
       backgroundColor: '#dbeafe',
       isUnlocked: false,
-      requirement: 'Lose 5kg from starting weight',
+      requirement: t('achievement.5kgLost.req'),
     },
     {
       id: 'weekly-warrior',
-      title: 'Weekly Warrior',
-      description: 'All weekly goals met',
+      title: t('achievement.weeklyWarrior.title'),
+      description: t('achievement.weeklyWarrior.desc'),
       emoji: '🏆',
       backgroundColor: '#fce7f3',
       isUnlocked: false,
-      requirement: 'Meet all weekly goals in a week',
+      requirement: t('achievement.weeklyWarrior.req'),
     },
     {
       id: 'first-exercise',
-      title: 'First Exercise',
-      description: 'Logged first workout',
+      title: t('achievement.firstExercise.title'),
+      description: t('achievement.firstExercise.desc'),
       emoji: '💪',
       backgroundColor: '#ccfbf1',
       isUnlocked: false,
-      requirement: 'Log your first exercise',
+      requirement: t('achievement.firstExercise.req'),
     },
-  ]);
+  ];
+  
+  const [achievements, setAchievements] = useState<Achievement[]>(getInitialAchievements);
+  
+  // Update achievements when language changes
+  useEffect(() => {
+    setAchievements(prev => prev.map((ach) => {
+      const initial = getInitialAchievements().find(a => a.id === ach.id);
+      return initial ? { ...ach, title: initial.title, description: initial.description, requirement: initial.requirement } : ach;
+    }));
+  }, [t]);
 
   // Helper function to get week start/end dates
   const getWeekDates = () => {
@@ -258,10 +264,14 @@ export default function ProgressScreen() {
           let settings = cachedGlobalSettings;
           
           if (!storedCoupleId || !storedGender) {
-            [storedCoupleId, storedGender] = await Promise.all([
+            const [scId, sGender] = await Promise.all([
               AsyncStorage.getItem('coupleId'),
               AsyncStorage.getItem('userGender'),
             ]) as [string | null, string | null];
+
+            storedCoupleId = scId;
+            // Only accept 'male' or 'female' values for storedGender; otherwise treat as null
+            storedGender = (sGender === 'male' || sGender === 'female') ? sGender : null;
           }
           
           if (!settings) {
@@ -676,12 +686,19 @@ export default function ProgressScreen() {
         <Ionicons name="arrow-back" size={24} color="#0f172a" />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>Progress</Text>
-        <Text style={styles.headerSubtitle}>Track your health journey</Text>
+        <Text style={styles.headerTitle}>{t('progress.title')}</Text>
+        <Text style={styles.headerSubtitle}>{t('progress.trackHealthJourney')}</Text>
       </View>
       <View style={{ width: 40 }} />
     </View>
   );
+
+  // Define timeRanges with translations inside component
+  const getTimeRanges = () => [
+    { id: 'week', label: t('progress.thisWeek') },
+    { id: 'month', label: t('progress.thisMonth') },
+    { id: '3months', label: t('progress.past3Months') },
+  ];
 
   const renderTimeRangeSelector = () => (
     <ScrollView 
@@ -690,7 +707,7 @@ export default function ProgressScreen() {
       style={styles.timeRangeScroll}
       contentContainerStyle={styles.timeRangeContent}
     >
-      {timeRanges.map((range) => (
+      {getTimeRanges().map((range) => (
         <TouchableOpacity
           key={range.id}
           style={[
@@ -740,7 +757,7 @@ export default function ProgressScreen() {
               styles.summaryLabel,
               selectedMetric === 'steps' && { color: '#7ba83c' },
             ]}>
-              {isFirstDayOrWeek ? 'Total Steps' : 'Avg Steps'}
+              {isFirstDayOrWeek ? t('progress.totalSteps') : t('progress.avgSteps')}
             </Text>
           </View>
         </TouchableOpacity>
@@ -770,7 +787,7 @@ export default function ProgressScreen() {
               styles.summaryLabel,
               selectedMetric === 'calories' && { color: '#dc2626' },
             ]}>
-              Total Calories
+              {t('progress.totalCalories')}
             </Text>
           </View>
         </TouchableOpacity>
@@ -800,7 +817,7 @@ export default function ProgressScreen() {
               styles.summaryLabel,
               selectedMetric === 'exercise' && { color: '#d97706' },
             ]}>
-              Exercise (min)
+              {t('progress.exerciseMin')}
             </Text>
           </View>
         </TouchableOpacity>
@@ -809,13 +826,18 @@ export default function ProgressScreen() {
   );
 
   const getChartTitle = () => {
-    const metricName = selectedMetric.charAt(0).toUpperCase() + selectedMetric.slice(1);
+    const metricKeys = {
+      steps: t('progress.steps'),
+      calories: t('progress.calories'),
+      exercise: t('progress.exercise')
+    };
+    const metricName = metricKeys[selectedMetric] || selectedMetric;
     switch (selectedRange) {
-      case 'week': return `Weekly ${metricName}`;
-      case 'month': return `Monthly ${metricName}`;
-      case '3months': return `3-Month ${metricName}`;
-      case 'all': return `All Time ${metricName}`;
-      default: return `Weekly ${metricName}`;
+      case 'week': return `${t('progress.weekly')} ${metricName}`;
+      case 'month': return `${t('progress.monthly')} ${metricName}`;
+      case '3months': return `${t('progress.threeMonth')} ${metricName}`;
+      case 'all': return `${t('progress.allTime')} ${metricName}`;
+      default: return `${t('progress.weekly')} ${metricName}`;
     }
   };
 
@@ -829,8 +851,8 @@ export default function ProgressScreen() {
           <View style={styles.chartLegend}>
             <View style={[styles.legendDot, { backgroundColor: '#006dab' }]} />
             <Text style={styles.legendText}>
-              {selectedMetric === 'steps' ? 'Steps' : 
-               selectedMetric === 'calories' ? 'Calories' : 'Minutes'}
+              {selectedMetric === 'steps' ? t('progress.steps') : 
+               selectedMetric === 'calories' ? t('progress.calories') : t('progress.minutes')}
             </Text>
           </View>
         </View>
@@ -886,12 +908,12 @@ export default function ProgressScreen() {
       return (
         <View style={styles.chartCard}>
           <View style={[styles.chartHeader, isMobile && styles.chartHeaderMobile]}>
-            <Text style={styles.chartTitle}>Weight Progress</Text>
+            <Text style={styles.chartTitle}>{t('progress.weightProgress')}</Text>
           </View>
           <View style={styles.emptyChartContainer}>
             <Ionicons name="scale-outline" size={48} color="#94a3b8" />
-            <Text style={styles.emptyChartText}>No weight data yet</Text>
-            <Text style={styles.emptyChartSubtext}>Log your weight to see progress</Text>
+            <Text style={styles.emptyChartText}>{t('progress.noWeightData')}</Text>
+            <Text style={styles.emptyChartSubtext}>{t('progress.logWeightToSee')}</Text>
           </View>
         </View>
       );
@@ -904,25 +926,25 @@ export default function ProgressScreen() {
     // Black when no change, green when reduced, red when gained
     const changeColor = isNoChange ? '#0f172a' : isWeightReduced ? '#98be4e' : '#ef4444';
     const changeText = isWeightReduced 
-      ? `${weightChange.toFixed(1)} kg lost` 
+      ? `${weightChange.toFixed(1)} ${t('log.weight.kgLost')}` 
       : weightChange < 0 
-        ? `${Math.abs(weightChange).toFixed(1)} kg gained`
-        : 'No change';
+        ? `${Math.abs(weightChange).toFixed(1)} ${t('log.weight.kgGained')}`
+        : t('progress.noChange');
     // Border color: default gray when no change
     const borderColor = isNoChange ? '#e2e8f0' : changeColor;
 
     return (
       <View style={styles.chartCard}>
         <View style={[styles.chartHeader, isMobile && styles.chartHeaderMobile]}>
-          <Text style={styles.chartTitle}>Weight Progress</Text>
+          <Text style={styles.chartTitle}>{t('progress.weightProgress')}</Text>
         </View>
 
         <View style={styles.weightProgressContainer}>
           {/* Start Weight */}
           <View style={styles.weightBox}>
-            <Text style={styles.weightBoxLabel}>Start</Text>
+            <Text style={styles.weightBoxLabel}>{t('progress.start')}</Text>
             <Text style={styles.weightBoxValue}>{startWeight}</Text>
-            <Text style={styles.weightBoxUnit}>kg</Text>
+            <Text style={styles.weightBoxUnit}>{t('progress.kg')}</Text>
           </View>
 
           {/* Arrow and Change */}
@@ -935,9 +957,9 @@ export default function ProgressScreen() {
 
           {/* Current Weight */}
           <View style={[styles.weightBox, { borderColor: borderColor }]}>
-            <Text style={styles.weightBoxLabel}>Current</Text>
+            <Text style={styles.weightBoxLabel}>{t('progress.current')}</Text>
             <Text style={[styles.weightBoxValue, { color: isNoChange ? '#0f172a' : changeColor }]}>{currentWeight}</Text>
-            <Text style={[styles.weightBoxUnit, { color: isNoChange ? '#64748b' : changeColor }]}>kg</Text>
+            <Text style={[styles.weightBoxUnit, { color: isNoChange ? '#64748b' : changeColor }]}>{t('progress.kg')}</Text>
           </View>
         </View>
       </View>
@@ -964,7 +986,7 @@ export default function ProgressScreen() {
 
     return (
       <View style={styles.goalsSection}>
-        <Text style={styles.sectionTitle}>Weekly Goals</Text>
+        <Text style={styles.sectionTitle}>{t('progress.weeklyGoals')}</Text>
         
         {/* Steps Goal */}
         <View style={styles.goalCard}>
@@ -973,12 +995,12 @@ export default function ProgressScreen() {
               <MaterialCommunityIcons name="walk" size={24} color="#98be4e" />
             </View>
             <View style={styles.goalInfo}>
-              <Text style={styles.goalTitle}>Weekly Steps</Text>
+              <Text style={styles.goalTitle}>{t('progress.weeklySteps')}</Text>
               <Text style={styles.goalStats}>
                 <Text style={{ color: '#98be4e', fontWeight: '800' }}>
                   {currentSteps.toLocaleString()}
                 </Text>
-                {' / '}{stepsTarget.toLocaleString()} steps
+                {' / '}{stepsTarget.toLocaleString()} {t('progress.steps')}
               </Text>
             </View>
             <Text style={[styles.goalPercent, { color: '#98be4e' }]}>
@@ -997,12 +1019,12 @@ export default function ProgressScreen() {
               <Ionicons name="people" size={24} color="#3b82f6" />
             </View>
             <View style={styles.goalInfo}>
-              <Text style={styles.goalTitle}>Couple Walking</Text>
+              <Text style={styles.goalTitle}>{t('progress.coupleWalking')}</Text>
               <Text style={styles.goalStats}>
                 <Text style={{ color: '#3b82f6', fontWeight: '800' }}>
                   {coupleWalkingMinutes}
                 </Text>
-                {' / '}{coupleWalkingTarget} mins/week
+                {' / '}{coupleWalkingTarget} {t('progress.minsWeek')}
               </Text>
             </View>
             <Text style={[styles.goalPercent, { color: '#3b82f6' }]}>
@@ -1021,12 +1043,12 @@ export default function ProgressScreen() {
               <MaterialCommunityIcons name="run-fast" size={24} color="#f59e0b" />
             </View>
             <View style={styles.goalInfo}>
-              <Text style={styles.goalTitle}>High Knees Exercise</Text>
+              <Text style={styles.goalTitle}>{t('progress.highKnees')}</Text>
               <Text style={styles.goalStats}>
                 <Text style={{ color: '#f59e0b', fontWeight: '800' }}>
                   {highKneesMinutes}
                 </Text>
-                {' / '}{highKneesTarget} mins/week
+                {' / '}{highKneesTarget} {t('progress.minsWeek')}
               </Text>
             </View>
             <Text style={[styles.goalPercent, { color: '#f59e0b' }]}>
@@ -1051,7 +1073,7 @@ export default function ProgressScreen() {
         {/* Recent Achievements (Unlocked) */}
         {unlockedAchievements.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Recent Achievements</Text>
+            <Text style={styles.sectionTitle}>{t('progress.recentAchievements')}</Text>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -1083,7 +1105,7 @@ export default function ProgressScreen() {
 
         {/* All Achievements (Locked with lock icon) */}
         <Text style={[styles.sectionTitle, unlockedAchievements.length > 0 && { marginTop: 24 }]}>
-          All Achievements
+          {t('progress.allAchievements')}
         </Text>
         <ScrollView 
           horizontal 
@@ -1126,14 +1148,14 @@ export default function ProgressScreen() {
               style={styles.coupleJourneyImage}
               contentFit="cover"
             />
-            <Text style={styles.coupleTitle}>Couple Journey</Text>
+            <Text style={styles.coupleTitle}>{t('progress.coupleJourney')}</Text>
           </View>
-          <Text style={styles.coupleSubtitle}>{coupleWeeksJoined} week{coupleWeeksJoined !== 1 ? 's' : ''} together</Text>
+          <Text style={styles.coupleSubtitle}>{coupleWeeksJoined} {t('progress.weeksTogether')}</Text>
         </View>
         
         <View style={styles.coupleStatsCenter}>
           <Text style={styles.coupleStatValueLarge}>{totalWalksTogether}</Text>
-          <Text style={styles.coupleStatLabelLarge}>Walks Together</Text>
+          <Text style={styles.coupleStatLabelLarge}>{t('progress.walksTogether')}</Text>
         </View>
       </View>
     </View>

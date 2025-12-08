@@ -1,11 +1,12 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { DietPlan, DietPlanFood, dietPlanService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
     Platform,
@@ -32,6 +33,7 @@ export default function DietPlanScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { colors, isDarkMode } = useTheme();
+  const { language, t } = useLanguage();
 
   const [isLoading, setIsLoading] = useState(true);
   const [dietPlan, setDietPlan] = useState<DietPlan | null>(null);
@@ -74,7 +76,10 @@ export default function DietPlanScreen() {
   const lunch = dietPlan ? formatDietItems(dietPlan.lunch) : [];
   const dinner = dietPlan ? formatDietItems(dietPlan.dinner) : [];
 
-  const totalCalories = dietPlan?.totalCalories || 0;
+  const totalCalories = [...breakfast, ...lunch, ...dinner].reduce(
+    (sum, item) => sum + (item.calories || 0),
+    0
+  );
 
   const renderMealSection = (
     title: string, 
@@ -110,12 +115,19 @@ export default function DietPlanScreen() {
               ]}
             >
               <View style={styles.foodItemLeft}>
-                <Text style={[styles.foodName, { color: colors.text }]}>{item.name}</Text>
-                <Text style={[styles.foodNameTamil, { color: colors.textSecondary }]}>{item.nameTamil}</Text>
+                <Text style={[styles.foodName, { color: colors.text }]}>
+                  {language === 'ta' && item.nameTamil ? item.nameTamil : item.name}
+                </Text>
+                {language === 'ta' && item.nameTamil && (
+                  <Text style={[styles.foodNameTamil, { color: colors.textSecondary }]}>{item.name}</Text>
+                )}
+                {language === 'en' && item.nameTamil && (
+                  <Text style={[styles.foodNameTamil, { color: colors.textSecondary }]}>{item.nameTamil}</Text>
+                )}
               </View>
               <View style={styles.foodItemRight}>
                 <Text style={[styles.foodQuantity, { color: colors.textSecondary }]}>{item.quantity}</Text>
-                <Text style={styles.foodCalories}>{item.calories} cal</Text>
+                <Text style={styles.foodCalories}>{item.calories} {t('diet.calories').toLowerCase().slice(0, 3)}</Text>
               </View>
             </View>
           ))}
@@ -136,7 +148,7 @@ export default function DietPlanScreen() {
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>Today's Diet Plan</Text>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>{t('diet.title')}</Text>
             <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
               Recommended by your health coach
             </Text>
@@ -157,13 +169,13 @@ export default function DietPlanScreen() {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#006dab" />
               <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-                Loading your diet plan...
+                {t('common.loading')}
               </Text>
             </View>
           ) : !dietPlan ? (
             <View style={styles.emptyContainer}>
               <MaterialCommunityIcons name="food-off" size={64} color={colors.textSecondary} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>No Diet Plan Yet</Text>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>{t('diet.noPlan')}</Text>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 Your health coach hasn't assigned a diet plan for you yet. Check back later!
               </Text>
@@ -171,37 +183,37 @@ export default function DietPlanScreen() {
           ) : (
             <>
               {/* Breakfast */}
-              {renderMealSection('Breakfast', breakfast, 'sunny', '#f59e0b', '#fef3c7')}
+              {renderMealSection(t('diet.breakfast'), breakfast, 'sunny', '#f59e0b', '#fef3c7')}
 
               {/* Lunch */}
-              {renderMealSection('Lunch', lunch, 'partly-sunny', '#98be4e', '#e8f5d6')}
+              {renderMealSection(t('diet.lunch'), lunch, 'partly-sunny', '#98be4e', '#e8f5d6')}
 
               {/* Dinner */}
-              {renderMealSection('Dinner', dinner, 'moon', '#006dab', '#e0f2fe')}
+              {renderMealSection(t('diet.dinner'), dinner, 'moon', '#006dab', '#e0f2fe')}
 
               {/* Tips Section */}
               <View style={[styles.tipsCard, { backgroundColor: colors.cardBackground }]}>
                 <View style={styles.tipsHeader}>
                   <Ionicons name="bulb" size={20} color="#f59e0b" />
-                  <Text style={[styles.tipsTitle, { color: colors.text }]}>Nutrition Tips</Text>
+                  <Text style={[styles.tipsTitle, { color: colors.text }]}>{t('diet.nutritionTips')}</Text>
                 </View>
                 <View style={styles.tipsList}>
                   <View style={styles.tipItem}>
                     <View style={[styles.tipDot, { backgroundColor: '#98be4e' }]} />
                     <Text style={[styles.tipText, { color: colors.textSecondary }]}>
-                      Drink plenty of water between meals
+                      {t('diet.tip1')}
                     </Text>
                   </View>
                   <View style={styles.tipItem}>
                     <View style={[styles.tipDot, { backgroundColor: '#006dab' }]} />
                     <Text style={[styles.tipText, { color: colors.textSecondary }]}>
-                      Eat slowly and chew your food thoroughly
+                      {t('diet.tip2')}
                     </Text>
                   </View>
                   <View style={styles.tipItem}>
                     <View style={[styles.tipDot, { backgroundColor: '#f59e0b' }]} />
                     <Text style={[styles.tipText, { color: colors.textSecondary }]}>
-                      Avoid heavy meals close to bedtime
+                      {t('diet.tip3')}
                     </Text>
                   </View>
                 </View>
