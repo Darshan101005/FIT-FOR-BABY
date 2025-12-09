@@ -975,6 +975,35 @@ export interface Broadcast {
 }
 
 // ============================================
+// LIPID PROFILE TEST RESULTS
+// Path: /couples/{coupleId}/testResults/{testId}
+// ============================================
+
+export interface LipidProfileTest {
+  id: string;
+  odAaByuserId: string; // C_001_M or C_001_F
+  gender: 'male' | 'female';
+  testNumber: 1 | 2; // Only 2 tests allowed per user
+  
+  // Test Values
+  cholesterol: number; // mg/dL
+  triglyceride: number; // mg/dL
+  hdlCholesterol: number; // mg/dL (HDL - High Density Lipoprotein)
+  ldlCholesterol: number; // mg/dL (LDL - Low Density Lipoprotein)
+  cholesterolHdlRatio: number; // Cholesterol / HDL ratio
+  
+  // Metadata
+  testDate: string; // YYYY-MM-DD
+  enteredBy: string; // Admin UID
+  enteredByName?: string; // Admin name
+  notes?: string;
+  
+  // Timestamps
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+// ============================================
 // COUPLES COLLECTION (User Onboarding)
 // Path: /couples/{coupleId}
 // ============================================

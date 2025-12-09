@@ -220,6 +220,12 @@ service cloud.firestore {
         allow delete: if true; // Allow reset functionality
       }
       
+      // Test results subcollection (lipid test results entered by admin)
+      match /testResults/{testId} {
+        allow read: if true; // Users can view their test results
+        allow create, update, delete: if true; // Admins can manage test results
+      }
+      
       // Devices subcollection (device management for users)
       match /devices/{deviceId} {
         allow read, write: if true; // Users can manage their devices

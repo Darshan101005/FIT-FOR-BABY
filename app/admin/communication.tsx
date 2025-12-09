@@ -6,18 +6,18 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -462,10 +462,13 @@ export default function AdminCommunicationScreen() {
 
   // Handle support chat click
   const handleSupportChatClick = (chat: Chat) => {
+    console.log('Support chat clicked:', chat.id, 'isMobile:', isMobile, 'isDesktop:', isDesktop);
     setSelectedChat(chat);
     // Mark as read
     chatService.markAsRead(chat.id, 'admin');
-    if (isMobile) {
+    // Open modal on non-desktop screens (mobile and tablet)
+    if (!isDesktop) {
+      console.log('Opening chat modal for non-desktop view');
       setShowChatModal(true);
     }
   };
@@ -566,10 +569,10 @@ export default function AdminCommunicationScreen() {
     }
   };
 
-  // Handle thread click
+  // Handle thread click (legacy mock data - not actively used)
   const handleThreadClick = (thread: ChatThread) => {
     setSelectedThread(thread);
-    if (isMobile) {
+    if (!isDesktop) {
       setShowChatModal(true);
     }
   };
@@ -2233,8 +2236,10 @@ export default function AdminCommunicationScreen() {
     </Modal>
   );
 
-  // Chat Modal (Mobile)
-  const renderChatModal = () => (
+  // Chat Modal (Mobile) - Uses real Firebase chat data
+  const renderChatModal = () => {
+    console.log('Rendering chat modal, visible:', showChatModal, 'selectedChat:', selectedChat?.id);
+    return (
     <Modal
       visible={showChatModal}
       animationType="slide"
@@ -2242,62 +2247,90 @@ export default function AdminCommunicationScreen() {
       onRequestClose={() => setShowChatModal(false)}
     >
       <View style={styles.chatModalContainer}>
-        {/* Chat Header */}
-        {selectedThread && (
+        {/* Show loading if no chat selected yet */}
+        {!selectedChat ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={{ marginTop: 12, color: COLORS.textSecondary }}>Loading chat...</Text>
+          </View>
+        ) : (
           <>
+            {/* Chat Header */}
             <View style={styles.chatModalHeader}>
               <TouchableOpacity onPress={() => setShowChatModal(false)}>
                 <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
               </TouchableOpacity>
               <View style={styles.chatModalHeaderInfo}>
-                <Text style={styles.chatModalHeaderName}>{selectedThread.coupleName}</Text>
-                <Text style={styles.chatModalHeaderId}>{selectedThread.coupleId}</Text>
+                <Text style={styles.chatModalHeaderName}>{selectedChat.odAaByuserName || 'User'}</Text>
+                <Text style={styles.chatModalHeaderId}>{selectedChat.coupleId}</Text>
               </View>
-              <TouchableOpacity>
-                <Ionicons name="ellipsis-vertical" size={24} color={COLORS.textSecondary} />
+              <TouchableOpacity onPress={() => handleToggleChatStatus(selectedChat)}>
+                <Ionicons 
+                  name={selectedChat.status === 'resolved' ? 'refresh' : 'checkmark-done'} 
+                  size={24} 
+                  color={selectedChat.status === 'resolved' ? COLORS.primary : COLORS.success} 
+                />
               </TouchableOpacity>
             </View>
 
             {/* Messages */}
-            <ScrollView style={styles.chatModalMessages}>
-              {selectedThread.messages.map(message => (
-                <View
-                  key={message.id}
-                  style={[
-                    styles.messageItem,
-                    message.senderType === 'admin' ? styles.messageItemAdmin : styles.messageItemUser,
-                  ]}
-                >
+            <ScrollView 
+              style={styles.chatModalMessages}
+              ref={(ref) => ref?.scrollToEnd({ animated: false })}
+            >
+              {isLoadingMessages ? (
+                <View style={styles.emptyChatMessages}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={styles.emptyChatText}>Loading messages...</Text>
+                </View>
+              ) : chatMessages.length === 0 ? (
+                <View style={styles.emptyChatMessages}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={48} color={COLORS.textMuted} />
+                  <Text style={styles.emptyChatText}>No messages yet</Text>
+                </View>
+              ) : (
+                chatMessages.map(message => (
                   <View
+                    key={message.id}
                     style={[
-                      styles.messageBubble,
-                      message.senderType === 'admin' ? styles.messageBubbleAdmin : styles.messageBubbleUser,
+                      styles.messageItem,
+                      message.senderType === 'admin' ? styles.messageItemAdmin : styles.messageItemUser,
                     ]}
                   >
-                    {message.senderType !== 'admin' && (
-                      <Text style={styles.messageSender}>
-                        {message.senderName} ({message.senderType === 'male' ? 'M' : 'F'})
+                    <View
+                      style={[
+                        styles.messageBubble,
+                        message.senderType === 'admin' ? styles.messageBubbleAdmin : styles.messageBubbleUser,
+                      ]}
+                    >
+                      {message.senderType !== 'admin' && (
+                        <Text style={styles.messageSender}>
+                          {message.senderName}
+                        </Text>
+                      )}
+                      <Text
+                        style={[
+                          styles.messageText,
+                          message.senderType === 'admin' && styles.messageTextAdmin,
+                        ]}
+                      >
+                        {message.message}
                       </Text>
-                    )}
-                    <Text
-                      style={[
-                        styles.messageText,
-                        message.senderType === 'admin' && styles.messageTextAdmin,
-                      ]}
-                    >
-                      {message.content}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.messageTime,
-                        message.senderType === 'admin' && styles.messageTimeAdmin,
-                      ]}
-                    >
-                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.messageTime,
+                          message.senderType === 'admin' && styles.messageTimeAdmin,
+                        ]}
+                      >
+                        {message.createdAt?.toDate ? 
+                          message.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) :
+                          new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        }
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              ))}
+                ))
+              )}
             </ScrollView>
 
             {/* Input */}
@@ -2310,15 +2343,19 @@ export default function AdminCommunicationScreen() {
                 placeholder="Type a message..."
                 placeholderTextColor={COLORS.textMuted}
                 value={newMessage}
-                onChangeText={setNewMessage}
+                onChangeText={handleAdminTyping}
                 multiline
               />
               <TouchableOpacity
-                style={[styles.sendButton, !newMessage.trim() && styles.sendButtonDisabled]}
-                onPress={handleSendMessage}
-                disabled={!newMessage.trim()}
+                style={[styles.sendButton, (!newMessage.trim() || isSendingMessage) && styles.sendButtonDisabled]}
+                onPress={handleSendSupportMessage}
+                disabled={!newMessage.trim() || isSendingMessage}
               >
-                <Ionicons name="send" size={20} color="#fff" />
+                {isSendingMessage ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="send" size={20} color="#fff" />
+                )}
               </TouchableOpacity>
             </View>
           </>
@@ -2326,6 +2363,7 @@ export default function AdminCommunicationScreen() {
       </View>
     </Modal>
   );
+  };
 
   // Toast
   const renderToast = () => (
@@ -3180,6 +3218,17 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     backgroundColor: COLORS.surface,
+  },
+  emptyChatMessages: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyChatText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    marginTop: 12,
   },
 
   // Toast

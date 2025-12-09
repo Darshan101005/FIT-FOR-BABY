@@ -5,24 +5,24 @@
 import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
 import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DeviceStatus, DoctorVisit, DoctorVisitStatus, ExerciseLog, Feedback, FeedbackCategory, FeedbackStatus, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, UserDevice, WeightLog } from '@/types/firebase.types';
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  deleteField,
-  doc,
-  getDoc,
-  getDocs,
-  increment,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  setDoc,
-  Timestamp,
-  Unsubscribe,
-  updateDoc,
-  where,
-  writeBatch
+    addDoc,
+    collection,
+    deleteDoc,
+    deleteField,
+    doc,
+    getDoc,
+    getDocs,
+    increment,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    setDoc,
+    Timestamp,
+    Unsubscribe,
+    updateDoc,
+    where,
+    writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -1323,6 +1323,157 @@ export interface CoupleStepEntry {
   loggedAt?: Timestamp;
   createdAt?: Timestamp;
 }
+
+// ============================================
+// LIPID PROFILE TEST SERVICE
+// Path: /couples/{coupleId}/testResults/{testId}
+// ============================================
+
+export interface LipidTestData {
+  cholesterol: number;
+  triglyceride: number;
+  hdlCholesterol: number;
+  ldlCholesterol: number;
+  cholesterolHdlRatio: number;
+  testDate: string;
+  notes?: string;
+}
+
+export interface LipidTestResult {
+  id: string;
+  odAaByuserId: string;
+  gender: 'male' | 'female';
+  testNumber: 1 | 2;
+  cholesterol: number;
+  triglyceride: number;
+  hdlCholesterol: number;
+  ldlCholesterol: number;
+  cholesterolHdlRatio: number;
+  testDate: string;
+  enteredBy: string;
+  enteredByName?: string;
+  notes?: string;
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export const lipidTestService = {
+  // Get all test results for a user
+  async getTestResults(coupleId: string, gender: 'male' | 'female'): Promise<LipidTestResult[]> {
+    try {
+      const testsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'testResults');
+      const q = query(testsRef, where('gender', '==', gender), orderBy('testNumber', 'asc'));
+      const snapshot = await getDocs(q);
+      
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as LipidTestResult[];
+    } catch (error) {
+      console.error('Error getting test results:', error);
+      return [];
+    }
+  },
+  
+  // Get test count for a user (to check if they can add more tests)
+  async getTestCount(coupleId: string, gender: 'male' | 'female'): Promise<number> {
+    try {
+      const testsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'testResults');
+      const q = query(testsRef, where('gender', '==', gender));
+      const snapshot = await getDocs(q);
+      return snapshot.size;
+    } catch (error) {
+      console.error('Error getting test count:', error);
+      return 0;
+    }
+  },
+  
+  // Add a new test result (max 2 per user)
+  async addTestResult(
+    coupleId: string, 
+    gender: 'male' | 'female', 
+    data: LipidTestData,
+    adminUid: string,
+    adminName?: string
+  ): Promise<{ success: boolean; error?: string; testId?: string }> {
+    try {
+      // Check current test count
+      const currentCount = await this.getTestCount(coupleId, gender);
+      
+      if (currentCount >= 2) {
+        return { success: false, error: 'Maximum 2 tests allowed per user' };
+      }
+      
+      const testNumber = (currentCount + 1) as 1 | 2;
+      const userId = `${coupleId}_${gender === 'male' ? 'M' : 'F'}`;
+      const testId = `${userId}_test${testNumber}`;
+      
+      const testDoc = {
+        odAaByuserId: userId,
+        gender,
+        testNumber,
+        cholesterol: data.cholesterol,
+        triglyceride: data.triglyceride,
+        hdlCholesterol: data.hdlCholesterol,
+        ldlCholesterol: data.ldlCholesterol,
+        cholesterolHdlRatio: data.cholesterolHdlRatio,
+        testDate: data.testDate,
+        enteredBy: adminUid,
+        enteredByName: adminName || 'Admin',
+        notes: data.notes || '',
+        createdAt: Timestamp.now(),
+      };
+      
+      console.log('Creating test document at:', `couples/${coupleId}/testResults/${testId}`);
+      console.log('Test document data:', testDoc);
+      
+      await setDoc(doc(db, COLLECTIONS.COUPLES, coupleId, 'testResults', testId), testDoc);
+      
+      console.log('Test document created successfully');
+      return { success: true, testId };
+    } catch (error: any) {
+      console.error('Error adding test result - Code:', error.code);
+      console.error('Error adding test result - Message:', error.message);
+      console.error('Error adding test result - Full:', error);
+      
+      // Check for permission error
+      if (error.code === 'permission-denied') {
+        return { success: false, error: 'Permission denied. Firestore rules need to allow testResults subcollection.' };
+      }
+      return { success: false, error: error.message || 'Failed to add test result' };
+    }
+  },
+  
+  // Update an existing test result
+  async updateTestResult(
+    coupleId: string,
+    testId: string,
+    data: Partial<LipidTestData>
+  ): Promise<boolean> {
+    try {
+      const testRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'testResults', testId);
+      await updateDoc(testRef, {
+        ...data,
+        updatedAt: Timestamp.now(),
+      });
+      return true;
+    } catch (error) {
+      console.error('Error updating test result:', error);
+      return false;
+    }
+  },
+  
+  // Delete a test result
+  async deleteTestResult(coupleId: string, testId: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.COUPLES, coupleId, 'testResults', testId));
+      return true;
+    } catch (error) {
+      console.error('Error deleting test result:', error);
+      return false;
+    }
+  },
+};
 
 export const coupleStepsService = {
   // Add step entry for a couple member

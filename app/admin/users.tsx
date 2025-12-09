@@ -1,4 +1,4 @@
-import { adminService, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService, questionnaireService } from '@/services/firestore.service';
+import { LipidTestResult, adminService, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService, lipidTestService, questionnaireService } from '@/services/firestore.service';
 import { Couple as FirestoreCouple } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,17 +7,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -103,6 +103,22 @@ export default function AdminUsersScreen() {
   const [exportingCouple, setExportingCouple] = useState<Couple | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportFormat, setExportFormat] = useState<'pdf' | 'csv' | 'excel'>('pdf');
+
+  // Lipid Test modal state
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [testingUser, setTestingUser] = useState<{ coupleId: string; gender: 'male' | 'female'; userName: string } | null>(null);
+  const [existingTests, setExistingTests] = useState<LipidTestResult[]>([]);
+  const [isLoadingTests, setIsLoadingTests] = useState(false);
+  const [isSavingTest, setIsSavingTest] = useState(false);
+  const [testForm, setTestForm] = useState({
+    cholesterol: '',
+    triglyceride: '',
+    hdlCholesterol: '',
+    ldlCholesterol: '',
+    cholesterolHdlRatio: '',
+    testDate: new Date().toISOString().split('T')[0],
+    notes: '',
+  });
 
   // Enrollment form state
   const [enrollForm, setEnrollForm] = useState({
@@ -443,6 +459,130 @@ export default function AdminUsersScreen() {
     }
   };
 
+  // Handle open test modal
+  const handleOpenTestModal = async (coupleId: string, gender: 'male' | 'female', userName: string) => {
+    setTestingUser({ coupleId, gender, userName });
+    setTestForm({
+      cholesterol: '',
+      triglyceride: '',
+      hdlCholesterol: '',
+      ldlCholesterol: '',
+      cholesterolHdlRatio: '',
+      testDate: new Date().toISOString().split('T')[0],
+      notes: '',
+    });
+    setShowTestModal(true);
+    setIsLoadingTests(true);
+    
+    try {
+      const tests = await lipidTestService.getTestResults(coupleId, gender);
+      setExistingTests(tests);
+    } catch (error) {
+      console.error('Error loading tests:', error);
+      setExistingTests([]);
+    } finally {
+      setIsLoadingTests(false);
+    }
+  };
+
+  // Handle save test result
+  const handleSaveTestResult = async () => {
+    if (!testingUser) {
+      showToast('No user selected', 'error');
+      return;
+    }
+    
+    // Debug: Log form values - use Alert for visibility
+    console.log('Test Form Values:', JSON.stringify(testForm));
+    console.log('Testing User:', JSON.stringify(testingUser));
+    
+    // Validate all fields are filled
+    const missingFields = [];
+    if (!testForm.cholesterol || testForm.cholesterol.trim() === '') missingFields.push('Cholesterol');
+    if (!testForm.triglyceride || testForm.triglyceride.trim() === '') missingFields.push('Triglyceride');
+    if (!testForm.hdlCholesterol || testForm.hdlCholesterol.trim() === '') missingFields.push('HDL Cholesterol');
+    if (!testForm.ldlCholesterol || testForm.ldlCholesterol.trim() === '') missingFields.push('LDL Cholesterol');
+    if (!testForm.cholesterolHdlRatio || testForm.cholesterolHdlRatio.trim() === '') missingFields.push('Cholesterol/HDL Ratio');
+    if (!testForm.testDate || testForm.testDate.trim() === '') missingFields.push('Test Date');
+    
+    if (missingFields.length > 0) {
+      console.log('Missing fields:', missingFields);
+      showToast(`Please fill: ${missingFields.join(', ')}`, 'error');
+      return;
+    }
+    
+    // Check if user already has 2 tests
+    if (existingTests.length >= 2) {
+      showToast('Maximum 2 tests allowed per user', 'error');
+      return;
+    }
+    
+    setIsSavingTest(true);
+    
+    try {
+      const adminName = await AsyncStorage.getItem('adminName') || 'Admin';
+      
+      // Prepare data for Firebase
+      const testData = {
+        cholesterol: parseFloat(testForm.cholesterol),
+        triglyceride: parseFloat(testForm.triglyceride),
+        hdlCholesterol: parseFloat(testForm.hdlCholesterol),
+        ldlCholesterol: parseFloat(testForm.ldlCholesterol),
+        cholesterolHdlRatio: parseFloat(testForm.cholesterolHdlRatio),
+        testDate: testForm.testDate,
+        notes: testForm.notes,
+      };
+      
+      console.log('Saving test with data:', {
+        coupleId: testingUser.coupleId,
+        gender: testingUser.gender,
+        testData,
+        adminUid: currentAdminUid,
+        adminName,
+      });
+      
+      const result = await lipidTestService.addTestResult(
+        testingUser.coupleId,
+        testingUser.gender,
+        testData,
+        currentAdminUid,
+        adminName
+      );
+      
+      console.log('Firebase result:', result);
+      
+      if (result.success) {
+        showToast(`Test ${existingTests.length + 1} saved successfully`, 'success');
+        // Reload tests
+        const tests = await lipidTestService.getTestResults(testingUser.coupleId, testingUser.gender);
+        setExistingTests(tests);
+        // Clear form
+        setTestForm({
+          cholesterol: '',
+          triglyceride: '',
+          hdlCholesterol: '',
+          ldlCholesterol: '',
+          cholesterolHdlRatio: '',
+          testDate: new Date().toISOString().split('T')[0],
+          notes: '',
+        });
+      } else {
+        console.error('Firebase returned error:', result.error);
+        showToast(result.error || 'Failed to save test', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error saving test - Full error:', error);
+      // Check for Firebase permission error
+      if (error.code === 'permission-denied' || (error.message && error.message.includes('permission'))) {
+        showToast('Firebase permission denied. Please update Firestore rules.', 'error');
+      } else {
+        showToast(error.message || 'Failed to save test', 'error');
+      }
+    } finally {
+      setIsSavingTest(false);
+    }
+  };
+
   // Handle delete couple confirmation
   const handleDeleteCouple = (coupleId: string, maleName: string, femaleName: string) => {
     setDeletingCouple({ coupleId, maleName, femaleName });
@@ -472,6 +612,487 @@ export default function AdminUsersScreen() {
     setExportingCouple(couple);
     setExportFormat('pdf');
     setShowExportModal(true);
+  };
+
+  // Export single user data as PDF
+  const handleExportSingleUser = async (couple: Couple, gender: 'male' | 'female') => {
+    setActionLoading(true);
+    
+    try {
+      const coupleId = couple.coupleId;
+      const user = couple[gender];
+      const userId = `${coupleId}_${gender === 'male' ? 'M' : 'F'}`;
+      
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const formatDateStr = (date: Date) => date.toISOString().split('T')[0];
+
+      // Fetch all data for this user
+      const [steps, weightLogs, exerciseLogs, foodLogs, questionnaire, testResults] = await Promise.all([
+        coupleStepsService.getByDateRange(coupleId, gender, formatDateStr(thirtyDaysAgo), formatDateStr(today)),
+        coupleWeightLogService.getAll(coupleId, gender),
+        coupleExerciseService.getByDateRange(coupleId, gender, formatDateStr(thirtyDaysAgo), formatDateStr(today)),
+        coupleFoodLogService.getByDateRange(coupleId, gender, formatDateStr(thirtyDaysAgo), formatDateStr(today)),
+        questionnaireService.getProgress(coupleId, gender),
+        lipidTestService.getTestResults(coupleId, gender),
+      ]);
+
+      // Get questionnaire answers (both complete and in-progress)
+      let questionnaireAnswers: any = null;
+      if (questionnaire?.answers && Object.keys(questionnaire.answers).length > 0) {
+        questionnaireAnswers = questionnaire.answers;
+      }
+
+      // Generate HTML report
+      const htmlContent = generateSingleUserExportHTML({
+        couple,
+        gender,
+        user,
+        userId,
+        steps: steps || [],
+        weightLogs: weightLogs || [],
+        exerciseLogs: exerciseLogs || [],
+        foodLogs: foodLogs || [],
+        questionnaire,
+        questionnaireAnswers,
+        testResults: testResults || [],
+      });
+
+      if (isWeb) {
+        const newWindow = window.open('', '_blank');
+        if (newWindow) {
+          newWindow.document.write(htmlContent);
+          newWindow.document.close();
+        }
+        showToast('Report opened in new tab. Use Print → Save as PDF', 'success');
+      } else {
+        const fileName = `${userId}_full_report_${formatDateStr(today)}.html`;
+        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, htmlContent);
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/html', dialogTitle: 'Export User Report' });
+        showToast('Report ready to share!', 'success');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast('Failed to export data. Please try again.', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Generate HTML for single user export with full details
+  const generateSingleUserExportHTML = (data: {
+    couple: Couple;
+    gender: 'male' | 'female';
+    user: any;
+    userId: string;
+    steps: any[];
+    weightLogs: any[];
+    exerciseLogs: any[];
+    foodLogs: any[];
+    questionnaire: any;
+    questionnaireAnswers: any;
+    testResults: LipidTestResult[];
+  }) => {
+    const { couple, gender, user, userId, steps, weightLogs, exerciseLogs, foodLogs, questionnaire, questionnaireAnswers, testResults } = data;
+
+    const formatDate = (dateStr: string) => {
+      if (!dateStr) return 'N/A';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    };
+
+    // Calculate stats
+    const totalSteps = steps.reduce((sum, s) => sum + (s.stepCount || 0), 0);
+    const avgSteps = steps.length > 0 ? Math.round(totalSteps / steps.length) : 0;
+    const totalExerciseMins = exerciseLogs.reduce((sum, e) => sum + (e.duration || 0), 0);
+    const latestWeight = weightLogs.length > 0 ? weightLogs[0] : null;
+
+    // Generate questionnaire section
+    let questionnaireHTML = '';
+    if (questionnaire?.isComplete && questionnaireAnswers) {
+      const answerEntries = Object.entries(questionnaireAnswers);
+      questionnaireHTML = `
+        <div class="section">
+          <h2 class="section-title">📋 Health Questionnaire</h2>
+          <div class="questionnaire-status completed">
+            <span class="status-icon">✓</span>
+            Completed on ${formatDate(questionnaire.completedAt?.toDate?.()?.toISOString?.() || '')}
+          </div>
+          <div class="questionnaire-answers">
+            ${answerEntries.map(([key, answer]: [string, any]) => `
+              <div class="qa-item">
+                <div class="question">${answer.questionText || key}</div>
+                <div class="answer">${Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer || 'N/A'}${answer.conditionalAnswer ? ` (${answer.conditionalAnswer})` : ''}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else if (questionnaire && questionnaireAnswers) {
+      // Show in-progress questionnaire with answered questions
+      const answerEntries = Object.entries(questionnaireAnswers);
+      questionnaireHTML = `
+        <div class="section">
+          <h2 class="section-title">📋 Health Questionnaire</h2>
+          <div class="questionnaire-status pending">
+            <span class="status-icon">⏳</span>
+            In Progress - ${Math.round(questionnaire.progress?.percentComplete || 0)}% Complete
+          </div>
+          ${answerEntries.length > 0 ? `
+            <div class="questionnaire-answers">
+              <h3 style="font-size: 14px; color: #64748b; margin: 16px 0 12px;">Answered Questions (${answerEntries.length})</h3>
+              ${answerEntries.map(([key, answer]: [string, any]) => `
+                <div class="qa-item">
+                  <div class="question">${answer.questionText || key}</div>
+                  <div class="answer">${Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer || 'N/A'}${answer.conditionalAnswer ? ` (${answer.conditionalAnswer})` : ''}</div>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    } else if (questionnaire) {
+      questionnaireHTML = `
+        <div class="section">
+          <h2 class="section-title">📋 Health Questionnaire</h2>
+          <div class="questionnaire-status pending">
+            <span class="status-icon">⏳</span>
+            In Progress - ${Math.round(questionnaire.progress?.percentComplete || 0)}% Complete
+          </div>
+        </div>
+      `;
+    } else {
+      questionnaireHTML = `
+        <div class="section">
+          <h2 class="section-title">📋 Health Questionnaire</h2>
+          <div class="questionnaire-status not-started">
+            <span class="status-icon">○</span>
+            Not Started
+          </div>
+        </div>
+      `;
+    }
+
+    // Generate test results section
+    let testResultsHTML = '';
+    if (testResults.length > 0) {
+      testResultsHTML = `
+        <div class="section">
+          <h2 class="section-title">🧪 Lipid Profile Tests</h2>
+          <div class="tests-grid">
+            ${testResults.map(test => `
+              <div class="test-card">
+                <div class="test-header">
+                  <span class="test-number">Test ${test.testNumber}</span>
+                  <span class="test-date">${formatDate(test.testDate)}</span>
+                </div>
+                <div class="test-results">
+                  <div class="test-row">
+                    <span class="test-label">Cholesterol</span>
+                    <span class="test-value">${test.cholesterol} mg/dL</span>
+                  </div>
+                  <div class="test-row">
+                    <span class="test-label">Triglyceride</span>
+                    <span class="test-value">${test.triglyceride} mg/dL</span>
+                  </div>
+                  <div class="test-row">
+                    <span class="test-label">HDL Cholesterol</span>
+                    <span class="test-value">${test.hdlCholesterol} mg/dL</span>
+                  </div>
+                  <div class="test-row">
+                    <span class="test-label">LDL Cholesterol</span>
+                    <span class="test-value">${test.ldlCholesterol} mg/dL</span>
+                  </div>
+                  <div class="test-row highlight">
+                    <span class="test-label">Chol/HDL Ratio</span>
+                    <span class="test-value">${test.cholesterolHdlRatio}</span>
+                  </div>
+                </div>
+                ${test.notes ? `<div class="test-notes">Notes: ${test.notes}</div>` : ''}
+                <div class="test-entered-by">Entered by: ${test.enteredByName || 'Admin'}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      testResultsHTML = `
+        <div class="section">
+          <h2 class="section-title">🧪 Lipid Profile Tests</h2>
+          <div class="no-data">No test results recorded</div>
+        </div>
+      `;
+    }
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fit for Baby - User Report - ${userId}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; color: #1e293b; background: #fff; line-height: 1.6; }
+    .report-container { max-width: 900px; margin: 0 auto; }
+    
+    /* Header */
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid ${gender === 'male' ? '#006dab' : '#98be4e'}; }
+    .header-left { display: flex; align-items: center; gap: 15px; }
+    .logo { width: 60px; height: 60px; border-radius: 12px; object-fit: contain; }
+    .header-text h1 { font-size: 24px; font-weight: 700; color: ${gender === 'male' ? '#006dab' : '#7da33e'}; }
+    
+    /* Download Button */
+    .download-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; background: linear-gradient(135deg, ${gender === 'male' ? '#006dab' : '#7da33e'} 0%, ${gender === 'male' ? '#0088d4' : '#98be4e'} 100%); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; text-decoration: none; }
+    .download-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+    @media print { .download-btn { display: none; } }
+    .header-text p { font-size: 13px; color: #64748b; }
+    .report-date { text-align: right; font-size: 12px; color: #64748b; }
+    
+    /* User Profile Card */
+    .profile-card { background: linear-gradient(135deg, ${gender === 'male' ? '#e0f2fe' : '#ecfccb'} 0%, ${gender === 'male' ? '#bae6fd' : '#d9f99d'} 100%); border-radius: 16px; padding: 24px; margin-bottom: 30px; border-left: 5px solid ${gender === 'male' ? '#006dab' : '#98be4e'}; }
+    .profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+    .profile-avatar { width: 70px; height: 70px; border-radius: 50%; background: ${gender === 'male' ? '#006dab' : '#98be4e'}; display: flex; align-items: center; justify-content: center; color: white; font-size: 28px; font-weight: 700; }
+    .profile-info h2 { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+    .profile-info .user-id { font-size: 14px; color: #64748b; }
+    .profile-details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .detail-item { background: rgba(255,255,255,0.7); border-radius: 10px; padding: 12px; }
+    .detail-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .detail-value { font-size: 15px; font-weight: 600; color: #0f172a; margin-top: 4px; }
+    
+    /* Stats Grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 30px; }
+    .stat-card { background: #fff; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .stat-icon { font-size: 28px; margin-bottom: 8px; }
+    .stat-value { font-size: 24px; font-weight: 800; color: ${gender === 'male' ? '#006dab' : '#7da33e'}; }
+    .stat-label { font-size: 12px; color: #64748b; margin-top: 4px; }
+    
+    /* Sections */
+    .section { background: #fff; border-radius: 16px; padding: 24px; margin-bottom: 24px; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .section-title { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #f1f5f9; }
+    
+    /* Questionnaire */
+    .questionnaire-status { padding: 12px 16px; border-radius: 10px; display: flex; align-items: center; gap: 10px; font-weight: 600; margin-bottom: 20px; }
+    .questionnaire-status.completed { background: #dcfce7; color: #16a34a; }
+    .questionnaire-status.pending { background: #fef3c7; color: #d97706; }
+    .questionnaire-status.not-started { background: #f1f5f9; color: #64748b; }
+    .questionnaire-answers { display: grid; gap: 12px; }
+    .qa-item { background: #f8fafc; border-radius: 8px; padding: 12px 16px; border-left: 3px solid ${gender === 'male' ? '#006dab' : '#98be4e'}; }
+    .question { font-size: 13px; color: #64748b; margin-bottom: 4px; }
+    .answer { font-size: 15px; font-weight: 600; color: #0f172a; }
+    
+    /* Test Results */
+    .tests-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .test-card { background: #f8fafc; border-radius: 12px; padding: 16px; border: 1px solid #e2e8f0; }
+    .test-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
+    .test-number { font-size: 16px; font-weight: 700; color: ${gender === 'male' ? '#006dab' : '#7da33e'}; }
+    .test-date { font-size: 12px; color: #64748b; }
+    .test-results { display: grid; gap: 8px; }
+    .test-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; }
+    .test-row.highlight { background: ${gender === 'male' ? '#e0f2fe' : '#ecfccb'}; margin: 4px -8px; padding: 8px; border-radius: 6px; }
+    .test-label { font-size: 13px; color: #64748b; }
+    .test-value { font-size: 14px; font-weight: 600; color: #0f172a; }
+    .test-notes { font-size: 12px; color: #64748b; font-style: italic; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
+    .test-entered-by { font-size: 11px; color: #94a3b8; margin-top: 8px; }
+    
+    /* Activity Table */
+    .activity-table { width: 100%; border-collapse: collapse; }
+    .activity-table th, .activity-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+    .activity-table th { background: #f8fafc; font-weight: 600; color: #64748b; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+    .activity-table tr:hover { background: #fafafa; }
+    
+    /* No Data */
+    .no-data { text-align: center; padding: 30px; color: #94a3b8; font-style: italic; }
+    
+    /* Footer */
+    .footer { text-align: center; padding: 20px; color: #94a3b8; font-size: 12px; border-top: 1px solid #e2e8f0; margin-top: 30px; }
+    
+    @media print {
+      body { padding: 20px; }
+      .section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="report-container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <img class="logo" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMDAiIHI9IjkwIiBmaWxsPSIjOThiZTRlIi8+PHBhdGggZD0iTTYwIDEyMGMwLTIyIDIwLTQ1IDQwLTQ1czQwIDIzIDQwIDQ1Yy01LTEwLTE1LTE1LTQwLTE1cy0zNSA1LTQwIDE1eiIgZmlsbD0iI2ZmZiIvPjxjaXJjbGUgY3g9IjEwMCIgY3k9IjYwIiByPSIyNSIgZmlsbD0iI2ZmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iMTcwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LXNpemU9IjE4IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSJib2xkIj5GRkI8L3RleHQ+PC9zdmc+" alt="Fit for Baby Logo" />
+        <div class="header-text">
+          <h1>User Health Report</h1>
+          <p>Fit for Baby - Complete Profile & Health Data</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <button class="download-btn" onclick="window.print()">
+          📥 Download PDF
+        </button>
+        <div class="report-date">
+          Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+        </div>
+      </div>
+    </div>
+    
+    <!-- User Profile Card -->
+    <div class="profile-card">
+      <div class="profile-header">
+        <div class="profile-avatar">${user.name?.charAt(0) || (gender === 'male' ? 'M' : 'F')}</div>
+        <div class="profile-info">
+          <h2>${user.name || 'Unknown'}</h2>
+          <div class="user-id">${userId} • ${gender.charAt(0).toUpperCase() + gender.slice(1)}</div>
+        </div>
+      </div>
+      <div class="profile-details">
+        <div class="detail-item">
+          <div class="detail-label">Email</div>
+          <div class="detail-value">${user.email || 'Not provided'}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Phone</div>
+          <div class="detail-value">${user.phone || 'Not provided'}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Age</div>
+          <div class="detail-value">${user.age ? user.age + ' years' : 'Not provided'}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Date of Birth</div>
+          <div class="detail-value">${user.dateOfBirth ? formatDate(user.dateOfBirth) : 'Not provided'}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Weight</div>
+          <div class="detail-value">${user.weight ? user.weight + ' kg' : 'Not recorded'}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Height</div>
+          <div class="detail-value">${user.height ? user.height + ' cm' : 'Not recorded'}</div>
+        </div>
+        ${user.bmi ? `
+        <div class="detail-item">
+          <div class="detail-label">BMI</div>
+          <div class="detail-value">${user.bmi}</div>
+        </div>
+        ` : ''}
+        <div class="detail-item">
+          <div class="detail-label">Enrollment Date</div>
+          <div class="detail-value">${formatDate(couple.enrollmentDate)}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Status</div>
+          <div class="detail-value" style="color: ${user.status === 'active' ? '#16a34a' : '#dc2626'}">${user.status?.toUpperCase() || 'UNKNOWN'}</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Stats Summary -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon">👣</div>
+        <div class="stat-value">${avgSteps.toLocaleString()}</div>
+        <div class="stat-label">Avg Daily Steps</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🏃</div>
+        <div class="stat-value">${totalExerciseMins}</div>
+        <div class="stat-label">Exercise Mins (30d)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">⚖️</div>
+        <div class="stat-value">${latestWeight?.weight || user.weight || '-'}</div>
+        <div class="stat-label">Latest Weight (kg)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🧪</div>
+        <div class="stat-value">${testResults.length}/2</div>
+        <div class="stat-label">Tests Recorded</div>
+      </div>
+    </div>
+    
+    ${testResultsHTML}
+    
+    ${questionnaireHTML}
+    
+    <!-- Recent Activity -->
+    <div class="section">
+      <h2 class="section-title">📊 Recent Activity (Last 30 Days)</h2>
+      ${(() => {
+        // Merge all dates and aggregate data
+        const dateMap = new Map<string, { steps: number; exercise: number; weight: number | null; dietLogged: boolean }>();
+        
+        // Add steps data (aggregate by date)
+        steps.forEach(s => {
+          const existing = dateMap.get(s.date) || { steps: 0, exercise: 0, weight: null, dietLogged: false };
+          existing.steps += (s.stepCount || 0);
+          dateMap.set(s.date, existing);
+        });
+        
+        // Add exercise data (aggregate by date)
+        exerciseLogs.forEach(e => {
+          const existing = dateMap.get(e.date) || { steps: 0, exercise: 0, weight: null, dietLogged: false };
+          existing.exercise += (e.duration || 0);
+          dateMap.set(e.date, existing);
+        });
+        
+        // Add weight data (take the latest for each date)
+        weightLogs.forEach(w => {
+          const existing = dateMap.get(w.date) || { steps: 0, exercise: 0, weight: null, dietLogged: false };
+          existing.weight = w.weight;
+          dateMap.set(w.date, existing);
+        });
+        
+        // Add food log data (check if logged)
+        foodLogs.forEach(f => {
+          const existing = dateMap.get(f.date) || { steps: 0, exercise: 0, weight: null, dietLogged: false };
+          existing.dietLogged = true;
+          dateMap.set(f.date, existing);
+        });
+        
+        // Sort dates descending
+        const sortedDates = Array.from(dateMap.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+        
+        if (sortedDates.length === 0) {
+          return '<div class="no-data">No activity data recorded in the last 30 days</div>';
+        }
+        
+        return `
+          <table class="activity-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Steps</th>
+                <th>Exercise (mins)</th>
+                <th>Weight (kg)</th>
+                <th>Diet Logged</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sortedDates.slice(0, 20).map(([date, data]) => `
+                <tr>
+                  <td>${formatDate(date)}</td>
+                  <td>${data.steps > 0 ? data.steps.toLocaleString() : '-'}</td>
+                  <td>${data.exercise > 0 ? data.exercise : '-'}</td>
+                  <td>${data.weight || '-'}</td>
+                  <td style="color: ${data.dietLogged ? '#16a34a' : '#dc2626'}">${data.dietLogged ? '✓ Yes' : '✗ No'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      })()}
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+      <p>This report was generated by Fit for Baby Admin Panel</p>
+      <p>Couple ID: ${couple.coupleId} • User ID: ${userId}</p>
+    </div>
+  </div>
+</body>
+</html>
+    `;
   };
 
   // Generate and export user data
@@ -1275,6 +1896,20 @@ export default function AdminUsersScreen() {
                     {couple.male.status === 'active' ? 'Pause' : 'Activate'}
                   </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.testButton]}
+                  onPress={() => handleOpenTestModal(couple.coupleId, 'male', couple.male.name)}
+                >
+                  <Ionicons name="flask" size={16} color="#fff" />
+                  <Text style={[styles.actionButtonText, { color: '#fff' }]}>Test</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.exportUserButton]}
+                  onPress={() => handleExportSingleUser(couple, 'male')}
+                >
+                  <Ionicons name="download-outline" size={16} color="#fff" />
+                  <Text style={[styles.actionButtonText, { color: '#fff' }]}>Export</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -1416,6 +2051,20 @@ export default function AdminUsersScreen() {
                   <Text style={[styles.actionButtonText, { color: couple.female.status === 'active' ? COLORS.error : COLORS.success }]}>
                     {couple.female.status === 'active' ? 'Pause' : 'Activate'}
                   </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.testButton]}
+                  onPress={() => handleOpenTestModal(couple.coupleId, 'female', couple.female.name)}
+                >
+                  <Ionicons name="flask" size={16} color="#fff" />
+                  <Text style={[styles.actionButtonText, { color: '#fff' }]}>Test</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.exportUserButton]}
+                  onPress={() => handleExportSingleUser(couple, 'female')}
+                >
+                  <Ionicons name="download-outline" size={16} color="#fff" />
+                  <Text style={[styles.actionButtonText, { color: '#fff' }]}>Export</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1968,6 +2617,259 @@ export default function AdminUsersScreen() {
     );
   };
 
+  // Lipid Test Modal
+  const renderTestModal = () => {
+    if (!testingUser) return null;
+    
+    const canAddTest = existingTests.length < 2;
+    
+    return (
+      <Modal
+        visible={showTestModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowTestModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 500 }]}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <View style={[styles.modalHeaderIcon, { backgroundColor: COLORS.accent + '20' }]}>
+                  <Ionicons name="flask" size={24} color={COLORS.accent} />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Lipid Profile Test</Text>
+                  <Text style={styles.modalSubtitle}>{testingUser.userName} ({testingUser.coupleId}_{testingUser.gender === 'male' ? 'M' : 'F'})</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setShowTestModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Existing Tests */}
+              {isLoadingTests ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                  <Text style={styles.loadingText}>Loading tests...</Text>
+                </View>
+              ) : existingTests.length > 0 ? (
+                <View style={styles.existingTestsSection}>
+                  <Text style={styles.sectionTitle}>Previous Tests ({existingTests.length}/2)</Text>
+                  {existingTests.map((test, index) => (
+                    <View key={test.id} style={styles.existingTestCard}>
+                      <View style={styles.testCardHeader}>
+                        <Text style={styles.testCardTitle}>Test {test.testNumber}</Text>
+                        <Text style={styles.testCardDate}>{test.testDate}</Text>
+                      </View>
+                      <View style={styles.testResultsGrid}>
+                        <View style={styles.testResultItem}>
+                          <Text style={styles.testResultLabel}>Cholesterol</Text>
+                          <Text style={styles.testResultValue}>{test.cholesterol} mg/dL</Text>
+                        </View>
+                        <View style={styles.testResultItem}>
+                          <Text style={styles.testResultLabel}>Triglyceride</Text>
+                          <Text style={styles.testResultValue}>{test.triglyceride} mg/dL</Text>
+                        </View>
+                        <View style={styles.testResultItem}>
+                          <Text style={styles.testResultLabel}>HDL</Text>
+                          <Text style={styles.testResultValue}>{test.hdlCholesterol} mg/dL</Text>
+                        </View>
+                        <View style={styles.testResultItem}>
+                          <Text style={styles.testResultLabel}>LDL</Text>
+                          <Text style={styles.testResultValue}>{test.ldlCholesterol} mg/dL</Text>
+                        </View>
+                        <View style={styles.testResultItem}>
+                          <Text style={styles.testResultLabel}>Chol/HDL Ratio</Text>
+                          <Text style={styles.testResultValue}>{test.cholesterolHdlRatio}</Text>
+                        </View>
+                      </View>
+                      {test.notes && (
+                        <Text style={styles.testNotes}>Notes: {test.notes}</Text>
+                      )}
+                      <Text style={styles.testEnteredBy}>Entered by: {test.enteredByName}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.noTestsMessage}>
+                  <Ionicons name="flask-outline" size={32} color={COLORS.textMuted} />
+                  <Text style={styles.noTestsText}>No tests recorded yet</Text>
+                </View>
+              )}
+
+              {/* Add New Test Form */}
+              {canAddTest ? (
+                <View style={styles.addTestSection}>
+                  <Text style={styles.sectionTitle}>Add Test {existingTests.length + 1}</Text>
+                  
+                  <View style={styles.testFormRow}>
+                    <View style={styles.testInputGroup}>
+                      <Text style={styles.testInputLabel}>Cholesterol (mg/dL) *</Text>
+                      <TextInput
+                        style={styles.testInput}
+                        value={testForm.cholesterol}
+                        onChangeText={(text) => setTestForm({ ...testForm, cholesterol: text })}
+                        placeholder="e.g., 180"
+                        placeholderTextColor={COLORS.textMuted}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <View style={styles.testInputGroup}>
+                      <Text style={styles.testInputLabel}>Triglyceride (mg/dL) *</Text>
+                      <TextInput
+                        style={styles.testInput}
+                        value={testForm.triglyceride}
+                        onChangeText={(text) => setTestForm({ ...testForm, triglyceride: text })}
+                        placeholder="e.g., 150"
+                        placeholderTextColor={COLORS.textMuted}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.testFormRow}>
+                    <View style={styles.testInputGroup}>
+                      <Text style={styles.testInputLabel}>HDL Cholesterol (mg/dL) *</Text>
+                      <TextInput
+                        style={styles.testInput}
+                        value={testForm.hdlCholesterol}
+                        onChangeText={(text) => setTestForm({ ...testForm, hdlCholesterol: text })}
+                        placeholder="e.g., 50"
+                        placeholderTextColor={COLORS.textMuted}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <View style={styles.testInputGroup}>
+                      <Text style={styles.testInputLabel}>LDL Cholesterol (mg/dL) *</Text>
+                      <TextInput
+                        style={styles.testInput}
+                        value={testForm.ldlCholesterol}
+                        onChangeText={(text) => setTestForm({ ...testForm, ldlCholesterol: text })}
+                        placeholder="e.g., 100"
+                        placeholderTextColor={COLORS.textMuted}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.testFormRow}>
+                    <View style={styles.testInputGroup}>
+                      <Text style={styles.testInputLabel}>Cholesterol/HDL Ratio *</Text>
+                      <TextInput
+                        style={styles.testInput}
+                        value={testForm.cholesterolHdlRatio}
+                        onChangeText={(text) => setTestForm({ ...testForm, cholesterolHdlRatio: text })}
+                        placeholder="e.g., 3.6"
+                        placeholderTextColor={COLORS.textMuted}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <View style={styles.testInputGroup}>
+                      <Text style={styles.testInputLabel}>Test Date *</Text>
+                      {isWeb ? (
+                        <input
+                          type="date"
+                          value={testForm.testDate}
+                          onChange={(e) => setTestForm({ ...testForm, testDate: e.target.value })}
+                          style={{
+                            height: 44,
+                            borderWidth: 1,
+                            borderColor: COLORS.border,
+                            borderRadius: 8,
+                            padding: '0 12px',
+                            fontSize: 15,
+                            color: COLORS.textPrimary,
+                            backgroundColor: COLORS.surface,
+                            outline: 'none',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            cursor: 'pointer',
+                          } as React.CSSProperties}
+                        />
+                      ) : (
+                        <TextInput
+                          style={styles.testInput}
+                          value={testForm.testDate}
+                          onChangeText={(text) => setTestForm({ ...testForm, testDate: text })}
+                          placeholder="YYYY-MM-DD"
+                          placeholderTextColor={COLORS.textMuted}
+                        />
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={styles.testInputGroupFull}>
+                    <Text style={styles.testInputLabel}>Notes (optional)</Text>
+                    <TextInput
+                      style={[styles.testInput, { height: 60 }]}
+                      value={testForm.notes}
+                      onChangeText={(text) => setTestForm({ ...testForm, notes: text })}
+                      placeholder="Any additional notes..."
+                      placeholderTextColor={COLORS.textMuted}
+                      multiline
+                    />
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.maxTestsReached}>
+                  <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
+                  <Text style={styles.maxTestsText}>Maximum 2 tests have been recorded for this user</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Footer Buttons */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonOutline]}
+                onPress={() => setShowTestModal(false)}
+              >
+                <Text style={[styles.modalButtonText, { color: COLORS.textSecondary }]}>Close</Text>
+              </TouchableOpacity>
+              {canAddTest && (
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: COLORS.accent, minWidth: 140 }, isSavingTest && { opacity: 0.6 }]}
+                  onPress={handleSaveTestResult}
+                  disabled={isSavingTest}
+                >
+                  {isSavingTest ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="save" size={18} color="#fff" />
+                      <Text style={[styles.modalButtonText, { color: '#fff' }]}>Save Test</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Toast inside modal for visibility */}
+            {toast.visible && (
+              <Animated.View
+                style={[
+                  styles.toast,
+                  { transform: [{ translateY: toastAnim }], zIndex: 9999 },
+                  toast.type === 'error' ? styles.toastError : styles.toastSuccess,
+                ]}
+              >
+                <Ionicons
+                  name={toast.type === 'error' ? 'alert-circle' : 'checkmark-circle'}
+                  size={20}
+                  color="#fff"
+                />
+                <Text style={styles.toastText}>{toast.message}</Text>
+              </Animated.View>
+            )}
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   // Delete Confirmation Modal
   const renderDeleteModal = () => {
     if (!deletingCouple) return null;
@@ -2210,6 +3112,7 @@ export default function AdminUsersScreen() {
       {renderEnrollmentModal()}
       {renderTempPasswordModal()}
       {renderEditModal()}
+      {renderTestModal()}
       {renderDeleteModal()}
       {renderExportModal()}
       {toast.visible && renderToast()}
@@ -3190,5 +4093,150 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Test Modal Styles
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 30,
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  existingTestsSection: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 12,
+  },
+  existingTestCard: {
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+  },
+  testCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  testCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  testCardDate: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  testResultsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  testResultItem: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    padding: 10,
+    minWidth: '48%',
+    flex: 1,
+  },
+  testResultLabel: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginBottom: 2,
+  },
+  testResultValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  testNotes: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 10,
+  },
+  testEnteredBy: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 8,
+  },
+  noTestsMessage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 30,
+    gap: 8,
+  },
+  noTestsText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+  },
+  addTestSection: {
+    marginTop: 10,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  testFormRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  testInputGroup: {
+    flex: 1,
+  },
+  testInputGroupFull: {
+    marginBottom: 12,
+  },
+  testInputLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    marginBottom: 6,
+  },
+  testInput: {
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  maxTestsReached: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.success + '15',
+    borderRadius: 12,
+    padding: 16,
+    gap: 10,
+    marginTop: 16,
+  },
+  maxTestsText: {
+    fontSize: 14,
+    color: COLORS.success,
+    fontWeight: '500',
+  },
+  // Styled Test and Export Buttons
+  testButton: {
+    backgroundColor: COLORS.accent,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  exportUserButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
 });
