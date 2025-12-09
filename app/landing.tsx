@@ -315,16 +315,11 @@ Easily record your daily steps, meals, exercise, and overall wellness
               <TouchableOpacity onPress={() => router.push('/our-mission')}>
                 <Text style={styles.footerLink}>Our Mission</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push('/team')}>
-                <Text style={styles.footerLink}>Team</Text>
-              </TouchableOpacity>
+
             </View>
 
             <View style={styles.footerColumn}>
               <Text style={styles.footerHeading}>Product</Text>
-              <TouchableOpacity onPress={() => router.push('/login')}>
-                <Text style={styles.footerLink}>Get Started</Text>
-              </TouchableOpacity>
               <TouchableOpacity onPress={() => router.push('/login')}>
                 <Text style={styles.footerLink}>Login</Text>
               </TouchableOpacity>

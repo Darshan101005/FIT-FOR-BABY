@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
@@ -12,27 +11,20 @@ export default function OurMissionScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
-        <Image
-          source={require('../assets/logos/fit_for_baby_horizontal.png')}
-          style={styles.headerLogo}
-          contentFit="contain"
-        />
-        <View style={styles.placeholder} />
+        <Text style={styles.headerTitle}>Our Mission</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={[styles.heroSection, isMobile && styles.heroSectionMobile]}>
-          <Text style={[styles.pageTitle, isMobile && styles.pageTitleMobile]}>Our Mission</Text>
-          <Text style={[styles.pageSubtitle, isMobile && styles.pageSubtitleMobile]}>
-            Empowering expectant parents with the tools and support they need for a healthy pregnancy journey
-          </Text>
-        </View>
-
+        
+        {/* Content Section containing Cards */}
         <View style={[styles.contentSection, isMobile && styles.contentSectionMobile]}>
+          
+          {/* Card 1 */}
           <View style={[styles.missionCard, isMobile && styles.missionCardMobile]}>
             <View style={styles.iconContainer}>
               <Ionicons name="heart" size={40} color="#006dab" />
@@ -45,6 +37,7 @@ export default function OurMissionScreen() {
             </Text>
           </View>
 
+          {/* Card 2 */}
           <View style={[styles.missionCard, isMobile && styles.missionCardMobile]}>
             <View style={[styles.iconContainer, styles.iconGreen]}>
               <Ionicons name="people" size={40} color="#10B981" />
@@ -57,6 +50,7 @@ export default function OurMissionScreen() {
             </Text>
           </View>
 
+          {/* Card 3 */}
           <View style={[styles.missionCard, isMobile && styles.missionCardMobile]}>
             <View style={[styles.iconContainer, styles.iconYellow]}>
               <Ionicons name="star" size={40} color="#D97706" />
@@ -69,6 +63,7 @@ export default function OurMissionScreen() {
             </Text>
           </View>
 
+          {/* Card 4 */}
           <View style={[styles.missionCard, isMobile && styles.missionCardMobile]}>
             <View style={[styles.iconContainer, styles.iconPurple]}>
               <Ionicons name="rocket" size={40} color="#7C3AED" />
@@ -80,11 +75,14 @@ export default function OurMissionScreen() {
               empower parents to make informed decisions about their health.
             </Text>
           </View>
+
         </View>
 
+        {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>© 2025 Fit for Baby. All rights reserved.</Text>
         </View>
+
       </ScrollView>
     </View>
   );
@@ -97,7 +95,6 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: isWeb ? 60 : 20,
     paddingVertical: 12,
@@ -108,46 +105,15 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
-  headerLogo: {
-    width: isWeb ? 200 : 150,
-    height: isWeb ? 52 : 40,
-  },
-  placeholder: {
-    width: 40,
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginLeft: 8,
+    textAlignVertical: 'center',
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  heroSection: {
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 60,
-    paddingVertical: 80,
-    alignItems: 'center',
-  },
-  heroSectionMobile: {
-    paddingHorizontal: 20,
-    paddingVertical: 40,
-  },
-  pageTitle: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: '#1e293b',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  pageTitleMobile: {
-    fontSize: 32,
-  },
-  pageSubtitle: {
-    fontSize: 20,
-    color: '#64748b',
-    textAlign: 'center',
-    maxWidth: 700,
-    lineHeight: 30,
-  },
-  pageSubtitleMobile: {
-    fontSize: 16,
-    lineHeight: 24,
   },
   contentSection: {
     paddingHorizontal: 60,

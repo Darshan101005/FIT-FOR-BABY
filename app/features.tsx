@@ -1,5 +1,4 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
@@ -76,21 +75,11 @@ export default function FeaturesScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
-        <Image
-          source={require('../assets/logos/fit_for_baby_horizontal.png')}
-          style={styles.headerLogo}
-          contentFit="contain"
-        />
-        <View style={styles.placeholder} />
+        <Text style={styles.headerTitle}>Features</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={[styles.heroSection, isMobile && styles.heroSectionMobile]}>
-          <Text style={[styles.pageTitle, isMobile && styles.pageTitleMobile]}>Features</Text>
-          <Text style={[styles.pageSubtitle, isMobile && styles.pageSubtitleMobile]}>
-            Everything you need to track, manage, and support your pregnancy journey
-          </Text>
-        </View>
+        
 
         <View style={[styles.featuresGrid, isMobile && styles.featuresGridMobile]}>
           {features.map((feature, index) => (
@@ -109,9 +98,11 @@ export default function FeaturesScreen() {
           <Text style={styles.ctaSubtitle}>
             Join thousands of parents who trust Fit for Baby for their pregnancy journey.
           </Text>
+          
+          {/* Arrow is now inside the button and visible */}
           <TouchableOpacity style={styles.ctaButton} onPress={() => router.push('/login')}>
             <Text style={styles.ctaButtonText}>Start Free Today</Text>
-            <Ionicons name="arrow-forward" size={18} color="#ffffff" />
+            <Ionicons name="arrow-forward" size={20} color="#006dab" />
           </TouchableOpacity>
         </View>
 
@@ -130,7 +121,6 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: isWeb ? 60 : 20,
     paddingVertical: 12,
@@ -141,21 +131,21 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
-  headerLogo: {
-    width: isWeb ? 200 : 150,
-    height: isWeb ? 52 : 40,
-  },
-  placeholder: {
-    width: 40,
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginLeft: 8,
+    textAlignVertical: 'center',
   },
   scrollContent: {
     flexGrow: 1,
   },
   heroSection: {
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 60,
     paddingVertical: 80,
     alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 60,
   },
   heroSectionMobile: {
     paddingHorizontal: 20,
@@ -255,11 +245,13 @@ const styles = StyleSheet.create({
   ctaButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#ffffff',
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 8,
     gap: 8,
+    marginTop: 16,
   },
   ctaButtonText: {
     color: '#006dab',

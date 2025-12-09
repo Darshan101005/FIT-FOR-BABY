@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
@@ -16,19 +15,10 @@ export default function PrivacyPolicyScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
-        <Image
-          source={require('../assets/logos/fit_for_baby_horizontal.png')}
-          style={styles.headerLogo}
-          contentFit="contain"
-        />
-        <View style={styles.placeholder} />
+        <Text style={styles.headerTitle}>Privacy Policy</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={[styles.heroSection, isMobile && styles.heroSectionMobile]}>
-          <Text style={[styles.pageTitle, isMobile && styles.pageTitleMobile]}>Privacy Policy</Text>
-          <Text style={styles.lastUpdated}>Last updated: December 7, 2025</Text>
-        </View>
 
         <View style={[styles.contentSection, isMobile && styles.contentSectionMobile]}>
           <View style={styles.section}>
@@ -137,8 +127,8 @@ export default function PrivacyPolicyScreen() {
               If you have questions about this Privacy Policy, please contact us at:
             </Text>
             <Text style={styles.contactInfo}>
-              Email: privacy@fitforbaby.com{'\n'}
-              Address: 123 Health Street, Medical City, MC 12345
+              Email: fitforbaby.sriher@gmail.com{'\n'}
+              Address: No 1, Ramachandra Nagar, Porur-600116, Chennai
             </Text>
           </View>
         </View>
@@ -158,7 +148,6 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: isWeb ? 60 : 20,
     paddingVertical: 12,
@@ -169,12 +158,12 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
-  headerLogo: {
-    width: isWeb ? 200 : 150,
-    height: isWeb ? 52 : 40,
-  },
-  placeholder: {
-    width: 40,
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginLeft: 8,
+    textAlignVertical: 'center',
   },
   scrollContent: {
     flexGrow: 1,

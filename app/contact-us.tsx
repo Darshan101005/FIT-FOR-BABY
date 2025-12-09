@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
@@ -11,7 +10,6 @@ export default function ContactUsScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
 
@@ -26,48 +24,15 @@ export default function ContactUsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
-        <Image
-          source={require('../assets/logos/fit_for_baby_horizontal.png')}
-          style={styles.headerLogo}
-          contentFit="contain"
-        />
-        <View style={styles.placeholder} />
+        <Text style={styles.headerTitle}>Contact Us</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={[styles.heroSection, isMobile && styles.heroSectionMobile]}>
-          <Text style={[styles.pageTitle, isMobile && styles.pageTitleMobile]}>Contact Us</Text>
-          <Text style={[styles.pageSubtitle, isMobile && styles.pageSubtitleMobile]}>
-            Have a question or feedback? We'd love to hear from you.
-          </Text>
-        </View>
+
 
         <View style={[styles.contentSection, isMobile && styles.contentSectionMobile]}>
-          <View style={[styles.contactInfo, isMobile && styles.contactInfoMobile]}>
-            <View style={styles.infoCard}>
-              <View style={styles.infoIconContainer}>
-                <Ionicons name="mail" size={24} color="#006dab" />
-              </View>
-              <Text style={styles.infoTitle}>Email</Text>
-              <Text style={styles.infoText}>support@fitforbaby.com</Text>
-            </View>
-
-            <View style={styles.infoCard}>
-              <View style={[styles.infoIconContainer, { backgroundColor: '#F0FDF4' }]}>
-                <Ionicons name="call" size={24} color="#10B981" />
-              </View>
-              <Text style={styles.infoTitle}>Phone</Text>
-              <Text style={styles.infoText}>+1 (800) 555-0123</Text>
-            </View>
-
-            <View style={styles.infoCard}>
-              <View style={[styles.infoIconContainer, { backgroundColor: '#FEF3C7' }]}>
-                <Ionicons name="time" size={24} color="#D97706" />
-              </View>
-              <Text style={styles.infoTitle}>Hours</Text>
-              <Text style={styles.infoText}>24/7 Support Available</Text>
-            </View>
-          </View>
+          
+          {/* Removed the empty 'contactInfo' View so the form can be centered properly */}
 
           <View style={[styles.formContainer, isMobile && styles.formContainerMobile]}>
             <Text style={styles.formTitle}>Send us a message</Text>
@@ -86,13 +51,12 @@ export default function ContactUsScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email Address</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, styles.disabledInput]}
                 placeholder="Enter your email"
                 placeholderTextColor="#94a3b8"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
+                value="fitforbaby.sriher@gmail.com"
+                editable={false}
+                selectTextOnFocus={false}
               />
             </View>
 
@@ -143,7 +107,6 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: isWeb ? 60 : 20,
     paddingVertical: 12,
@@ -154,12 +117,12 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
-  headerLogo: {
-    width: isWeb ? 200 : 150,
-    height: isWeb ? 52 : 40,
-  },
-  placeholder: {
-    width: 40,
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginLeft: 8,
+    textAlignVertical: 'center',
   },
   scrollContent: {
     flexGrow: 1,
@@ -167,86 +130,50 @@ const styles = StyleSheet.create({
   heroSection: {
     backgroundColor: '#f8fafc',
     paddingHorizontal: 60,
-    paddingVertical: 60,
+    paddingVertical: 40,
     alignItems: 'center',
   },
   heroSectionMobile: {
     paddingHorizontal: 20,
-    paddingVertical: 40,
+    paddingVertical: 30,
   },
   pageTitle: {
-    fontSize: 48,
+    fontSize: 32,
     fontWeight: '800',
     color: '#1e293b',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   pageTitleMobile: {
-    fontSize: 32,
+    fontSize: 28,
   },
   pageSubtitle: {
-    fontSize: 20,
+    fontSize: 16,
     color: '#64748b',
     textAlign: 'center',
     maxWidth: 600,
-    lineHeight: 30,
-  },
-  pageSubtitleMobile: {
-    fontSize: 16,
     lineHeight: 24,
   },
+  pageSubtitleMobile: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  // Updated to Center content
   contentSection: {
-    flexDirection: 'row',
-    paddingHorizontal: 60,
-    paddingVertical: 60,
-    gap: 40,
+    width: '100%',
+    alignItems: 'center', // Centers the form horizontally
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 40,
   },
   contentSectionMobile: {
-    flexDirection: 'column',
-    paddingHorizontal: 20,
-    paddingVertical: 30,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
   },
-  contactInfo: {
-    width: isWeb ? '35%' : '100%',
-    gap: 20,
-  },
-  contactInfoMobile: {
-    width: '100%',
-    marginBottom: 20,
-  },
-  infoCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  infoIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 4,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#64748b',
-  },
+  // Updated Form Container to be centered with fixed max-width
   formContainer: {
-    flex: 1,
+    width: '100%',
+    maxWidth: 600, // Keeps form from getting too wide on Web
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 32,
@@ -260,12 +187,14 @@ const styles = StyleSheet.create({
   },
   formContainerMobile: {
     padding: 20,
+    maxWidth: '100%',
   },
   formTitle: {
     fontSize: 24,
     fontWeight: '700',
     color: '#1e293b',
     marginBottom: 24,
+    textAlign: 'center', // Centers the text inside the form
   },
   inputGroup: {
     marginBottom: 20,
@@ -285,6 +214,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: '#1e293b',
+    // outlineStyle: 'none', // Optional: Add if using Web and want to remove blue glow
+  },
+  disabledInput: {
+    backgroundColor: '#f1f5f9',
+    color: '#64748b',
   },
   textArea: {
     minHeight: 120,
@@ -309,6 +243,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e293b',
     paddingVertical: 24,
     alignItems: 'center',
+    marginTop: 'auto', // Pushes footer to bottom if content is short
   },
   footerText: {
     color: '#94a3b8',
