@@ -1,25 +1,24 @@
 import { coupleService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import {
-    Animated,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
-type Step = 'identify' | 'select-profile' | 'verify-pin' | 'reset-password' | 'success';
+type Step = 'identify' | 'verify-pin' | 'reset-password' | 'success';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -96,13 +95,20 @@ export default function ForgotPasswordScreen() {
 
   const handleFindAccount = async () => {
     if (!identifier.trim()) {
-      showToast('Please enter Couple ID, Email or Username', 'error');
+      showToast('Please enter your Email, Phone or Username', 'error');
       return;
     }
 
     setIsLoading(true);
     try {
       const trimmedIdentifier = identifier.trim();
+
+      // Block Couple ID format - only individual credentials allowed
+      if (trimmedIdentifier.match(/^C_\d+$/i)) {
+        showToast('Please use your individual Email, Phone or Username. Couple ID is not allowed.', 'error');
+        setIsLoading(false);
+        return;
+      }
 
       // Use the existing findByCredential method
       const result = await coupleService.findByCredential(trimmedIdentifier);
@@ -117,11 +123,12 @@ export default function ForgotPasswordScreen() {
       setCoupleData(couple);
 
       if (gender === 'both') {
-        // Need to select which profile to reset
-        setStep('select-profile');
-        showToast('Account found! Select your profile.', 'success');
+        // Shared credential - not allowed for password reset
+        showToast('This credential is shared by both partners. Please use your unique Email, Phone or Username.', 'error');
+        setIsLoading(false);
+        return;
       } else {
-        // Single profile matched
+        // Single profile matched - this is what we want
         setSelectedGender(gender);
         
         // Check if PIN is set for this user
@@ -140,15 +147,6 @@ export default function ForgotPasswordScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleSelectProfile = (gender: 'male' | 'female') => {
-    if (!coupleData[gender].isPinSet || !coupleData[gender].pin) {
-      showToast('No PIN set for this profile. Please contact support.', 'error');
-      return;
-    }
-    setSelectedGender(gender);
-    setStep('verify-pin');
   };
 
   const handleVerifyPin = async () => {
@@ -304,15 +302,15 @@ export default function ForgotPasswordScreen() {
       </View>
       <Text style={styles.stepTitle}>Find Your Account</Text>
       <Text style={styles.stepDescription}>
-        Enter your Couple ID, Email, or Username to find your account
+        Enter your Email, Phone or Username to find your account
       </Text>
 
       <View style={styles.inputContainer}>
         <Ionicons name="person-outline" size={20} color="#64748b" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Couple ID / Email / Username"
-          placeholderTextColor="#94a3b8"
+          placeholder="Email / Phone / Username"
+          placeholderTextColor="#64748b"
           value={identifier}
           onChangeText={setIdentifier}
           autoCapitalize="none"
@@ -409,7 +407,7 @@ export default function ForgotPasswordScreen() {
           <TextInput
             style={styles.input}
             placeholder="New Password"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor="#64748b"
             value={newPassword}
             onChangeText={setNewPassword}
             secureTextEntry={!showNewPassword}
@@ -444,7 +442,7 @@ export default function ForgotPasswordScreen() {
           <TextInput
             style={styles.input}
             placeholder="Confirm Password"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor="#64748b"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry={!showConfirmPassword}
@@ -474,7 +472,7 @@ export default function ForgotPasswordScreen() {
               <Ionicons
                 name={item.met ? 'checkmark-circle' : 'ellipse-outline'}
                 size={16}
-                color={item.met ? '#22c55e' : '#94a3b8'}
+                color={item.met ? '#006dab' : '#94a3b8'}
               />
               <Text style={[styles.ruleText, item.met && styles.ruleTextMet]}>{item.rule}</Text>
             </View>
@@ -509,7 +507,7 @@ export default function ForgotPasswordScreen() {
   const renderSuccessStep = () => (
     <View style={styles.stepContent}>
       <View style={[styles.iconContainer, styles.successIcon]}>
-        <Ionicons name="checkmark-circle" size={60} color="#22c55e" />
+        <Ionicons name="checkmark-circle" size={60} color="#006dab" />
       </View>
       <Text style={styles.stepTitle}>Password Changed!</Text>
       <Text style={styles.stepDescription}>
@@ -517,7 +515,7 @@ export default function ForgotPasswordScreen() {
       </Text>
 
       <TouchableOpacity style={styles.primaryButton} onPress={() => router.replace('/login')}>
-        <LinearGradient colors={['#22c55e', '#16a34a']} style={styles.buttonGradient}>
+        <LinearGradient colors={['#006dab', '#005a8f']} style={styles.buttonGradient}>
           <Text style={styles.buttonText}>Go to Login</Text>
           <Ionicons name="log-in" size={20} color="#fff" />
         </LinearGradient>
@@ -550,14 +548,6 @@ export default function ForgotPasswordScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('@/assets/logos/fit_for_baby_horizontal.png')}
-              style={[styles.logo, { width: logoSize, height: logoSize * 0.35 }]}
-              contentFit="contain"
-            />
-          </View>
-
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Forgot Password</Text>
             
@@ -592,6 +582,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: isWeb ? 40 : 60,
     alignItems: 'center',
+    justifyContent: 'center', // Added to center vertically
   },
   logoContainer: {
     alignItems: 'center',
@@ -642,7 +633,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#006dab',
   },
   stepDotCompleted: {
-    backgroundColor: '#22c55e',
+    backgroundColor: '#006dab',
   },
   stepNumber: {
     fontSize: 12,
@@ -674,7 +665,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   successIcon: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: '#e0f2fe',
   },
   stepTitle: {
     fontSize: 20,
@@ -700,6 +691,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     marginBottom: 16,
     paddingHorizontal: 14,
+    overflow: 'visible',
   },
   inputIcon: {
     marginRight: 10,
@@ -709,6 +701,7 @@ const styles = StyleSheet.create({
     height: 52,
     fontSize: 15,
     color: '#0f172a',
+    backgroundColor: 'transparent',
   },
   eyeIcon: {
     padding: 8,
@@ -793,7 +786,7 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
   },
   ruleTextMet: {
-    color: '#22c55e',
+    color: '#006dab',
   },
   primaryButton: {
     width: '100%',
@@ -855,7 +848,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ef4444',
   },
   toastSuccess: {
-    backgroundColor: '#22c55e',
+    backgroundColor: '#006dab',
   },
   toastText: {
     flex: 1,

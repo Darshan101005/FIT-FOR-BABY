@@ -2634,8 +2634,8 @@ export default function AdminUsersScreen() {
           <View style={[styles.modalContent, { maxWidth: 500 }]}>
             {/* Header */}
             <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderLeft}>
-                <View style={[styles.modalHeaderIcon, { backgroundColor: COLORS.accent + '20' }]}>
+              <View style={styles.modalHeader}>
+                <View style={[styles.modalHeader, { backgroundColor: COLORS.accent + '20' }]}>
                   <Ionicons name="flask" size={24} color={COLORS.accent} />
                 </View>
                 <View>
@@ -4095,137 +4095,127 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   // Test Modal Styles
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 30,
-    gap: 10,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  existingTestsSection: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 12,
-  },
-  existingTestCard: {
-    backgroundColor: COLORS.borderLight,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-  },
-  testCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  testCardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  testCardDate: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  testResultsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  testResultItem: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
-    padding: 10,
-    minWidth: '48%',
-    flex: 1,
-  },
-  testResultLabel: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginBottom: 2,
-  },
-  testResultValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  testNotes: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic',
-    marginTop: 10,
-  },
-  testEnteredBy: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 8,
-  },
-  noTestsMessage: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 30,
-    gap: 8,
-  },
-  noTestsText: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-  },
-  addTestSection: {
-    marginTop: 10,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  testFormRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  testInputGroup: {
-    flex: 1,
-  },
-  testInputGroupFull: {
-    marginBottom: 12,
-  },
-  testInputLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-    marginBottom: 6,
-  },
-  testInput: {
-    backgroundColor: COLORS.borderLight,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: COLORS.textPrimary,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  maxTestsReached: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.success + '15',
-    borderRadius: 12,
-    padding: 16,
-    gap: 10,
-    marginTop: 16,
-  },
-  maxTestsText: {
-    fontSize: 14,
-    color: COLORS.success,
-    fontWeight: '500',
-  },
+    existingTestsSection: {
+      marginBottom: 20,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: COLORS.textPrimary,
+      marginBottom: 12,
+    },
+    existingTestCard: {
+      backgroundColor: COLORS.borderLight,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 12,
+    },
+    testCardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    testCardTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: COLORS.primary,
+    },
+    testCardDate: {
+      fontSize: 13,
+      color: COLORS.textSecondary,
+    },
+    testResultsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    testResultItem: {
+      backgroundColor: COLORS.surface,
+      borderRadius: 8,
+      padding: 10,
+      minWidth: '48%',
+      flex: 1,
+    },
+    testResultLabel: {
+      fontSize: 11,
+      color: COLORS.textMuted,
+      marginBottom: 2,
+    },
+    testResultValue: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: COLORS.textPrimary,
+    },
+    testNotes: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      fontStyle: 'italic',
+      marginTop: 10,
+    },
+    testEnteredBy: {
+      fontSize: 11,
+      color: COLORS.textMuted,
+      marginTop: 8,
+    },
+    noTestsMessage: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 30,
+      gap: 8,
+    },
+    noTestsText: {
+      fontSize: 14,
+      color: COLORS.textMuted,
+    },
+    addTestSection: {
+      marginTop: 10,
+      paddingTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: COLORS.border,
+    },
+    testFormRow: {
+      flexDirection: 'row',
+      gap: 12,
+      marginBottom: 12,
+    },
+    testInputGroup: {
+      flex: 1,
+    },
+    testInputGroupFull: {
+      marginBottom: 12,
+    },
+    testInputLabel: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: COLORS.textSecondary,
+      marginBottom: 6,
+    },
+    testInput: {
+      backgroundColor: COLORS.borderLight,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: COLORS.textPrimary,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+    },
+    maxTestsReached: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: COLORS.success + '15',
+      borderRadius: 12,
+      padding: 16,
+      gap: 10,
+      marginTop: 16,
+    },
+    maxTestsText: {
+      fontSize: 14,
+      color: COLORS.success,
+      fontWeight: '500',
+    },
   // Styled Test and Export Buttons
   testButton: {
     backgroundColor: COLORS.accent,

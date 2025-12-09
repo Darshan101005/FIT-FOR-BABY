@@ -1,8 +1,10 @@
 import PWAInstallBanner from '@/components/PWAInstallBanner';
+import OfflineModal from '@/components/ui/OfflineModal';
 import { AppProvider } from '@/context/AppContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { LanguageProvider } from '@/context/LanguageContext';
 import { ThemeProvider } from '@/context/ThemeContext';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { initPWA } from '@/services/pwa.service';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -24,6 +26,7 @@ function LoadingScreen() {
 // Main navigation with auth check
 function RootNavigator() {
   const { isLoading } = useAuth();
+  const { isOfflineModalVisible, setIsOfflineModalVisible } = useNetworkStatus();
 
   // Initialize PWA on web
   useEffect(() => {
@@ -60,6 +63,12 @@ function RootNavigator() {
       
       {/* PWA Install Banner - shows only on mobile web browsers */}
       {isWeb && <PWAInstallBanner />}
+      
+      {/* Offline Modal - shows when no internet connection */}
+      <OfflineModal 
+        visible={isOfflineModalVisible} 
+        onExit={() => setIsOfflineModalVisible(false)} 
+      />
     </>
   );
 }
