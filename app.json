@@ -75,5 +75,10 @@
       "router": {}
     },
     "owner": "fit_for_baby"
+    ,
+    "updates": {
+      "enabled": true,
+      "fallbackToCacheTimeout": 0
+    }
   }
 }
