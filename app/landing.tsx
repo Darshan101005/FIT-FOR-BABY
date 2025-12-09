@@ -155,9 +155,9 @@ const LandingScreen: React.FC = () => {
               <LinearGradient colors={['#EFF6FF', '#DBEAFE']} style={styles.featureIconContainer}>
                 <MaterialCommunityIcons name="shoe-print" size={36} color="#006dab" />
               </LinearGradient>
-              <Text style={styles.featureTitle}>Daily Progress Tracking</Text>
+              <Text style={styles.featureTitle}>Health Tracking</Text>
               <Text style={styles.featureDescription}>
-                Log your steps, weight, and exercise with AI-powered photo verification
+Easily record your daily steps, meals, exercise, and overall wellness
               </Text>
             </View>
 
@@ -165,9 +165,9 @@ const LandingScreen: React.FC = () => {
               <LinearGradient colors={['#F0FDF4', '#DCFCE7']} style={styles.featureIconContainer}>
                 <MaterialCommunityIcons name="food-apple" size={36} color="#10B981" />
               </LinearGradient>
-              <Text style={styles.featureTitle}>Diet Plan & Nutrition</Text>
+              <Text style={styles.featureTitle}>Guidance & Support</Text>
               <Text style={styles.featureDescription}>
-                Get personalized diet plans and track your daily food intake
+                Access helpful tips and connect with health professionals whenever needed.
               </Text>
             </View>
 
@@ -175,9 +175,9 @@ const LandingScreen: React.FC = () => {
               <LinearGradient colors={['#FEF3C7', '#FDE68A']} style={styles.featureIconContainer}>
                 <MaterialCommunityIcons name="calendar-clock" size={36} color="#D97706" />
               </LinearGradient>
-              <Text style={styles.featureTitle}>Appointments & Chat</Text>
+              <Text style={styles.featureTitle}>Simple & Convenient</Text>
               <Text style={styles.featureDescription}>
-                Schedule visits and communicate directly with healthcare providers
+                Log your information quickly and view your progress anytime.
               </Text>
             </View>
 
@@ -185,9 +185,9 @@ const LandingScreen: React.FC = () => {
               <LinearGradient colors={['#FCE7F3', '#FBCFE8']} style={styles.featureIconContainer}>
                 <MaterialCommunityIcons name="account-heart" size={36} color="#EC4899" />
               </LinearGradient>
-              <Text style={styles.featureTitle}>Couple Partnership</Text>
+              <Text style={styles.featureTitle}>Secure & Private</Text>
               <Text style={styles.featureDescription}>
-                Track your pregnancy journey together with your partner
+                Your data is safely stored and kept completely confidential.
               </Text>
             </View>
           </View>
@@ -202,9 +202,11 @@ const LandingScreen: React.FC = () => {
               <View style={styles.timelineCardLeft}>
                 <View style={styles.timelineCardHeader}>
                   <MaterialCommunityIcons name="login" size={28} color="#0EA5E9" />
-                  <Text style={styles.timelineCardTitle}>Login & Setup</Text>
+                  <Text style={styles.timelineCardTitle}>Start Using Your Account
+</Text>
                 </View>
-                <Text style={styles.timelineCardDescription}>Sign in with your credentials provided by your healthcare team. Set up your PIN for quick access.</Text>
+                <Text style={styles.timelineCardDescription}>Log in with the details provided to you and begin your wellness journey.
+</Text>
               </View>
               <LinearGradient colors={['#0EA5E9', '#06B6D4']} style={styles.timelineDot}>
                 <Text style={styles.timelineDotText}>1</Text>
@@ -220,9 +222,9 @@ const LandingScreen: React.FC = () => {
               <View style={styles.timelineCardRight}>
                 <View style={styles.timelineCardHeader}>
                   <MaterialCommunityIcons name="shoe-print" size={28} color="#10B981" />
-                  <Text style={styles.timelineCardTitle}>Log Daily Activity</Text>
+                  <Text style={styles.timelineCardTitle}>Track Your Daily Progress</Text>
                 </View>
-                <Text style={styles.timelineCardDescription}>Track your steps, weight, exercise, and meals daily. Upload photos for AI-powered verification.</Text>
+                <Text style={styles.timelineCardDescription}>Enter your activity, meals, exercise, and weight to follow your improvements.</Text>
               </View>
             </View>
 
@@ -230,9 +232,9 @@ const LandingScreen: React.FC = () => {
               <View style={styles.timelineCardLeft}>
                 <View style={styles.timelineCardHeader}>
                   <MaterialCommunityIcons name="calendar-check" size={28} color="#7C3AED" />
-                  <Text style={styles.timelineCardTitle}>Schedule Appointments</Text>
+                  <Text style={styles.timelineCardTitle}>Receive Support When Needed</Text>
                 </View>
-                <Text style={styles.timelineCardDescription}>Book nursing visits and chat with your healthcare providers directly through the app.</Text>
+                <Text style={styles.timelineCardDescription}>Reach out to health professionals for guidance at any time.</Text>
               </View>
               <LinearGradient colors={['#0EA5E9', '#06B6D4']} style={styles.timelineDot}>
                 <Text style={styles.timelineDotText}>3</Text>
@@ -248,9 +250,9 @@ const LandingScreen: React.FC = () => {
               <View style={styles.timelineCardRight}>
                 <View style={styles.timelineCardHeader}>
                   <MaterialCommunityIcons name="trophy" size={28} color="#F59E0B" />
-                  <Text style={styles.timelineCardTitle}>Track Your Progress</Text>
+                  <Text style={styles.timelineCardTitle}>Stay Updated</Text>
                 </View>
-                <Text style={styles.timelineCardDescription}>View your weekly stats, earn achievements, and maintain your streak with your partner.</Text>
+                <Text style={styles.timelineCardDescription}>Get personalised reminders, tips, and notifications to keep you on track.</Text>
               </View>
             </View>
           </View>

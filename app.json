@@ -61,7 +61,8 @@
           "sounds": [],
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -69,8 +70,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "your-eas-project-id"
-      }
-    }
+        "projectId": "5945cd3a-d246-465a-825c-3aeb6b5ac96d"
+      },
+      "router": {}
+    },
+    "owner": "fit_for_baby"
   }
 }
