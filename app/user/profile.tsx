@@ -5,7 +5,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { cloudinaryService } from '@/services/cloudinary.service';
-import { coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService, questionnaireService } from '@/services/firestore.service';
+import { coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService, formatDateString, questionnaireService } from '@/services/firestore.service';
 import { QuestionnaireProgress } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,17 +17,17 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -485,28 +485,59 @@ export default function ProfileScreen() {
       // Get couple data
       const coupleData = await coupleService.get(coupleId);
       
-      // Get steps data (last 30 days)
-      const today = new Date();
-      const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Get steps data (last 30 days) - using same method as admin
+      const endDate = formatDateString(new Date());
+      const startDate = formatDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
       
-      // Format dates as strings (YYYY-MM-DD)
-      const formatDateStr = (date: Date) => {
-        return date.toISOString().split('T')[0];
-      };
+      const stepsData = await coupleStepsService.getByDateRange(coupleId, userGender, startDate, endDate);
       
-      const stepsData = await coupleStepsService.getByDateRange(coupleId, userGender, formatDateStr(thirtyDaysAgo), formatDateStr(today));
+      // Debug: Log the fetched steps data
+      console.log('📊 Fetched Steps Data (Raw):', {
+        count: stepsData?.length || 0,
+        dateRange: `${startDate} to ${endDate}`,
+        sample: stepsData?.slice(0, 5).map((s: any) => ({
+          date: s.date,
+          stepCount: s.stepCount,
+          goal: s.goal
+        })),
+        today: endDate
+      });
+      
+      // Aggregate steps by date (sum all stepCount entries for each date)
+      const aggregatedSteps = stepsData.reduce((acc: any, entry: any) => {
+        const dateKey = entry.date;
+        if (!acc[dateKey]) {
+          acc[dateKey] = {
+            date: entry.date,
+            steps: 0,
+            goal: entry.goal || 3000, // Use goal from first entry or default to 3000
+          };
+        }
+        acc[dateKey].steps += entry.stepCount || 0;
+        return acc;
+      }, {});
+      
+      // Convert to array and sort by date descending
+      const sortedStepsData = Object.values(aggregatedSteps)
+        .sort((a: any, b: any) => {
+          return b.date.localeCompare(a.date);
+        });
+      
+      console.log('📊 Aggregated Steps Data:', {
+        count: sortedStepsData.length,
+        sample: sortedStepsData.slice(0, 5)
+      });
       
       // Get weight logs
       const weightData = await coupleWeightLogService.getAll(coupleId, userGender);
       
       // Get food logs (last 7 days)
-      const sevenDaysAgo = new Date(today);
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const foodData = await coupleFoodLogService.getByDateRange(coupleId, userGender, formatDateStr(sevenDaysAgo), formatDateStr(today));
+      const foodEndDate = formatDateString(new Date());
+      const foodStartDate = formatDateString(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+      const foodData = await coupleFoodLogService.getByDateRange(coupleId, userGender, foodStartDate, foodEndDate);
       
       // Get exercise logs (last 30 days)
-      const exerciseData = await coupleExerciseService.getByDateRange(coupleId, userGender, formatDateStr(thirtyDaysAgo), formatDateStr(today));
+      const exerciseData = await coupleExerciseService.getByDateRange(coupleId, userGender, startDate, endDate);
       
       // Get questionnaire progress
       const questionnaireData = await questionnaireService.getProgress(coupleId, userGender);
@@ -519,7 +550,7 @@ export default function ProfileScreen() {
           coupleName: `${coupleData?.male?.name || 'N/A'} & ${coupleData?.female?.name || 'N/A'}`,
           enrollmentDate: coupleData?.enrollmentDate || 'N/A',
         },
-        stepsData: stepsData || [],
+        stepsData: sortedStepsData || [],
         weightData: weightData || [],
         foodData: foodData || [],
         exerciseData: exerciseData || [],
@@ -564,9 +595,21 @@ export default function ProfileScreen() {
   }) => {
     const { userData, coupleData, stepsData, weightData, foodData, exerciseData, questionnaireData, profileData } = data;
     
-    const formatDate = (dateStr: string) => {
-      if (!dateStr) return 'N/A';
-      const date = new Date(dateStr);
+    const formatDate = (dateInput: any) => {
+      if (!dateInput) return 'N/A';
+      
+      let date: Date;
+      if (typeof dateInput === 'string') {
+        date = new Date(dateInput);
+      } else if (dateInput.toDate) {
+        // Firestore Timestamp
+        date = dateInput.toDate();
+      } else if (dateInput instanceof Date) {
+        date = dateInput;
+      } else {
+        return 'N/A';
+      }
+      
       return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     };
 
@@ -576,10 +619,10 @@ export default function ProfileScreen() {
       return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
-    // Calculate totals
-    const totalSteps = stepsData.reduce((sum, s) => sum + (s.steps || 0), 0);
+    // Calculate totals and averages
+    const totalSteps = stepsData.reduce((sum: number, s: any) => sum + (s.steps || 0), 0);
     const avgSteps = stepsData.length > 0 ? Math.round(totalSteps / stepsData.length) : 0;
-    const totalExerciseMinutes = exerciseData.reduce((sum, e) => sum + (e.duration || 0), 0);
+    const totalExerciseMinutes = exerciseData.reduce((sum: number, e: any) => sum + (e.duration || 0), 0);
     const latestWeight = weightData.length > 0 ? weightData[0]?.weight || 'N/A' : 'N/A';
 
     return `
@@ -784,16 +827,55 @@ export default function ProfileScreen() {
           </tr>
         </thead>
         <tbody>
-          ${stepsData.slice(0, 30).map(s => `
+          ${stepsData.slice(0, 30).map((s: any) => {
+            // Use goal from admin if sent, else use fixed minimum (3000)
+            const goal = s.goal || 3000;
+            const steps = s.steps || 0;
+            
+            // Determine if this is today's date - handle both string and Date objects
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            
+            let dateStr = '';
+            if (s.date) {
+              if (typeof s.date === 'string') {
+                dateStr = s.date;
+              } else if (s.date.toDate) {
+                // Firestore Timestamp
+                const d = s.date.toDate();
+                dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              } else if (s.date.toISOString) {
+                dateStr = s.date.toISOString().split('T')[0];
+              }
+            }
+            
+            // Status logic: Only today is 'In Progress', others are 'Completed' or 'Not Completed'
+            let status = '';
+            let statusColor = '';
+            if (dateStr === todayStr) {
+              status = '⏳ In Progress';
+              statusColor = '#f59e0b';
+            } else {
+              if (steps >= goal) {
+                status = '✅ Completed';
+                statusColor = '#16a34a';
+              } else {
+                status = '❌ Not Completed';
+                statusColor = '#ef4444';
+              }
+            }
+            
+            return `
           <tr>
             <td>${formatDate(s.date)}</td>
-            <td><strong>${(s.steps || 0).toLocaleString()}</strong></td>
-            <td>${(s.goal || 10000).toLocaleString()}</td>
-            <td style="color: ${(s.steps || 0) >= (s.goal || 10000) ? '#16a34a' : '#f59e0b'};">
-              ${(s.steps || 0) >= (s.goal || 10000) ? '✅ Complete' : '⏳ In Progress'}
+            <td><strong>${steps.toLocaleString()}</strong></td>
+            <td>${goal.toLocaleString()}</td>
+            <td style="color: ${statusColor};">
+              ${status}
             </td>
           </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
       ` : '<p style="color: #64748b; text-align: center; padding: 20px;">No steps data recorded yet.</p>'}
@@ -858,18 +940,33 @@ export default function ProfileScreen() {
             <th>Date</th>
             <th>Meal</th>
             <th>Food Item</th>
-            <th>Calories</th>
           </tr>
         </thead>
         <tbody>
-          ${foodData.slice(0, 30).map(f => `
+          ${(() => {
+            // Group food logs by date
+            const grouped: { [date: string]: any[] } = {};
+            foodData.slice(0, 30).forEach((f: any) => {
+              const dateKey: string = f.date ? (typeof f.date === 'string' ? f.date : (f.date.toISOString ? f.date.toISOString().split('T')[0] : '')) : '';
+              if (!grouped[dateKey]) grouped[dateKey] = [];
+              grouped[dateKey].push(f);
+            });
+            
+            // Render rows - show date only on first meal of each date
+            const rows: string[] = [];
+            Object.entries(grouped).forEach(([date, meals]) => {
+              (meals as any[]).forEach((meal: any, idx: number) => {
+                rows.push(`
           <tr>
-            <td>${formatDate(f.date)}</td>
-            <td>${f.mealType || 'Meal'}</td>
-            <td><strong>${f.foodName || f.name || 'Food'}</strong></td>
-            <td>${f.calories || '-'} kcal</td>
+            <td>${idx === 0 ? formatDate(meal.date) : ''}</td>
+            <td>${meal.mealType || 'Meal'}</td>
+            <td><strong>${meal.foodName || meal.name || 'Food'}</strong></td>
           </tr>
-          `).join('')}
+                `);
+              });
+            });
+            return rows.join('');
+          })()}
         </tbody>
       </table>
       ` : '<p style="color: #64748b; text-align: center; padding: 20px;">No food data recorded yet.</p>'}
@@ -879,9 +976,12 @@ export default function ProfileScreen() {
     <div class="section">
       <h2 class="section-title">📋 Questionnaire Progress</h2>
       <div style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-        <p><strong>Status:</strong> ${questionnaireData.isComplete ? '✅ Completed' : '⏳ In Progress'}</p>
-        <p><strong>Progress:</strong> ${questionnaireData.progress || 0}%</p>
-        <p><strong>Answers:</strong> ${questionnaireData.answers ? Object.keys(questionnaireData.answers).length : 0} questions answered</p>
+        <p><strong>Status:</strong> ${questionnaireData.status === 'completed' ? '✅ Completed' : questionnaireData.status === 'in-progress' ? '⏳ In Progress' : '📝 Not Started'}</p>
+        <p><strong>Progress:</strong> ${questionnaireData.progress?.percentComplete || 0}%</p>
+        <p><strong>Questions Answered:</strong> ${questionnaireData.progress?.answeredQuestions || 0} / ${questionnaireData.progress?.totalQuestions || 0}</p>
+        ${questionnaireData.completedAt ? `<p><strong>Completed:</strong> ${formatTimestamp(questionnaireData.completedAt)}</p>` : ''}
+        ${questionnaireData.lastUpdatedAt ? `<p><strong>Last Updated:</strong> ${formatTimestamp(questionnaireData.lastUpdatedAt)}</p>` : ''}
+        ${questionnaireData.language ? `<p><strong>Language:</strong> ${questionnaireData.language === 'english' ? '🇬🇧 English' : '🇮🇳 தமிழ்'}</p>` : ''}
       </div>
     </div>
     ` : ''}
