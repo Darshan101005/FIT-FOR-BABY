@@ -1034,11 +1034,13 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   saveButtonSolid: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#98be4e',
     paddingVertical: 16,
+    paddingHorizontal: 16,
     gap: 8,
   },
   saveButtonText: { fontSize: 16, fontWeight: '700', color: '#ffffff' },

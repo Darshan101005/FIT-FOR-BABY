@@ -404,7 +404,7 @@ export default function LogStepsScreen() {
               ) : (
                 <View style={styles.imageUploadRow}>
                   <TouchableOpacity 
-                    style={styles.uploadButton}
+                    style={[styles.uploadButton, { backgroundColor: COLORS.primaryDark }]}
                     onPress={pickImageFromGallery}
                     activeOpacity={0.8}
                   >
@@ -418,7 +418,7 @@ export default function LogStepsScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity 
-                    style={styles.uploadButton}
+                    style={[styles.uploadButton, { backgroundColor: COLORS.accentDark }]}
                     onPress={takePhoto}
                     activeOpacity={0.8}
                   >
@@ -683,6 +683,7 @@ const styles = StyleSheet.create({
   },
   imageUploadRow: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     gap: 12,
   },
   uploadButton: {
@@ -696,16 +697,20 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   uploadButtonGradient: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
+    paddingHorizontal: 12,
     gap: 8,
   },
   uploadButtonText: {
     color: '#ffffff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
+    flexShrink: 1,
   },
   imagePreviewContainer: {
     position: 'relative',

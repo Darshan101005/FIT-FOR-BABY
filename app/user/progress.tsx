@@ -736,12 +736,14 @@ export default function ProgressScreen() {
           style={[
             styles.summaryCard,
             selectedMetric === 'steps' && styles.summaryCardActive,
-            selectedMetric === 'steps' && { backgroundColor: '#e8f5d6' },
           ]}
           activeOpacity={0.8}
           onPress={() => setSelectedMetric('steps')}
         >
-          <View style={styles.summaryGradientWrapper}>
+          <View style={[
+            styles.summaryGradientWrapper,
+            selectedMetric === 'steps' && { backgroundColor: '#e8f5d6' },
+          ]}>
             <MaterialCommunityIcons 
               name="walk" 
               size={28} 
@@ -766,12 +768,14 @@ export default function ProgressScreen() {
           style={[
             styles.summaryCard,
             selectedMetric === 'calories' && styles.summaryCardActive,
-            selectedMetric === 'calories' && { backgroundColor: '#fee2e2' },
           ]}
           activeOpacity={0.8}
           onPress={() => setSelectedMetric('calories')}
         >
-          <View style={styles.summaryGradientWrapper}>
+          <View style={[
+            styles.summaryGradientWrapper,
+            selectedMetric === 'calories' && { backgroundColor: '#fee2e2' },
+          ]}>
             <MaterialCommunityIcons 
               name="fire" 
               size={28} 
@@ -796,12 +800,14 @@ export default function ProgressScreen() {
           style={[
             styles.summaryCard,
             selectedMetric === 'exercise' && styles.summaryCardActive,
-            selectedMetric === 'exercise' && { backgroundColor: '#fef3c7' },
           ]}
           activeOpacity={0.8}
           onPress={() => setSelectedMetric('exercise')}
         >
-          <View style={styles.summaryGradientWrapper}>
+          <View style={[
+            styles.summaryGradientWrapper,
+            selectedMetric === 'exercise' && { backgroundColor: '#fef3c7' },
+          ]}>
             <MaterialCommunityIcons 
               name="run-fast" 
               size={28} 
@@ -1248,7 +1254,7 @@ const styles = StyleSheet.create({
   timeRangeText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
   timeRangeTextActive: { color: '#ffffff' },
   summaryContainer: { gap: 12, marginBottom: 20 },
-  summaryRow: { flexDirection: 'row', gap: 12 },
+  summaryRow: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },
   summaryCard: {
     flex: 1,
     borderRadius: 16,
@@ -1263,11 +1269,11 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   summaryGradientWrapper: {
+    flex: 1,
     padding: 16,
     alignItems: 'center',
     minHeight: 100,
     justifyContent: 'center',
-    backgroundColor: 'transparent',
     borderRadius: 16,
   },
   summaryGradient: {
@@ -1342,33 +1348,38 @@ const styles = StyleSheet.create({
   // New simple weight progress styles
   weightProgressContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     paddingVertical: 20,
+    gap: 8,
   },
   weightBox: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#f8fafc',
     borderRadius: 16,
     paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingHorizontal: 12,
     borderWidth: 2,
     borderColor: '#e2e8f0',
+    minWidth: 80,
   },
   weightBoxLabel: { 
-    fontSize: 12, 
+    fontSize: 11, 
     color: '#64748b', 
     fontWeight: '500',
     marginBottom: 4,
+    textAlign: 'center',
   },
   weightBoxValue: { 
-    fontSize: 32, 
+    fontSize: 28, 
     fontWeight: '800', 
     color: '#0f172a',
   },
   weightBoxUnit: { 
-    fontSize: 14, 
+    fontSize: 13, 
     color: '#64748b', 
     fontWeight: '600',
     marginTop: 2,
@@ -1376,13 +1387,16 @@ const styles = StyleSheet.create({
   weightChangeContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 4,
+    flexShrink: 1,
+    minWidth: 60,
   },
   weightChangeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     marginTop: 4,
     textAlign: 'center',
+    flexWrap: 'wrap',
   },
   // Keep old styles for backward compatibility
   weightStats: {
