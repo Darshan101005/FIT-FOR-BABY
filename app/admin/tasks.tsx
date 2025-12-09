@@ -1,6 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -553,113 +553,6 @@ export default function AdminTasksScreen() {
           ))}
         </View>
         )}
-      </View>
-
-      {/* Data Collection Periods */}
-      <View style={styles.configCard}>
-        <View style={styles.configHeader}>
-          <View style={styles.configHeaderLeft}>
-            <Ionicons name="calendar" size={22} color={COLORS.accent} />
-            <Text style={styles.configTitle}>Data Collection Periods</Text>
-          </View>
-        </View>
-
-        {/* Diet Logging Window */}
-        <View style={styles.periodItem}>
-          <View style={styles.periodHeader}>
-            <MaterialCommunityIcons name="food-apple" size={20} color={COLORS.error} />
-            <Text style={styles.periodTitle}>Diet Logging Window</Text>
-            <View style={[styles.periodStatus, collectionPeriods.dietLogging.active && styles.periodStatusActive]}>
-              <Text style={[styles.periodStatusText, collectionPeriods.dietLogging.active && styles.periodStatusTextActive]}>
-                {collectionPeriods.dietLogging.active ? 'Active' : 'Inactive'}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.dateInputsContainer}>
-            <View style={styles.dateInputGroup}>
-              <Text style={styles.dateLabel}>Start Date</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={collectionPeriods.dietLogging.startDate}
-                onChangeText={(text) => setCollectionPeriods({
-                  ...collectionPeriods,
-                  dietLogging: { ...collectionPeriods.dietLogging, startDate: text }
-                })}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={COLORS.textMuted}
-              />
-            </View>
-            <View style={styles.dateInputGroup}>
-              <Text style={styles.dateLabel}>End Date</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={collectionPeriods.dietLogging.endDate}
-                onChangeText={(text) => setCollectionPeriods({
-                  ...collectionPeriods,
-                  dietLogging: { ...collectionPeriods.dietLogging, endDate: text }
-                })}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={COLORS.textMuted}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Exercise Frequency */}
-        <View style={styles.periodItem}>
-          <View style={styles.periodHeader}>
-            <Ionicons name="fitness" size={20} color={COLORS.warning} />
-            <Text style={styles.periodTitle}>Exercise Logging</Text>
-          </View>
-          <View style={styles.toggleGroup}>
-            <TouchableOpacity
-              style={[styles.toggleOption, collectionPeriods.exerciseFrequency === 'continuous' && styles.toggleOptionActive]}
-              onPress={() => setCollectionPeriods({ ...collectionPeriods, exerciseFrequency: 'continuous' })}
-            >
-              <Text style={[styles.toggleText, collectionPeriods.exerciseFrequency === 'continuous' && styles.toggleTextActive]}>
-                Continuous
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.toggleOption, collectionPeriods.exerciseFrequency === 'period' && styles.toggleOptionActive]}
-              onPress={() => setCollectionPeriods({ ...collectionPeriods, exerciseFrequency: 'period' })}
-            >
-              <Text style={[styles.toggleText, collectionPeriods.exerciseFrequency === 'period' && styles.toggleTextActive]}>
-                Period-based
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Weight Tracking */}
-        <View style={styles.periodItem}>
-          <View style={styles.periodHeader}>
-            <MaterialCommunityIcons name="scale-bathroom" size={20} color={COLORS.info} />
-            <Text style={styles.periodTitle}>Weight Tracking</Text>
-          </View>
-          <View style={styles.toggleGroup}>
-            <TouchableOpacity
-              style={[styles.toggleOption, collectionPeriods.weightTracking === 'weekly' && styles.toggleOptionActive]}
-              onPress={() => setCollectionPeriods({ ...collectionPeriods, weightTracking: 'weekly' })}
-            >
-              <Text style={[styles.toggleText, collectionPeriods.weightTracking === 'weekly' && styles.toggleTextActive]}>
-                Weekly
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.toggleOption, collectionPeriods.weightTracking === 'monthly' && styles.toggleOptionActive]}
-              onPress={() => setCollectionPeriods({ ...collectionPeriods, weightTracking: 'monthly' })}
-            >
-              <Text style={[styles.toggleText, collectionPeriods.weightTracking === 'monthly' && styles.toggleTextActive]}>
-                Monthly
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.savePeriodButton} onPress={handleSaveCollectionPeriods}>
-          <Text style={styles.savePeriodButtonText}>Save Collection Settings</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Diet Recommendations - Individual User */}
