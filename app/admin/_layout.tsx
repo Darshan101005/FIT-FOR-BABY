@@ -64,11 +64,11 @@ const navItems: NavItem[] = [
     route: '/admin/users',
   },
   {
-    id: 'questionnaire',
-    label: 'Questionnaires',
-    icon: 'clipboard-list-outline',
-    iconFamily: 'MaterialCommunityIcons',
-    route: '/admin/questionnaire',
+    id: 'appointments',
+    label: 'Appointments',
+    icon: 'calendar-outline',
+    iconFamily: 'Ionicons',
+    route: '/admin/appointments',
   },
   {
     id: 'tasks',
@@ -85,11 +85,11 @@ const navItems: NavItem[] = [
     route: '/admin/monitoring',
   },
   {
-    id: 'appointments',
-    label: 'Appointments',
-    icon: 'calendar-outline',
-    iconFamily: 'Ionicons',
-    route: '/admin/appointments',
+    id: 'questionnaire',
+    label: 'Questionnaires',
+    icon: 'clipboard-list-outline',
+    iconFamily: 'MaterialCommunityIcons',
+    route: '/admin/questionnaire',
   },
   {
     id: 'communication',

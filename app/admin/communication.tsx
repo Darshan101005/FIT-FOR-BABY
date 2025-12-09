@@ -2264,13 +2264,20 @@ export default function AdminCommunicationScreen() {
                 <Text style={styles.chatModalHeaderName}>{selectedChat.odAaByuserName || 'User'}</Text>
                 <Text style={styles.chatModalHeaderId}>{selectedChat.coupleId}</Text>
               </View>
-              <TouchableOpacity onPress={() => handleToggleChatStatus(selectedChat)}>
-                <Ionicons 
-                  name={selectedChat.status === 'resolved' ? 'refresh' : 'checkmark-done'} 
-                  size={24} 
-                  color={selectedChat.status === 'resolved' ? COLORS.primary : COLORS.success} 
-                />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 16 }}>
+                <TouchableOpacity onPress={() => {
+                  setShowClearChatModal(true);
+                }}>
+                  <Ionicons name="trash-outline" size={22} color={COLORS.error} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleToggleChatStatus(selectedChat)}>
+                  <Ionicons 
+                    name={selectedChat.status === 'resolved' ? 'refresh' : 'checkmark-done'} 
+                    size={22} 
+                    color={selectedChat.status === 'resolved' ? COLORS.primary : COLORS.success} 
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Messages */}
