@@ -11,16 +11,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
-    Animated,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -56,7 +56,7 @@ export default function LogStepsScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
-  const { refreshDailyData } = useUserData();
+  const { refreshDailyData, globalSettings } = useUserData();
   const { t } = useLanguage();
 
   const [stepCount, setStepCount] = useState('');
@@ -497,9 +497,9 @@ export default function LogStepsScreen() {
             
             {/* Helper text for optional image */}
             {!imageUri && (
-              <View style={[styles.proofRequiredMessage, { backgroundColor: COLORS.primary + '10', borderColor: COLORS.primary + '30' }]}>
+              <View style={[styles.proofRequiredMessage, { backgroundColor: COLORS.primary + '10', borderColor: COLORS.primary + '30', marginBottom: 18 }]}> 
                 <Ionicons name="information-circle-outline" size={16} color={COLORS.primary} />
-                <Text style={[styles.proofRequiredText, { color: COLORS.primary }]}>
+                <Text style={[styles.proofRequiredText, { color: COLORS.primary }]}> 
                   {t('log.steps.stepCounterDesc')}
                 </Text>
               </View>
@@ -510,8 +510,12 @@ export default function LogStepsScreen() {
               <View style={styles.entriesSection}>
                 <View style={styles.entriesHeader}>
                   <Text style={styles.inputLabel}>{t('log.steps.todaysTotal')} ({stepEntries.length})</Text>
-                  <View style={styles.totalBadge}>
-                    <Text style={styles.totalBadgeText}>{t('home.goal')}: {getTotalSteps().toLocaleString()}</Text>
+                  <View style={styles.goalRow}>
+                    <View style={styles.goalBadge}>
+                      <Text style={styles.goalBadgeText}>
+                        Goal: {globalSettings?.dailySteps ? globalSettings.dailySteps.toLocaleString() : '—'}
+                      </Text>
+                    </View>
                   </View>
                 </View>
                 {stepEntries.map((entry, index) => (
@@ -526,12 +530,14 @@ export default function LogStepsScreen() {
                           <Text style={styles.entryTime}>{formatTime(entry.loggedAt)}</Text>
                         </View>
                       </View>
-                      <TouchableOpacity 
-                        style={styles.deleteButton}
-                        onPress={() => handleRemoveEntry(entry.id)}
-                      >
-                        <Ionicons name="trash-outline" size={20} color={COLORS.error} />
-                      </TouchableOpacity>
+                      {index === 0 && (
+                        <TouchableOpacity 
+                          style={styles.deleteButton}
+                          onPress={() => handleRemoveEntry(entry.id)}
+                        >
+                          <Ionicons name="trash-outline" size={20} color={COLORS.error} />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 ))}
@@ -783,16 +789,29 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
-  totalBadge: {
-    backgroundColor: COLORS.accentLight,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+  goalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 4,
+    marginBottom: 2,
   },
-  totalBadgeText: {
-    color: COLORS.accentDark,
-    fontSize: 14,
+  goalBadge: {
+    backgroundColor: '#e6f9d7',
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 22,
+    minWidth: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 0,
+  },
+  goalBadgeText: {
+    color: '#4e8c2f',
+    fontSize: 16,
     fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.2,
   },
   entryCard: {
     backgroundColor: COLORS.cardBackground,
