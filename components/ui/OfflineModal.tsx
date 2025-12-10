@@ -97,30 +97,20 @@ export default function OfflineModal({ visible, onExit }: OfflineModalProps) {
   const handleRetry = async () => {
     try {
       let isOnline = false;
-
       if (Platform.OS === 'web') {
-        // Check web connection
         isOnline = navigator.onLine;
       } else {
-        // Check mobile connection
         const state = await NetInfo.fetch();
         isOnline = state.isConnected ?? false;
       }
-
       if (isOnline) {
-        // Connection restored - go to home
+        // Connection restored - close modal
         onExit();
-        router.replace('/');
-      } else {
-        // Still offline - show 404 page
-        onExit();
-        router.push('/+not-found');
       }
+      // If still offline, do nothing (modal stays open)
     } catch (error) {
-      // Error checking connection - show 404
+      // On error, do nothing (modal stays open)
       console.error('Error checking network:', error);
-      onExit();
-      router.push('/+not-found');
     }
   };
 
@@ -293,13 +283,13 @@ const styles = StyleSheet.create({
   },
   // Buttons
   retryButton: {
-    backgroundColor: '#111827', // Dark/Black button for high contrast
+    backgroundColor: '#006dab', // FitForBaby blue theme
     width: '100%',
     paddingVertical: 18,
     borderRadius: 20,
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: '#006dab', // Blue shadow
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.2,
     shadowRadius: 10,
