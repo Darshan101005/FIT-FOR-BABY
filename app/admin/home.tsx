@@ -7,17 +7,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -539,11 +539,17 @@ export default function AdminHomeScreen() {
       
       if (result.success) {
         setReminderStatus('success');
-        setReminderMessage(
-          result.error 
-            ? result.error 
-            : `Reminder sent to ${result.sentCount} couple(s). Users will see it in their app.`
-        );
+        // Show appropriate message based on whether push was sent
+        let message = `Reminder saved for ${result.sentCount} couple(s).`;
+        if (result.pushSent && result.pushSent > 0) {
+          message += ` Push notification sent to ${result.pushSent} device(s).`;
+        } else {
+          message += ' Users will see it when they open the app.';
+        }
+        if (result.error) {
+          message = result.error;
+        }
+        setReminderMessage(message);
       } else {
         setReminderStatus('error');
         setReminderMessage(result.error || 'Could not send reminders. Please try again.');

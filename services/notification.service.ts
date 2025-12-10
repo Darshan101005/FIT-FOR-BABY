@@ -1,6 +1,7 @@
 // ============================================
 // FCM Push Notification Service
 // Handles push notification registration, permissions, and sending
+// Supports both Expo push tokens and native FCM tokens (EAS builds)
 // ============================================
 
 import { COLLECTIONS } from '@/types/firebase.types';
@@ -8,8 +9,12 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { addDoc, arrayRemove, arrayUnion, collection, doc, getDoc, getDocs, query, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
 import { db } from './firebase';
+
+// Get Firebase Functions instance
+const functions = getFunctions();
 
 // Configure how notifications are handled when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -47,8 +52,8 @@ export interface ReminderNotification {
 
 /**
  * Request notification permissions and get the push token
- * Call this when the user logs in or when needed
- * Note: Push tokens are not available in Expo Go SDK 53+, requires development build
+ * For EAS builds: Gets native FCM token
+ * For Expo Go: Gets Expo push token (limited functionality)
  */
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   let token: string | null = null;
@@ -61,7 +66,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
   // Check if running on web
   if (Platform.OS === 'web') {
-    console.log('Push notifications are not fully supported on web via Expo');
+    console.log('Push notifications are not fully supported on web');
     return null;
   }
 
@@ -81,33 +86,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       return null;
     }
 
-    // Try to get the Expo push token
-    // Note: This will fail in Expo Go SDK 53+ - requires development build
-    try {
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId || 
-                        Constants.easConfig?.projectId;
-      
-      if (!projectId) {
-        console.log('Project ID not found. Using default configuration.');
-        // Try to get token without project ID for development
-        const tokenResponse = await Notifications.getExpoPushTokenAsync();
-        token = tokenResponse.data;
-      } else {
-        const tokenResponse = await Notifications.getExpoPushTokenAsync({
-          projectId: projectId,
-        });
-        token = tokenResponse.data;
-      }
-
-      console.log('Push notification token:', token);
-    } catch (tokenError: any) {
-      // This is expected in Expo Go SDK 53+
-      console.log('Could not get push token (expected in Expo Go SDK 53+):', tokenError.message);
-      // Return null but don't throw - app should continue working
-      return null;
-    }
-
-    // Android-specific: Set up notification channel
+    // Android-specific: Set up notification channels FIRST
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Default',
@@ -116,7 +95,6 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
         lightColor: '#006dab',
       });
 
-      // High priority channel for reminders
       await Notifications.setNotificationChannelAsync('reminders', {
         name: 'Reminders',
         description: 'Daily log reminders and alerts',
@@ -125,6 +103,31 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
         lightColor: '#ef4444',
         sound: 'default',
       });
+    }
+
+    // Try to get NATIVE FCM token first (for EAS builds)
+    try {
+      const deviceToken = await Notifications.getDevicePushTokenAsync();
+      token = deviceToken.data;
+      console.log('Native FCM token obtained:', token?.substring(0, 20) + '...');
+    } catch (nativeError: any) {
+      console.log('Could not get native FCM token:', nativeError.message);
+      
+      // Fallback: Try Expo push token (for Expo Go)
+      try {
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId || 
+                          Constants.easConfig?.projectId;
+        
+        const tokenResponse = projectId
+          ? await Notifications.getExpoPushTokenAsync({ projectId })
+          : await Notifications.getExpoPushTokenAsync();
+        
+        token = tokenResponse.data;
+        console.log('Expo push token obtained:', token);
+      } catch (expoError: any) {
+        console.log('Could not get Expo push token:', expoError.message);
+        return null;
+      }
     }
   } catch (error) {
     console.error('Error registering for push notifications:', error);
@@ -135,6 +138,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
 /**
  * Save the push token to Firestore for a couple user
+ * Uses Cloud Function for FCM tokens, direct Firestore for Expo tokens
  */
 export async function savePushTokenForUser(
   coupleId: string,
@@ -142,6 +146,34 @@ export async function savePushTokenForUser(
   token: string
 ): Promise<boolean> {
   try {
+    // Check if it's a native FCM token (not Expo push token)
+    const isNativeFCM = !token.startsWith('ExponentPushToken');
+    
+    if (isNativeFCM) {
+      // Use Cloud Function to register FCM token
+      try {
+        const registerFCMToken = httpsCallable(functions, 'registerFCMToken');
+        const result = await registerFCMToken({
+          coupleId,
+          gender,
+          token,
+          deviceInfo: {
+            platform: Platform.OS,
+            deviceName: Device.deviceName || 'Unknown Device',
+            osVersion: Platform.Version?.toString() || 'Unknown',
+          },
+        });
+        
+        const data = result.data as { success: boolean; message: string };
+        console.log('FCM token registration result:', data.message);
+        return data.success;
+      } catch (cloudError: any) {
+        console.log('Cloud Function not available, falling back to direct Firestore:', cloudError.message);
+        // Fall through to direct Firestore update
+      }
+    }
+
+    // Direct Firestore update (for Expo tokens or Cloud Function fallback)
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
     const coupleDoc = await getDoc(coupleRef);
     
@@ -150,16 +182,14 @@ export async function savePushTokenForUser(
       return false;
     }
 
-    // Get current device tokens
     const coupleData = coupleDoc.data();
-    const userField = gender;
-    const currentTokens = coupleData[userField]?.deviceTokens || [];
+    const currentTokens = coupleData[gender]?.deviceTokens || [];
 
     // Only add if not already present
     if (!currentTokens.includes(token)) {
       await updateDoc(coupleRef, {
-        [`${userField}.deviceTokens`]: arrayUnion(token),
-        [`${userField}.pushNotificationsEnabled`]: true,
+        [`${gender}.deviceTokens`]: arrayUnion(token),
+        [`${gender}.pushNotificationsEnabled`]: true,
         updatedAt: Timestamp.now(),
       });
       console.log('Push token saved for user:', `${coupleId}_${gender}`);
@@ -181,6 +211,22 @@ export async function removePushTokenForUser(
   token: string
 ): Promise<boolean> {
   try {
+    // Check if it's a native FCM token
+    const isNativeFCM = !token.startsWith('ExponentPushToken');
+    
+    if (isNativeFCM) {
+      // Try Cloud Function first
+      try {
+        const unregisterFCMToken = httpsCallable(functions, 'unregisterFCMToken');
+        await unregisterFCMToken({ coupleId, gender, token });
+        console.log('FCM token removed via Cloud Function');
+        return true;
+      } catch (cloudError: any) {
+        console.log('Cloud Function not available, falling back to direct Firestore');
+      }
+    }
+
+    // Direct Firestore update
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
     
     await updateDoc(coupleRef, {
@@ -337,63 +383,73 @@ export async function getAllActiveUserTokens(): Promise<string[]> {
 /**
  * Send reminder to users with pending/missing logs
  * Called from admin panel "Send Reminder" button
- * Always saves to Firestore, attempts push notification (may fail in Expo Go)
+ * Uses Cloud Function for FCM push notifications
  */
 export async function sendMissingLogsReminder(
   coupleIdsWithMissingLogs: string[],
   adminName: string
-): Promise<{ success: boolean; sentCount: number; error?: string }> {
+): Promise<{ success: boolean; sentCount: number; pushSent?: number; error?: string }> {
   try {
     if (coupleIdsWithMissingLogs.length === 0) {
       return { success: true, sentCount: 0 };
     }
 
-    // ALWAYS create a broadcast record for in-app display first
-    // This ensures users see the reminder even if push fails
-    await createBroadcastRecord({
-      title: 'Daily Log Reminder',
-      message: "Don't forget to log your steps, food, and exercise for today! Stay on track with your health goals.",
-      sentBy: 'system',
-      sentByName: adminName,
-      priority: 'important',
-      type: 'reminder', // Reminders show on home page, not in messages
-    });
-
-    // Try to get device tokens for these couples
-    const tokens = await getTokensForUsersWithMissingLogs(coupleIdsWithMissingLogs);
-
-    // If no tokens, still return success since broadcast was saved
-    if (tokens.length === 0) {
-      console.log('No push tokens found, but broadcast saved to Firestore');
-      return { 
-        success: true, 
-        sentCount: coupleIdsWithMissingLogs.length,
-        error: 'Reminder saved! Push notifications unavailable (users will see it when they open the app).'
-      };
-    }
-
-    // Try to send push notification (may fail in Expo Go SDK 53+)
+    // Try Cloud Function first (handles both Firestore save and FCM push)
     try {
-      const result = await sendPushNotification(tokens, {
-        title: '📋 Daily Log Reminder',
-        body: "Don't forget to log your steps, food, and exercise for today! Stay on track with your health goals.",
-        data: {
-          type: 'missing_logs_reminder',
-          screen: '/user/home',
-        },
+      const sendReminder = httpsCallable(functions, 'sendMissingLogsReminder');
+      const result = await sendReminder({
+        coupleIds: coupleIdsWithMissingLogs,
+        adminName: adminName,
       });
 
-      return { 
-        success: true, 
-        sentCount: tokens.length 
+      const data = result.data as {
+        success: boolean;
+        notificationId?: string;
+        sentCount?: number;
+        pushSent?: number;
+        pushFailed?: number;
+        message?: string;
+        error?: string;
       };
-    } catch (pushError) {
-      // Push failed but broadcast is saved
-      console.log('Push notification failed, but broadcast saved:', pushError);
-      return { 
-        success: true, 
+
+      return {
+        success: data.success,
+        sentCount: data.sentCount || coupleIdsWithMissingLogs.length,
+        pushSent: data.pushSent || 0,
+        error: data.message || data.error,
+      };
+    } catch (cloudError: any) {
+      console.log('Cloud Function not deployed or error, falling back to local:', cloudError.message);
+      
+      // Fallback: Create broadcast record locally
+      await createBroadcastRecord({
+        title: 'Daily Log Reminder',
+        message: "Don't forget to log your steps, food, and exercise for today! Stay on track with your health goals.",
+        sentBy: 'system',
+        sentByName: adminName,
+        priority: 'important',
+        type: 'reminder',
+      });
+
+      // Try Expo push as fallback
+      const tokens = await getTokensForUsersWithMissingLogs(coupleIdsWithMissingLogs);
+      
+      if (tokens.length > 0) {
+        try {
+          await sendPushNotification(tokens, {
+            title: '📋 Daily Log Reminder',
+            body: "Don't forget to log your steps, food, and exercise for today! Stay on track with your health goals.",
+            data: { type: 'reminder', screen: '/user/home' },
+          });
+        } catch (pushError) {
+          console.log('Expo push failed:', pushError);
+        }
+      }
+
+      return {
+        success: true,
         sentCount: coupleIdsWithMissingLogs.length,
-        error: 'Reminder saved! Push notifications may not work in Expo Go.'
+        error: 'Reminder saved! Deploy Cloud Functions for better push notification support.',
       };
     }
   } catch (error: any) {
@@ -401,7 +457,6 @@ export async function sendMissingLogsReminder(
     return { success: false, sentCount: 0, error: error.message };
   }
 }
-
 /**
  * Send a custom broadcast/reminder to all users
  */

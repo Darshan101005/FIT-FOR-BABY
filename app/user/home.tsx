@@ -83,6 +83,7 @@ export default function UserHomeScreen() {
     streakData,
     refreshDailyData,
     refreshUserInfo,
+    refreshMessages,
     dismissReminder,
     clearAllReminders,
   } = useUserData();
@@ -129,12 +130,16 @@ export default function UserHomeScreen() {
     // Set up notification listeners
     const notificationReceivedListener = addNotificationReceivedListener(async notification => {
       console.log('Notification received:', notification);
-      // Refresh data from context when notification received
+      // Refresh reminders when a push notification arrives
+      // This ensures new reminders show up in the bell icon immediately
+      refreshMessages();
       refreshDailyData();
     });
 
     const notificationResponseListener = addNotificationResponseListener(response => {
       console.log('Notification response:', response);
+      // Refresh reminders when user taps notification
+      refreshMessages();
       // Handle notification tap - navigate to appropriate screen
       const data = response.notification.request.content.data;
       if (data?.screen) {
@@ -147,7 +152,7 @@ export default function UserHomeScreen() {
       notificationReceivedListener.remove();
       notificationResponseListener.remove();
     };
-  }, [userInfo, refreshDailyData]);
+  }, [userInfo, refreshDailyData, refreshMessages]);
 
   // Refresh daily data and user info when home page comes into focus (e.g., after logging steps/food/exercise or updating profile)
   useFocusEffect(

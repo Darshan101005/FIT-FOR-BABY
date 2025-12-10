@@ -1,6 +1,6 @@
 /**
  * Firebase Cloud Functions for Fit for Baby App
- * Handles push notifications via FCM
+ * Handles push notifications via FCM for EAS builds
  */
 
 import * as admin from 'firebase-admin';
@@ -23,9 +23,11 @@ interface NotificationPayload {
 }
 
 interface CoupleUser {
-  deviceTokens?: string[];
+  deviceTokens?: string[]; // FCM tokens
+  expoPushTokens?: string[]; // Expo push tokens (legacy)
   pushNotificationsEnabled?: boolean;
   name?: string;
+  id?: string;
 }
 
 interface Couple {
@@ -40,7 +42,7 @@ interface Couple {
 // ============================================
 
 /**
- * Get all device tokens for specified couples
+ * Get all FCM device tokens for specified couples
  */
 async function getTokensForCouples(coupleIds: string[]): Promise<string[]> {
   const tokens: string[] = [];
@@ -51,14 +53,18 @@ async function getTokensForCouples(coupleIds: string[]): Promise<string[]> {
       if (coupleDoc.exists) {
         const data = coupleDoc.data() as Couple;
         
-        // Get tokens for male
-        if (data.male?.deviceTokens && data.male.pushNotificationsEnabled !== false) {
-          tokens.push(...data.male.deviceTokens);
+        // Get FCM tokens for male
+        if (data.male?.pushNotificationsEnabled !== false) {
+          if (data.male?.deviceTokens) {
+            tokens.push(...data.male.deviceTokens);
+          }
         }
         
-        // Get tokens for female
-        if (data.female?.deviceTokens && data.female.pushNotificationsEnabled !== false) {
-          tokens.push(...data.female.deviceTokens);
+        // Get FCM tokens for female
+        if (data.female?.pushNotificationsEnabled !== false) {
+          if (data.female?.deviceTokens) {
+            tokens.push(...data.female.deviceTokens);
+          }
         }
       }
     } catch (error) {
@@ -66,12 +72,14 @@ async function getTokensForCouples(coupleIds: string[]): Promise<string[]> {
     }
   }
 
-  // Remove duplicates
-  return [...new Set(tokens)];
+  // Remove duplicates and filter out Expo tokens (they start with ExponentPushToken)
+  return [...new Set(tokens)].filter(token => 
+    token && !token.startsWith('ExponentPushToken')
+  );
 }
 
 /**
- * Get all device tokens for active couples
+ * Get all FCM device tokens for active couples
  */
 async function getAllActiveTokens(): Promise<string[]> {
   const tokens: string[] = [];
@@ -84,11 +92,11 @@ async function getAllActiveTokens(): Promise<string[]> {
     couplesSnapshot.forEach(doc => {
       const data = doc.data() as Couple;
       
-      if (data.male?.deviceTokens && data.male.pushNotificationsEnabled !== false) {
+      if (data.male?.pushNotificationsEnabled !== false && data.male?.deviceTokens) {
         tokens.push(...data.male.deviceTokens);
       }
       
-      if (data.female?.deviceTokens && data.female.pushNotificationsEnabled !== false) {
+      if (data.female?.pushNotificationsEnabled !== false && data.female?.deviceTokens) {
         tokens.push(...data.female.deviceTokens);
       }
     });
@@ -96,7 +104,10 @@ async function getAllActiveTokens(): Promise<string[]> {
     console.error('Error getting all active tokens:', error);
   }
 
-  return [...new Set(tokens)];
+  // Remove duplicates and filter out Expo tokens
+  return [...new Set(tokens)].filter(token => 
+    token && !token.startsWith('ExponentPushToken')
+  );
 }
 
 /**
@@ -105,13 +116,14 @@ async function getAllActiveTokens(): Promise<string[]> {
 async function sendToTokens(
   tokens: string[],
   payload: NotificationPayload
-): Promise<{ success: number; failure: number }> {
+): Promise<{ success: number; failure: number; invalidTokens: string[] }> {
   if (tokens.length === 0) {
-    return { success: 0, failure: 0 };
+    return { success: 0, failure: 0, invalidTokens: [] };
   }
 
   let successCount = 0;
   let failureCount = 0;
+  const invalidTokens: string[] = [];
 
   // FCM allows max 500 tokens per request
   const batchSize = 500;
@@ -129,7 +141,7 @@ async function sendToTokens(
           title: payload.title,
           body: payload.body,
         },
-        data: payload.data,
+        data: payload.data || {},
         android: {
           priority: 'high',
           notification: {
@@ -137,6 +149,8 @@ async function sendToTokens(
             priority: 'high',
             defaultSound: true,
             defaultVibrateTimings: true,
+            icon: 'notification_icon',
+            color: '#006dab',
           },
         },
         apns: {
@@ -144,6 +158,7 @@ async function sendToTokens(
             aps: {
               sound: 'default',
               badge: 1,
+              'content-available': 1,
             },
           },
         },
@@ -153,11 +168,17 @@ async function sendToTokens(
       successCount += response.successCount;
       failureCount += response.failureCount;
 
-      // Log failed tokens for debugging
+      // Track failed tokens for cleanup
       if (response.failureCount > 0) {
         response.responses.forEach((resp, idx) => {
           if (!resp.success) {
-            console.error(`Failed to send to token ${batch[idx]}:`, resp.error);
+            const errorCode = resp.error?.code;
+            // Track tokens that should be removed
+            if (errorCode === 'messaging/invalid-registration-token' ||
+                errorCode === 'messaging/registration-token-not-registered') {
+              invalidTokens.push(batch[idx]);
+            }
+            console.error(`Failed to send to token: ${errorCode}`);
           }
         });
       }
@@ -167,7 +188,56 @@ async function sendToTokens(
     }
   }
 
-  return { success: successCount, failure: failureCount };
+  return { success: successCount, failure: failureCount, invalidTokens };
+}
+
+/**
+ * Remove invalid tokens from Firestore
+ */
+async function cleanupInvalidTokens(invalidTokens: string[]): Promise<void> {
+  if (invalidTokens.length === 0) return;
+
+  try {
+    const couplesSnapshot = await db.collection('couples').get();
+    const batch = db.batch();
+    let updateCount = 0;
+
+    for (const doc of couplesSnapshot.docs) {
+      const data = doc.data() as Couple;
+      let needsUpdate = false;
+      const updates: Record<string, any> = {};
+
+      // Check male tokens
+      if (data.male?.deviceTokens) {
+        const cleanedTokens = data.male.deviceTokens.filter((t: string) => !invalidTokens.includes(t));
+        if (cleanedTokens.length !== data.male.deviceTokens.length) {
+          updates['male.deviceTokens'] = cleanedTokens;
+          needsUpdate = true;
+        }
+      }
+
+      // Check female tokens
+      if (data.female?.deviceTokens) {
+        const cleanedTokens = data.female.deviceTokens.filter((t: string) => !invalidTokens.includes(t));
+        if (cleanedTokens.length !== data.female.deviceTokens.length) {
+          updates['female.deviceTokens'] = cleanedTokens;
+          needsUpdate = true;
+        }
+      }
+
+      if (needsUpdate) {
+        batch.update(doc.ref, updates);
+        updateCount++;
+      }
+    }
+
+    if (updateCount > 0) {
+      await batch.commit();
+      console.log(`Cleaned up invalid tokens from ${updateCount} couples`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up invalid tokens:', error);
+  }
 }
 
 // ============================================
@@ -179,11 +249,6 @@ async function sendToTokens(
  * Called from admin panel
  */
 export const sendMissingLogsReminder = functions.https.onCall(async (data, context) => {
-  // Verify admin authentication (optional - add if needed)
-  // if (!context.auth) {
-  //   throw new functions.https.HttpsError('unauthenticated', 'Must be authenticated');
-  // }
-
   const { coupleIds, adminName } = data;
 
   if (!coupleIds || !Array.isArray(coupleIds) || coupleIds.length === 0) {
@@ -191,46 +256,67 @@ export const sendMissingLogsReminder = functions.https.onCall(async (data, conte
   }
 
   try {
+    const notificationId = db.collection('broadcasts').doc().id;
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+    // Create broadcast/reminder record in Firestore FIRST (for in-app display)
+    // type='reminder' makes it show on home page bell icon
+    await db.collection('broadcasts').doc(notificationId).set({
+      id: notificationId,
+      title: '📋 Daily Log Reminder',
+      message: "Don't forget to log your steps, food, and exercise for today! Stay on track with your health goals.",
+      type: 'reminder', // Shows on home page, not in messages
+      priority: 'important',
+      status: 'sent',
+      sentBy: 'system',
+      sentByName: adminName || 'Admin',
+      targetCoupleIds: coupleIds,
+      createdAt: timestamp,
+      sentAt: timestamp,
+      expiresAt: admin.firestore.Timestamp.fromDate(
+        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+      ),
+    });
+
     // Get device tokens
     const tokens = await getTokensForCouples(coupleIds);
 
     if (tokens.length === 0) {
       return {
-        success: false,
-        sentCount: 0,
-        error: 'No device tokens found for specified users',
+        success: true,
+        notificationId,
+        sentCount: coupleIds.length,
+        pushSent: 0,
+        message: 'Reminder saved! Users will see it when they open the app.',
       };
     }
 
-    // Send notifications
+    // Send FCM push notifications
     const result = await sendToTokens(tokens, {
       title: '📋 Daily Log Reminder',
       body: "Don't forget to log your steps, food, and exercise for today! Stay on track with your health goals.",
       data: {
-        type: 'missing_logs_reminder',
+        type: 'reminder',
+        notificationId: notificationId,
         screen: '/user/home',
+        timestamp: Date.now().toString(),
       },
     });
 
-    // Create broadcast record for in-app display
-    await db.collection('broadcasts').add({
-      title: 'Daily Log Reminder',
-      message: "Don't forget to log your steps, food, and exercise for today! Stay on track with your health goals.",
-      priority: 'important',
-      status: 'sent',
-      sentBy: 'system',
-      sentByName: adminName || 'Admin',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      sentAt: admin.firestore.FieldValue.serverTimestamp(),
-      expiresAt: admin.firestore.Timestamp.fromDate(
-        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      ),
-    });
+    // Cleanup invalid tokens in background
+    if (result.invalidTokens.length > 0) {
+      cleanupInvalidTokens(result.invalidTokens).catch(console.error);
+    }
 
     return {
       success: true,
-      sentCount: result.success,
-      failedCount: result.failure,
+      notificationId,
+      sentCount: coupleIds.length,
+      pushSent: result.success,
+      pushFailed: result.failure,
+      message: result.success > 0 
+        ? `Push sent to ${result.success} device(s).`
+        : 'Reminder saved! Users will see it when they open the app.',
     };
   } catch (error) {
     console.error('Error in sendMissingLogsReminder:', error);
@@ -412,3 +498,134 @@ export const onBroadcastCreated = functions.firestore
       return null;
     }
   });
+
+/**
+ * Register FCM token for a user
+ * Called from the app when user logs in on EAS build
+ */
+export const registerFCMToken = functions.https.onCall(async (data, context) => {
+  const { coupleId, gender, token, deviceInfo } = data;
+
+  if (!coupleId || !gender || !token) {
+    throw new functions.https.HttpsError('invalid-argument', 'coupleId, gender, and token are required');
+  }
+
+  // Skip Expo push tokens - we only want native FCM tokens
+  if (token.startsWith('ExponentPushToken')) {
+    return { success: false, message: 'Expo tokens not supported for native FCM' };
+  }
+
+  try {
+    const coupleRef = db.collection('couples').doc(coupleId);
+    const coupleDoc = await coupleRef.get();
+
+    if (!coupleDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Couple not found');
+    }
+
+    const coupleData = coupleDoc.data() as Couple;
+    const currentTokens = coupleData[gender]?.deviceTokens || [];
+
+    // Only add if not already present
+    if (!currentTokens.includes(token)) {
+      await coupleRef.update({
+        [`${gender}.deviceTokens`]: admin.firestore.FieldValue.arrayUnion(token),
+        [`${gender}.pushNotificationsEnabled`]: true,
+        [`${gender}.lastDeviceInfo`]: deviceInfo || null,
+        [`${gender}.lastTokenUpdated`]: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`FCM token registered for ${coupleId}/${gender}`);
+      return { success: true, message: 'Token registered successfully', isNew: true };
+    }
+
+    return { success: true, message: 'Token already registered', isNew: false };
+  } catch (error) {
+    console.error('Error registering FCM token:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to register token');
+  }
+});
+
+/**
+ * Unregister FCM token when user logs out
+ */
+export const unregisterFCMToken = functions.https.onCall(async (data, context) => {
+  const { coupleId, gender, token } = data;
+
+  if (!coupleId || !gender || !token) {
+    throw new functions.https.HttpsError('invalid-argument', 'coupleId, gender, and token are required');
+  }
+
+  try {
+    const coupleRef = db.collection('couples').doc(coupleId);
+    
+    await coupleRef.update({
+      [`${gender}.deviceTokens`]: admin.firestore.FieldValue.arrayRemove(token),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`FCM token removed for ${coupleId}/${gender}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error unregistering FCM token:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to unregister token');
+  }
+});
+
+/**
+ * HTTP endpoint for testing FCM notifications (development only)
+ */
+export const testFCMNotification = functions.https.onRequest(async (req, res) => {
+  // Allow CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'POST');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.status(204).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const { token, title, body } = req.body;
+
+  if (!token) {
+    res.status(400).json({ error: 'Token is required' });
+    return;
+  }
+
+  try {
+    const message: admin.messaging.Message = {
+      token: token,
+      notification: {
+        title: title || '🧪 Test Notification',
+        body: body || 'This is a test notification from Fit for Baby!',
+      },
+      data: {
+        type: 'test',
+        timestamp: Date.now().toString(),
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'reminders',
+          priority: 'high',
+          icon: 'notification_icon',
+          color: '#006dab',
+        },
+      },
+    };
+
+    const response = await messaging.send(message);
+    console.log('Test notification sent:', response);
+    res.json({ success: true, messageId: response });
+  } catch (error: any) {
+    console.error('Error sending test notification:', error);
+    res.status(500).json({ error: error.message, code: error.code });
+  }
+});
