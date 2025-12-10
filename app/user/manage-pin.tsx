@@ -66,6 +66,19 @@ export default function ManagePinScreen() {
   useEffect(() => {
     const loadUserData = async () => {
       try {
+        // SECURITY: Validate coupleId if coming from params
+        if (paramCoupleId) {
+          const storedCoupleId = await AsyncStorage.getItem('coupleId');
+          const userRole = await AsyncStorage.getItem('userRole');
+          
+          // Only allow if user is authenticated and coupleId matches
+          if (!userRole || (storedCoupleId && storedCoupleId !== paramCoupleId)) {
+            console.warn('Security: Unauthorized coupleId access attempt in manage-pin');
+            router.replace('/login');
+            return;
+          }
+        }
+        
         const storedCoupleId = paramCoupleId || await AsyncStorage.getItem('coupleId') || '';
         const storedGender = paramGender || (await AsyncStorage.getItem('userGender') as 'male' | 'female') || 'male';
         

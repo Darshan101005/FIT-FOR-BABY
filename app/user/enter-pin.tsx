@@ -7,15 +7,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useWindowDimensions,
-    Vibration,
-    View,
+  Animated,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  Vibration,
+  View,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -66,7 +66,23 @@ export default function EnterPinScreen() {
       const paramCoupleId = params.coupleId as string;
       
       if (paramCoupleId) {
-        // Params are available, use them
+        // SECURITY: Validate that this coupleId belongs to the authenticated user
+        // Prevent URL manipulation to view other couples' data
+        const storedCoupleId = await AsyncStorage.getItem('coupleId');
+        const userRole = await AsyncStorage.getItem('userRole');
+        
+        // Only allow if:
+        // 1. User is authenticated (has userRole)
+        // 2. The coupleId matches the authenticated user's coupleId
+        if (!userRole || (storedCoupleId && storedCoupleId !== paramCoupleId)) {
+          console.warn('Security: Unauthorized coupleId access attempt');
+          // Clear any partial auth state and redirect to login
+          await AsyncStorage.multiRemove(['coupleId', 'userGender', 'quickAccessMode', 'userRole', 'pendingProfileSelection']);
+          router.replace('/login');
+          return;
+        }
+        
+        // Params are available and validated, use them
         setCoupleData({
           coupleId: paramCoupleId,
           maleName: params.maleName as string || '',
@@ -284,6 +300,7 @@ export default function EnterPinScreen() {
         
         // Register this device
         try {
+          const browserName = Platform.OS === 'web' ? getBrowserName() : undefined;
           const deviceInfo = {
             deviceName: Platform.OS === 'web' 
               ? (navigator?.userAgent?.includes('Mobile') ? 'Mobile Browser' : 'Web Browser')
@@ -295,7 +312,7 @@ export default function EnterPinScreen() {
               ? (navigator?.platform || 'Web')
               : `${Platform.OS === 'ios' ? 'iOS' : 'Android'}`,
             osVersion: Platform.OS === 'web' ? undefined : String(Platform.Version),
-            browser: Platform.OS === 'web' ? getBrowserName() : undefined,
+            browser: browserName || undefined,
             deviceModel: Platform.OS === 'web' ? undefined : Platform.OS,
           };
           const result = await deviceService.registerDevice(coupleId, selectedGender, deviceInfo);
@@ -673,16 +690,6 @@ export default function EnterPinScreen() {
           </Animated.View>
         </Animated.View>
       )}
-
-      {/* Simple back button only */}
-      <View style={styles.topBar}>
-        <TouchableOpacity 
-          onPress={() => router.back()} 
-          style={[styles.backButton, { backgroundColor: isDarkMode ? colors.cardBackground : '#f1f5f9' }]}
-        >
-          <Ionicons name="close" size={24} color={colors.text} />
-        </TouchableOpacity>
-      </View>
 
       <View style={[styles.content, isMobile && styles.contentMobile]}>
         {/* Profile Avatar */}

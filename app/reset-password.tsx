@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -26,6 +26,25 @@ export default function ResetPasswordScreen() {
   const mode = params.mode as string;
   const coupleId = params.coupleId as string;
   const gender = params.gender as 'male' | 'female';
+
+  // SECURITY: Validate coupleId on mount
+  useEffect(() => {
+    const validateAccess = async () => {
+      if (coupleId) {
+        const storedCoupleId = await AsyncStorage.getItem('coupleId');
+        const userRole = await AsyncStorage.getItem('userRole');
+        
+        // Only allow if user is authenticated and coupleId matches
+        if (!userRole || (storedCoupleId && storedCoupleId !== coupleId)) {
+          console.warn('Security: Unauthorized coupleId access attempt in reset-password');
+          router.replace('/login');
+          return;
+        }
+      }
+    };
+    
+    validateAccess();
+  }, [coupleId]);
 
   const isMobileWeb = useMemo(() => {
     if (!isWeb) return false;

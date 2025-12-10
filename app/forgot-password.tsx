@@ -4,16 +4,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import {
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    Animated,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -582,7 +582,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: isWeb ? 40 : 60,
     alignItems: 'center',
-    justifyContent: 'center', // Added to center vertically
+    justifyContent: 'center',
   },
   logoContainer: {
     alignItems: 'center',
@@ -691,10 +691,12 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     marginBottom: 16,
     paddingHorizontal: 14,
+    paddingVertical: 4,
     overflow: 'visible',
   },
   inputIcon: {
     marginRight: 10,
+    alignSelf: 'center',
   },
   input: {
     flex: 1,
@@ -702,6 +704,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#0f172a',
     backgroundColor: 'transparent',
+    paddingVertical: 0,
+    textAlignVertical: 'center',
   },
   eyeIcon: {
     padding: 8,
