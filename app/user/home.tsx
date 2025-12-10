@@ -805,6 +805,12 @@ export default function UserHomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    // For mobile web browsers, use min-height with dvh (dynamic viewport height)
+    // This accounts for mobile browser URL bar appearing/disappearing
+    ...(isWeb && {
+      minHeight: '100dvh' as any,
+      height: '100dvh' as any,
+    }),
   },
   scrollContent: {
     paddingBottom: 100,
@@ -1154,21 +1160,41 @@ const styles = StyleSheet.create({
 
   // Notification Sidebar
   sidebarOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    // Use fixed position for web to ensure overlay covers entire viewport
+    ...(isWeb ? {
+      position: 'fixed' as any,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 100,
+    } : {
+      position: 'absolute' as any,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 100,
+    }),
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    zIndex: 100,
   },
   notificationSidebar: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: 300,
-    zIndex: 101,
+    // Use fixed position for web to ensure sidebar stays in place
+    ...(isWeb ? {
+      position: 'fixed' as any,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      width: 300,
+      zIndex: 101,
+    } : {
+      position: 'absolute' as any,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      width: 300,
+      zIndex: 101,
+    }),
     shadowColor: '#000',
     shadowOffset: { width: -4, height: 0 },
     shadowOpacity: 0.15,

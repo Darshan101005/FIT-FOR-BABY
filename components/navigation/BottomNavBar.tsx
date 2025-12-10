@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePathname, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+    Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -13,6 +14,8 @@ import {
     View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const isWeb = Platform.OS === 'web';
 
 const BROADCASTS_READ_KEY = 'broadcasts_last_read_timestamp';
 
@@ -213,10 +216,20 @@ export default function BottomNavBar() {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    // Use fixed position for web (especially mobile browsers) to prevent nav bar moving
+    // when URL bar appears/disappears
+    ...(isWeb ? {
+      position: 'fixed' as any,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 1000,
+    } : {
+      position: 'absolute' as any,
+      bottom: 0,
+      left: 0,
+      right: 0,
+    }),
     borderTopWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },

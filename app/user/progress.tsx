@@ -1200,6 +1200,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+    // For mobile web browsers, use min-height with dvh (dynamic viewport height)
+    ...(isWeb && {
+      minHeight: '100dvh' as any,
+      height: '100dvh' as any,
+    }),
   },
   header: {
     flexDirection: 'row',
@@ -1230,7 +1235,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scrollContent: { flexGrow: 1, paddingBottom: isWeb ? 40 : 100 },
+  scrollContent: { flexGrow: 1, paddingBottom: 100 },
   content: {
     padding: isWeb ? 40 : 16,
     maxWidth: 800,

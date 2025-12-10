@@ -4,17 +4,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Image,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Animated,
+    Image,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
@@ -541,6 +541,11 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     backgroundColor: COLORS.background,
+    // For mobile web browsers, use min-height with dvh (dynamic viewport height)
+    ...(isWeb && {
+      minHeight: '100dvh' as any,
+      height: '100dvh' as any,
+    }),
   },
 
   // Sidebar Styles
@@ -723,22 +728,42 @@ const styles = StyleSheet.create({
 
   // Mobile Drawer Styles
   drawerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    // Use fixed position for web to ensure overlay covers entire viewport
+    ...(isWeb ? {
+      position: 'fixed' as any,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 100,
+    } : {
+      position: 'absolute' as any,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 100,
+    }),
     backgroundColor: 'rgba(0,0,0,0.5)',
-    zIndex: 100,
   },
   mobileDrawer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    width: 280,
+    // Use fixed position for web to ensure drawer stays in place
+    ...(isWeb ? {
+      position: 'fixed' as any,
+      top: 0,
+      left: 0,
+      bottom: 0,
+      width: 280,
+      zIndex: 101,
+    } : {
+      position: 'absolute' as any,
+      top: 0,
+      left: 0,
+      bottom: 0,
+      width: 280,
+      zIndex: 101,
+    }),
     backgroundColor: COLORS.surface,
-    zIndex: 101,
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.25,
@@ -873,6 +898,14 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     paddingTop: 8,
+    // Use fixed position for web to prevent nav bar moving when URL bar appears/disappears
+    ...(isWeb && {
+      position: 'fixed' as any,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 1000,
+    }),
   },
   bottomNavItem: {
     flex: 1,
@@ -902,6 +935,10 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     backgroundColor: COLORS.background,
+    // Add padding bottom on mobile web to account for fixed bottom nav
+    ...(isWeb && {
+      paddingBottom: 70,
+    }),
   },
   mainContentWithSidebar: {
     marginLeft: 0,

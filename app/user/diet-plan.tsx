@@ -232,6 +232,11 @@ export default function DietPlanScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    // For mobile web browsers, use min-height with dvh (dynamic viewport height)
+    ...(isWeb && {
+      minHeight: '100dvh' as any,
+      height: '100dvh' as any,
+    }),
   },
   header: {
     paddingTop: isWeb ? 24 : 50,
