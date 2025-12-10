@@ -1567,6 +1567,12 @@ const styles = StyleSheet.create({
   statsGridMobile: {
     gap: 10,
     justifyContent: 'space-between',
+    // For mobile web, use CSS grid for reliable 2-column layout
+    ...(isWeb && {
+      display: 'grid' as any,
+      gridTemplateColumns: 'repeat(2, 1fr)' as any,
+      gap: 10,
+    }),
   },
   statCard: {
     flex: 1,
@@ -1582,9 +1588,16 @@ const styles = StyleSheet.create({
   },
   statCardMobile: {
     flex: 0,
-    width: '48%',
-    minWidth: 0,
-    padding: 12,
+    // For mobile web, reset width since grid handles layout
+    ...(isWeb ? {
+      width: 'auto' as any,
+      minWidth: 0,
+      padding: 14,
+    } : {
+      width: '48%',
+      minWidth: 0,
+      padding: 12,
+    }),
   },
   statIconBg: {
     width: 44,
@@ -1617,6 +1630,12 @@ const styles = StyleSheet.create({
   statLabelMobile: {
     fontSize: 12,
     marginTop: 2,
+    // For mobile web, prevent text from wrapping character by character
+    ...(isWeb && {
+      whiteSpace: 'nowrap' as any,
+      overflow: 'hidden' as any,
+      textOverflow: 'ellipsis' as any,
+    }),
   },
   statSubLabel: {
     fontSize: 11,
@@ -1625,6 +1644,12 @@ const styles = StyleSheet.create({
   },
   statSubLabelMobile: {
     fontSize: 10,
+    // For mobile web, prevent text from wrapping character by character
+    ...(isWeb && {
+      whiteSpace: 'nowrap' as any,
+      overflow: 'hidden' as any,
+      textOverflow: 'ellipsis' as any,
+    }),
   },
 
   // Two Column Layout
