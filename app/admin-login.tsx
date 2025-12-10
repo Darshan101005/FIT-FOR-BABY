@@ -2,7 +2,7 @@ import { loginWithEmail, registerWithEmail } from '@/services/firebase';
 import { adminService } from '@/services/firestore.service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
