@@ -17,17 +17,17 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -127,7 +127,8 @@ export default function ProfileScreen() {
     questionnaire: cachedQuestionnaire, 
     streak: cachedStreak,
     isInitialized,
-    refreshUserInfo 
+    refreshUserInfo,
+    globalSettings
   } = useUserData();
 
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
@@ -510,7 +511,7 @@ export default function ProfileScreen() {
           acc[dateKey] = {
             date: entry.date,
             steps: 0,
-            goal: entry.goal || 3000, // Use goal from first entry or default to 3000
+            goal: globalSettings?.dailySteps || entry.goal || 3000, // Use admin goal if available, else entry or default
           };
         }
         acc[dateKey].steps += entry.stepCount || 0;
