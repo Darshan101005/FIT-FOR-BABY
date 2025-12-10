@@ -13,6 +13,7 @@ import {
     useWindowDimensions,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const BROADCASTS_READ_KEY = 'broadcasts_last_read_timestamp';
 
@@ -73,6 +74,7 @@ export default function BottomNavBar() {
   const isMobile = width < 768;
   const { colors } = useTheme();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [unreadBroadcastCount, setUnreadBroadcastCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
@@ -160,7 +162,11 @@ export default function BottomNavBar() {
     <View style={[
       styles.container, 
       isMobile && styles.containerMobile,
-      { backgroundColor: colors.tabBar, borderTopColor: colors.tabBarBorder }
+      { 
+        backgroundColor: colors.tabBar, 
+        borderTopColor: colors.tabBarBorder,
+        paddingBottom: Math.max(insets.bottom, 10)
+      }
     ]}>
       <View style={styles.tabBar}>
         {tabs.map((tab) => {
@@ -213,7 +219,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     borderTopWidth: 1,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.05,
@@ -221,7 +226,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   containerMobile: {
-    paddingBottom: Platform.OS === 'ios' ? 25 : 8,
+    // paddingBottom is now handled dynamically via useSafeAreaInsets
   },
   tabBar: {
     flexDirection: 'row',

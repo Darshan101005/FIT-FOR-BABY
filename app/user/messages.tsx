@@ -23,6 +23,7 @@ import {
     View,
     useWindowDimensions
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const isWeb = Platform.OS === 'web';
 const BROADCASTS_READ_KEY = 'broadcasts_last_read_timestamp';
@@ -61,6 +62,7 @@ export default function MessagesScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const { colors } = useTheme();
   const { language, t } = useLanguage();
+  const insets = useSafeAreaInsets();
   
   // Initial welcome message when user starts a new chat
   const getWelcomeMessage = (): Message => ({
@@ -226,11 +228,11 @@ export default function MessagesScreen() {
   }, [isLoadingBroadcasts, broadcasts.length, view]);
 
   const handleCallSupport = () => {
-    Linking.openURL('tel:9884671395');
+    Linking.openURL('tel:9449632431');
   };
 
   const handleEmailSupport = () => {
-    Linking.openURL('mailto:e0323040@sriher.edu.in');
+    Linking.openURL('mailto:fitforbaby.sriher@gmail.com');
   };
 
   const formatTime = (date: Date) => {
@@ -559,7 +561,7 @@ export default function MessagesScreen() {
             <Ionicons name="call" size={24} color="#22c55e" />
           </View>
           <Text style={styles.helpLabel}>{t('messages.contactUs')}</Text>
-          <Text style={styles.helpDetail}>9884671395</Text>
+          <Text style={styles.helpDetail}>9449632431</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.helpOption} onPress={handleEmailSupport}>
@@ -567,7 +569,7 @@ export default function MessagesScreen() {
             <Ionicons name="mail" size={24} color="#3b82f6" />
           </View>
           <Text style={styles.helpLabel}>{t('messages.emailUs')}</Text>
-          <Text style={styles.helpDetail}>e0323040@sriher.edu.in</Text>
+          <Text style={styles.helpDetail}>fitforbaby.sriher@gmail.com</Text>
         </TouchableOpacity>
       </View>
 
@@ -722,7 +724,7 @@ export default function MessagesScreen() {
       </ScrollView>
 
       {/* Input Area */}
-      <View style={styles.inputArea}>
+      <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <TouchableOpacity style={styles.attachButton}>
           <Ionicons name="attach" size={24} color="#64748b" />
         </TouchableOpacity>
@@ -1138,7 +1140,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    paddingBottom: Platform.OS === 'web' ? 12 : 16,
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',

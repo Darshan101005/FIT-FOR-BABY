@@ -21,6 +21,7 @@ import {
     View,
     useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const isWeb = Platform.OS === 'web';
 
@@ -88,6 +89,7 @@ export default function ChatScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
 
   // Calculate max width for desktop layout (like other pages)
   const maxContentWidth = Math.min(screenWidth, 800);
@@ -624,7 +626,7 @@ export default function ChatScreen() {
             </Text>
           </View>
         ) : (
-          <View style={[styles.inputContainer, { maxWidth: maxContentWidth }]}>
+          <View style={[styles.inputContainer, { maxWidth: maxContentWidth, paddingBottom: Math.max(insets.bottom, 16) }]}>
             <TouchableOpacity style={styles.attachButton} onPress={handleAttachFile}>
               <Ionicons name="attach" size={24} color="#64748b" />
             </TouchableOpacity>
@@ -1000,7 +1002,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 16,
     gap: 8,
   },
   attachButton: {

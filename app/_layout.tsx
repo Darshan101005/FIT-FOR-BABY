@@ -8,7 +8,6 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { initPWA } from '@/services/pwa.service';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import * as Updates from 'expo-updates';
 import { useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
@@ -33,23 +32,6 @@ function RootNavigator() {
   useEffect(() => {
     if (isWeb) {
       initPWA();
-    }
-    // Check for OTA updates on native platforms
-    if (!isWeb) {
-      const checkForUpdates = async () => {
-        try {
-          const update = await Updates.checkForUpdateAsync();
-          if (update.isAvailable) {
-            await Updates.fetchUpdateAsync();
-            // Optionally, show a prompt to the user before reloading
-            await Updates.reloadAsync();
-          }
-        } catch (e) {
-          // Handle or log error if needed
-          console.log('OTA update check failed:', e);
-        }
-      };
-      checkForUpdates();
     }
   }, []);
 

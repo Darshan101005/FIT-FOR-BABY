@@ -16,6 +16,7 @@ import {
     View,
     useWindowDimensions
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { supportRequestService } from '../../services/firestore.service';
 
@@ -163,6 +164,7 @@ export default function AdminLayout() {
   const pathname = usePathname();
   const { width: screenWidth } = useWindowDimensions();
   const { isAuthenticated, isLoading: authLoading, userRole, logout } = useAuth();
+  const insets = useSafeAreaInsets();
   
   // Responsive breakpoints
   const isMobile = screenWidth < 768;
@@ -465,7 +467,7 @@ export default function AdminLayout() {
 
   // Mobile Bottom Navigation
   const renderMobileBottomNav = () => (
-    <View style={styles.bottomNav}>
+    <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 10) }]}>
       {navItems.slice(0, 5).map((item) => {
         const active = isActive(item.route);
         const IconComponent = item.iconFamily === 'Ionicons' ? Ionicons : MaterialCommunityIcons;
@@ -870,7 +872,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    paddingBottom: 20,
     paddingTop: 8,
   },
   bottomNavItem: {
