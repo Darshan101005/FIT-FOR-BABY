@@ -1376,7 +1376,6 @@ export default function ProfileScreen() {
             showToast('Language changed to English', 'success');
           }}
         >
-          <Text style={styles.languageFlag}>🇬🇧</Text>
           <Text style={[
             styles.languageText,
             { color: colors.textSecondary },
@@ -1398,7 +1397,6 @@ export default function ProfileScreen() {
             showToast('மொழி தமிழுக்கு மாற்றப்பட்டது', 'success');
           }}
         >
-          <Text style={styles.languageFlag}>🇮🇳</Text>
           <Text style={[
             styles.languageText,
             { color: colors.textSecondary },
