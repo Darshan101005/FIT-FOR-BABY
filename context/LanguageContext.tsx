@@ -491,6 +491,16 @@ const translations: Record<Language, Record<string, string>> = {
     'home.noDietPlanYet': 'No Diet Plan Yet',
     'home.noDietPlanDesc': "Your health coach hasn't assigned a diet plan for you yet. Check back later!",
     'home.nutritionTips': 'Nutrition Tips',
+    'home.getSunlight': 'Get some sunlight for vitamin D and mood boost.',
+    'home.tryHealthyRecipe': 'Try a new healthy recipe today.',
+    'home.expressGratitude': 'Take a moment to express gratitude to your partner.',
+    'home.readSomethingInspiring': 'Read something inspiring or educational today.',
+    'home.scheduleCheckup': 'Schedule your next health checkup.',
+    'home.shareFeelings': 'Share your feelings with someone you trust.',
+    'home.spendTimeInNature': 'Spend time in nature to relax and recharge.',
+    'home.listenToMusic': 'Listen to your favorite music for a mood lift.',
+    'home.tryCycling': 'Try cycling or another fun activity today.',
+    'home.limitProcessedFoods': 'Limit processed foods and opt for whole grains.',
     
     // Log Steps Additional
     'log.steps.stepCounter': 'Step Counter Image',
@@ -1369,6 +1379,16 @@ const translations: Record<Language, Record<string, string>> = {
     'home.noDietPlanYet': 'இன்னும் உணவு திட்டம் இல்லை',
     'home.noDietPlanDesc': 'உங்கள் ஆரோக்கிய பயிற்சியாளர் இன்னும் உணவு திட்டத்தை வழங்கவில்லை. பின்னர் சரிபார்க்கவும்!',
     'home.nutritionTips': 'ஊட்டச்சத்து குறிப்புகள்',
+    'home.getSunlight': 'விட்டமின் D மற்றும் மனநிலைக்கு சூரிய ஒளியைப் பெறுங்கள்.',
+    'home.tryHealthyRecipe': 'இன்று ஒரு புதிய ஆரோக்கியமான சமையல் முயற்சிக்கவும்.',
+    'home.expressGratitude': 'உங்கள் துணைக்கு நன்றி தெரிவிக்க ஒரு நிமிடம் எடுத்துக்கொள்ளுங்கள்.',
+    'home.readSomethingInspiring': 'இன்று ஊக்கமளிக்கும் அல்லது கல்வி சார்ந்த ஒன்றை படிக்கவும்.',
+    'home.scheduleCheckup': 'உங்கள் அடுத்த சுகாதார பரிசோதனையை திட்டமிடுங்கள்.',
+    'home.shareFeelings': 'நம்பிக்கையுள்ள ஒருவருடன் உங்கள் உணர்வுகளை பகிரவும்.',
+    'home.spendTimeInNature': 'இயற்கையில் நேரம் செலவிட்டு ஓய்வெடுக்கவும்.',
+    'home.listenToMusic': 'உங்கள் விருப்பமான இசையை கேட்டு மனநிலையை உயர்த்துங்கள்.',
+    'home.tryCycling': 'இன்று சைக்கிள் ஓட்டுதல் அல்லது வேறு ஒரு பொழுதுபோக்கு முயற்சிக்கவும்.',
+    'home.limitProcessedFoods': 'செயற்கை உணவுகளை குறைத்து முழு தானியங்களை தேர்வு செய்யவும்.',
     
     // Log Steps Additional
     'log.steps.stepCounter': 'அடிகள் எண்ணி படம்',

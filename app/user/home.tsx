@@ -5,24 +5,24 @@ import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { formatDateString } from '@/services/firestore.service';
 import {
-    addNotificationReceivedListener,
-    addNotificationResponseListener,
-    registerForPushNotificationsAsync,
-    savePushTokenForUser
+  addNotificationReceivedListener,
+  addNotificationResponseListener,
+  registerForPushNotificationsAsync,
+  savePushTokenForUser
 } from '@/services/notification.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Animated,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
@@ -242,6 +242,16 @@ export default function UserHomeScreen() {
     { id: 3, icon: 'nutrition', color: '#f59e0b', tip: t('home.leafyGreens') },
     { id: 4, icon: 'bed', color: '#8b5cf6', tip: t('home.qualitySleep') },
     { id: 5, icon: 'heart', color: '#ef4444', tip: t('home.deepBreathing') },
+    { id: 6, icon: 'sunny', color: '#fbbf24', tip: t('home.getSunlight') },
+    { id: 7, icon: 'leaf', color: '#22c55e', tip: t('home.tryHealthyRecipe') },
+    { id: 8, icon: 'happy', color: '#f472b6', tip: t('home.expressGratitude') },
+    { id: 9, icon: 'book', color: '#6366f1', tip: t('home.readSomethingInspiring') },
+    { id: 10, icon: 'medkit', color: '#10b981', tip: t('home.scheduleCheckup') },
+    { id: 11, icon: 'chatbubble', color: '#0ea5e9', tip: t('home.shareFeelings') },
+    { id: 12, icon: 'flower', color: '#e879f9', tip: t('home.spendTimeInNature') },
+    { id: 13, icon: 'musical-notes', color: '#f43f5e', tip: t('home.listenToMusic') },
+    { id: 14, icon: 'bicycle', color: '#38bdf8', tip: t('home.tryCycling') },
+    { id: 15, icon: 'nutrition', color: '#f59e0b', tip: t('home.limitProcessedFoods') },
   ];
 
   // Get a random tip based on the day
