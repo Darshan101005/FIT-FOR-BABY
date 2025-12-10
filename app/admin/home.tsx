@@ -577,34 +577,36 @@ export default function AdminHomeScreen() {
 
   // Header Section
   const renderHeader = () => (
-    <View style={styles.header}>
+    <View style={[styles.header, isMobile && { flexDirection: 'column', alignItems: 'flex-start', gap: 16 }]}>
       <View>
         <Text style={styles.greeting}>Welcome back,</Text>
         <Text style={styles.userName}>{adminName}</Text>
       </View>
-      <View style={styles.headerRight}>
+      <View style={[styles.headerRight, isMobile && { width: '100%', justifyContent: 'flex-start' }]}>
         {isSuperAdmin && (
           <TouchableOpacity 
             style={styles.superAdminButton}
             onPress={() => router.push('/admin/manage-admins' as any)}
           >
             <Ionicons name="shield-checkmark" size={18} color="#fff" />
-            {!isMobile && <Text style={styles.superAdminButtonText}>Manage Admins</Text>}
+            <Text style={styles.superAdminButtonText}>Manage Admins</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity style={styles.headerButton} onPress={openSearchModal}>
           <Ionicons name="search" size={22} color={COLORS.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerButton} onPress={openNotificationModal}>
-          <Ionicons name="notifications-outline" size={22} color={COLORS.textSecondary} />
-          {totalUnreadCount > 0 && (
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>
-                {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        {!isMobile && (
+          <TouchableOpacity style={styles.headerButton} onPress={openNotificationModal}>
+            <Ionicons name="notifications-outline" size={22} color={COLORS.textSecondary} />
+            {totalUnreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

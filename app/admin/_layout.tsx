@@ -392,11 +392,6 @@ export default function AdminLayout() {
           style={styles.drawerHeader}
         >
           <View style={styles.drawerHeaderContent}>
-            <Image
-              source={require('../../assets/logos/logo-icon-alt.svg')}
-              style={styles.drawerLogo}
-              resizeMode="contain"
-            />
             <View>
               <Text style={styles.drawerAppName}>Fit for Baby</Text>
               <Text style={styles.drawerAppSubtitle}>Admin Portal</Text>
@@ -449,11 +444,6 @@ export default function AdminLayout() {
         <Ionicons name="menu" size={24} color={COLORS.textPrimary} />
       </TouchableOpacity>
       <View style={styles.mobileHeaderCenter}>
-        <Image
-          source={require('../../assets/logos/logo-icon-alt.svg')}
-          style={styles.mobileHeaderLogo}
-          resizeMode="contain"
-        />
         <Text style={styles.mobileHeaderTitle}>Admin</Text>
       </View>
       <TouchableOpacity style={styles.notificationButton}>

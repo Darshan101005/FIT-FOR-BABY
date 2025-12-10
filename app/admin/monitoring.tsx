@@ -5,17 +5,17 @@ import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Alert,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 import { CoupleStepEntry, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService } from '../../services/firestore.service';
 
@@ -1687,16 +1687,14 @@ export default function AdminMonitoringScreen() {
       <View style={styles.gridHeaderLeft}>
         <Text style={styles.gridHeaderLabel}>Couple</Text>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.gridHeaderMetrics}>
-          {metrics.map(metric => (
-            <View key={metric.id} style={styles.gridHeaderCell}>
-              <Text style={styles.gridHeaderCellText}>M</Text>
-              <Text style={styles.gridHeaderCellText}>F</Text>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
+      <View style={styles.gridHeaderMetrics}>
+        {metrics.map(metric => (
+          <View key={metric.id} style={styles.gridHeaderCell}>
+            <Text style={styles.gridHeaderCellText}>M</Text>
+            <Text style={styles.gridHeaderCellText}>F</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 
@@ -1706,20 +1704,18 @@ export default function AdminMonitoringScreen() {
       <View style={styles.gridHeaderLeft}>
         <Text style={styles.metricHeaderEmpty}></Text>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.gridHeaderMetrics}>
-          {metrics.map(metric => (
-            <View key={metric.id} style={styles.metricHeaderCell}>
-              {metric.iconFamily === 'Ionicons' ? (
-                <Ionicons name={metric.icon as any} size={16} color={COLORS.textSecondary} />
-              ) : (
-                <MaterialCommunityIcons name={metric.icon as any} size={16} color={COLORS.textSecondary} />
-              )}
-              <Text style={styles.metricHeaderText}>{metric.label}</Text>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
+      <View style={styles.gridHeaderMetrics}>
+        {metrics.map(metric => (
+          <View key={metric.id} style={styles.metricHeaderCell}>
+            {metric.iconFamily === 'Ionicons' ? (
+              <Ionicons name={metric.icon as any} size={16} color="#fff" />
+            ) : (
+              <MaterialCommunityIcons name={metric.icon as any} size={16} color="#fff" />
+            )}
+            <Text style={styles.metricHeaderText}>{metric.label}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 
@@ -1762,15 +1758,13 @@ export default function AdminMonitoringScreen() {
             </View>
           </View>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.logRowMetrics}>
-            {renderDualStatus(log.steps)}
-            {renderDualStatus(log.exercise)}
-            {renderDualStatus(log.diet)}
-            {renderDualStatus(log.weight)}
-            {renderSingleStatus(log.coupleWalking)}
-          </View>
-        </ScrollView>
+        <View style={styles.logRowMetrics}>
+          {renderDualStatus(log.steps)}
+          {renderDualStatus(log.exercise)}
+          {renderDualStatus(log.diet)}
+          {renderDualStatus(log.weight)}
+          {renderSingleStatus(log.coupleWalking)}
+        </View>
       </TouchableOpacity>
     );
   };
@@ -2526,12 +2520,14 @@ export default function AdminMonitoringScreen() {
 
               {renderLegend()}
 
-              {/* Grid */}
-              <View style={styles.grid}>
-                {renderMetricHeaders()}
-                {renderGridHeader()}
-                {filteredLogs.map(log => renderLogRow(log))}
-              </View>
+              {/* Grid - Wrapped in horizontal ScrollView for mobile */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={isMobile} style={{ flex: 1 }}>
+                <View style={[styles.grid, isMobile && { minWidth: 500 }]}>
+                  {renderMetricHeaders()}
+                  {renderGridHeader()}
+                  {filteredLogs.map(log => renderLogRow(log))}
+                </View>
+              </ScrollView>
 
               {filteredLogs.length === 0 && (
                 <View style={styles.emptyState}>

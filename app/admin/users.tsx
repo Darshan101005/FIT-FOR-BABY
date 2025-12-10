@@ -103,6 +103,9 @@ export default function AdminUsersScreen() {
   const [exportingCouple, setExportingCouple] = useState<Couple | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportFormat, setExportFormat] = useState<'pdf' | 'csv' | 'excel'>('pdf');
+  const [exportSelection, setExportSelection] = useState<'male' | 'female' | 'couple'>('couple');
+  const [showExportAllModal, setShowExportAllModal] = useState(false);
+  const [exportAllFormat, setExportAllFormat] = useState<'pdf' | 'csv' | 'excel'>('csv');
 
   // Lipid Test modal state
   const [showTestModal, setShowTestModal] = useState(false);
@@ -611,6 +614,7 @@ export default function AdminUsersScreen() {
   const handleExportUser = (couple: Couple) => {
     setExportingCouple(couple);
     setExportFormat('pdf');
+    setExportSelection('couple');
     setShowExportModal(true);
   };
 
@@ -1112,40 +1116,58 @@ export default function AdminUsersScreen() {
       
       const formatDateStr = (date: Date) => date.toISOString().split('T')[0];
 
-      // Get steps data for both
-      const maleSteps = await coupleStepsService.getByDateRange(coupleId, 'male', formatDateStr(thirtyDaysAgo), formatDateStr(today));
-      const femaleSteps = await coupleStepsService.getByDateRange(coupleId, 'female', formatDateStr(thirtyDaysAgo), formatDateStr(today));
+      // Initialize data arrays
+      let maleSteps: any[] = [];
+      let femaleSteps: any[] = [];
+      let maleWeight: any[] = [];
+      let femaleWeight: any[] = [];
+      let maleExercise: any[] = [];
+      let femaleExercise: any[] = [];
+      let maleFood: any[] = [];
+      let femaleFood: any[] = [];
+      let maleQuestionnaire: any = null;
+      let femaleQuestionnaire: any = null;
 
-      // Get weight logs for both
-      const maleWeight = await coupleWeightLogService.getAll(coupleId, 'male');
-      const femaleWeight = await coupleWeightLogService.getAll(coupleId, 'female');
+      // Fetch data based on export selection
+      if (exportSelection === 'male' || exportSelection === 'couple') {
+        maleSteps = await coupleStepsService.getByDateRange(coupleId, 'male', formatDateStr(thirtyDaysAgo), formatDateStr(today)) || [];
+        maleWeight = await coupleWeightLogService.getAll(coupleId, 'male') || [];
+        maleExercise = await coupleExerciseService.getByDateRange(coupleId, 'male', formatDateStr(thirtyDaysAgo), formatDateStr(today)) || [];
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        maleFood = await coupleFoodLogService.getByDateRange(coupleId, 'male', formatDateStr(sevenDaysAgo), formatDateStr(today)) || [];
+        maleQuestionnaire = await questionnaireService.getProgress(coupleId, 'male');
+      }
 
-      // Get exercise logs for both
-      const maleExercise = await coupleExerciseService.getByDateRange(coupleId, 'male', formatDateStr(thirtyDaysAgo), formatDateStr(today));
-      const femaleExercise = await coupleExerciseService.getByDateRange(coupleId, 'female', formatDateStr(thirtyDaysAgo), formatDateStr(today));
+      if (exportSelection === 'female' || exportSelection === 'couple') {
+        femaleSteps = await coupleStepsService.getByDateRange(coupleId, 'female', formatDateStr(thirtyDaysAgo), formatDateStr(today)) || [];
+        femaleWeight = await coupleWeightLogService.getAll(coupleId, 'female') || [];
+        femaleExercise = await coupleExerciseService.getByDateRange(coupleId, 'female', formatDateStr(thirtyDaysAgo), formatDateStr(today)) || [];
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        femaleFood = await coupleFoodLogService.getByDateRange(coupleId, 'female', formatDateStr(sevenDaysAgo), formatDateStr(today)) || [];
+        femaleQuestionnaire = await questionnaireService.getProgress(coupleId, 'female');
+      }
 
-      // Get food logs for both (last 7 days)
-      const sevenDaysAgo = new Date(today);
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const maleFood = await coupleFoodLogService.getByDateRange(coupleId, 'male', formatDateStr(sevenDaysAgo), formatDateStr(today));
-      const femaleFood = await coupleFoodLogService.getByDateRange(coupleId, 'female', formatDateStr(sevenDaysAgo), formatDateStr(today));
-
-      // Get questionnaire progress for both
-      const maleQuestionnaire = await questionnaireService.getProgress(coupleId, 'male');
-      const femaleQuestionnaire = await questionnaireService.getProgress(coupleId, 'female');
+      // For single user export, use the handleExportSingleUser function
+      if (exportSelection === 'male' || exportSelection === 'female') {
+        await handleExportSingleUser(couple, exportSelection);
+        setShowExportModal(false);
+        return;
+      }
 
       if (exportFormat === 'pdf') {
         // Generate HTML report
         const htmlContent = generateUserExportHTML({
           couple,
-          maleSteps: maleSteps || [],
-          femaleSteps: femaleSteps || [],
-          maleWeight: maleWeight || [],
-          femaleWeight: femaleWeight || [],
-          maleExercise: maleExercise || [],
-          femaleExercise: femaleExercise || [],
-          maleFood: maleFood || [],
-          femaleFood: femaleFood || [],
+          maleSteps,
+          femaleSteps,
+          maleWeight,
+          femaleWeight,
+          maleExercise,
+          femaleExercise,
+          maleFood,
+          femaleFood,
           maleQuestionnaire,
           femaleQuestionnaire,
         });
@@ -1167,12 +1189,12 @@ export default function AdminUsersScreen() {
       } else if (exportFormat === 'csv') {
         const csvContent = generateUserExportCSV({
           couple,
-          maleSteps: maleSteps || [],
-          femaleSteps: femaleSteps || [],
-          maleWeight: maleWeight || [],
-          femaleWeight: femaleWeight || [],
-          maleExercise: maleExercise || [],
-          femaleExercise: femaleExercise || [],
+          maleSteps,
+          femaleSteps,
+          maleWeight,
+          femaleWeight,
+          maleExercise,
+          femaleExercise,
         });
 
         if (isWeb) {
@@ -1195,12 +1217,12 @@ export default function AdminUsersScreen() {
         // Generate CSV with Excel-compatible format (semicolon separated)
         const csvContent = generateUserExportCSV({
           couple,
-          maleSteps: maleSteps || [],
-          femaleSteps: femaleSteps || [],
-          maleWeight: maleWeight || [],
-          femaleWeight: femaleWeight || [],
-          maleExercise: maleExercise || [],
-          femaleExercise: femaleExercise || [],
+          maleSteps,
+          femaleSteps,
+          maleWeight,
+          femaleWeight,
+          maleExercise,
+          femaleExercise,
         }, ';');
 
         if (isWeb) {
@@ -1224,6 +1246,68 @@ export default function AdminUsersScreen() {
       setShowExportModal(false);
     } catch (error) {
       console.error('Export error:', error);
+      showToast('Failed to export data. Please try again.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Export all couples data
+  const handleExportAllCouples = async () => {
+    setIsExporting(true);
+    
+    try {
+      const today = new Date();
+      const formatDateStr = (date: Date) => date.toISOString().split('T')[0];
+      
+      // Generate CSV with all couples summary data
+      let csv = '\ufeff'; // BOM for Excel
+      const s = ',';
+      
+      csv += `FIT FOR BABY - ALL COUPLES EXPORT\n`;
+      csv += `Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
+      csv += `Total Couples: ${couples.length}\n\n`;
+      
+      // Couples Summary Header
+      csv += `COUPLES SUMMARY\n`;
+      csv += `Couple ID${s}Status${s}Enrollment Date${s}Male Name${s}Male Email${s}Male Phone${s}Male Age${s}Male Status${s}Female Name${s}Female Email${s}Female Phone${s}Female Age${s}Female Status\n`;
+      
+      for (const couple of couples) {
+        csv += `${couple.coupleId}${s}`;
+        csv += `${couple.status}${s}`;
+        csv += `${couple.enrollmentDate}${s}`;
+        csv += `${couple.male.name}${s}`;
+        csv += `${couple.male.email || ''}${s}`;
+        csv += `${couple.male.phone || ''}${s}`;
+        csv += `${couple.male.age || ''}${s}`;
+        csv += `${couple.male.status}${s}`;
+        csv += `${couple.female.name}${s}`;
+        csv += `${couple.female.email || ''}${s}`;
+        csv += `${couple.female.phone || ''}${s}`;
+        csv += `${couple.female.age || ''}${s}`;
+        csv += `${couple.female.status}\n`;
+      }
+      
+      if (isWeb) {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `all_couples_export_${formatDateStr(today)}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showToast('All couples data exported!', 'success');
+      } else {
+        const fileName = `all_couples_export_${formatDateStr(today)}.csv`;
+        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, csv);
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export All Couples' });
+        showToast('All couples data ready to share!', 'success');
+      }
+      
+      setShowExportAllModal(false);
+    } catch (error) {
+      console.error('Export all error:', error);
       showToast('Failed to export data. Please try again.', 'error');
     } finally {
       setIsExporting(false);
@@ -1629,18 +1713,27 @@ export default function AdminUsersScreen() {
   // Header with search
   const renderHeader = () => (
     <View style={styles.header}>
-      <View style={styles.headerTop}>
+      <View style={[styles.headerTop, isMobile && { flexDirection: 'column', alignItems: 'flex-start', gap: 12 }]}>
         <View>
           <Text style={styles.headerTitle}>User Management</Text>
           <Text style={styles.headerSubtitle}>{couples.length} couples enrolled</Text>
         </View>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowEnrollModal(true)}
-        >
-          <Ionicons name="add" size={20} color="#fff" />
-          <Text style={styles.addButtonText}>Add New Couple</Text>
-        </TouchableOpacity>
+        <View style={[{ flexDirection: 'row', gap: 10 }, isMobile && { width: '100%' }]}>
+          <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: COLORS.accent }, isMobile && { flex: 1 }]}
+            onPress={() => setShowExportAllModal(true)}
+          >
+            <Ionicons name="download-outline" size={20} color="#fff" />
+            <Text style={styles.addButtonText}>Export All</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.addButton, isMobile && { flex: 1 }]}
+            onPress={() => setShowEnrollModal(true)}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={styles.addButtonText}>Add New Couple</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search Bar */}
@@ -1903,13 +1996,6 @@ export default function AdminUsersScreen() {
                   <Ionicons name="flask" size={16} color="#fff" />
                   <Text style={[styles.actionButtonText, { color: '#fff' }]}>Test</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.exportUserButton]}
-                  onPress={() => handleExportSingleUser(couple, 'male')}
-                >
-                  <Ionicons name="download-outline" size={16} color="#fff" />
-                  <Text style={[styles.actionButtonText, { color: '#fff' }]}>Export</Text>
-                </TouchableOpacity>
               </View>
             </View>
 
@@ -2058,13 +2144,6 @@ export default function AdminUsersScreen() {
                 >
                   <Ionicons name="flask" size={16} color="#fff" />
                   <Text style={[styles.actionButtonText, { color: '#fff' }]}>Test</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.exportUserButton]}
-                  onPress={() => handleExportSingleUser(couple, 'female')}
-                >
-                  <Ionicons name="download-outline" size={16} color="#fff" />
-                  <Text style={[styles.actionButtonText, { color: '#fff' }]}>Export</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2947,11 +3026,87 @@ export default function AdminUsersScreen() {
             
             <Text style={styles.deleteTitle}>Export User Data</Text>
             <Text style={styles.deleteSubtitle}>
-              Export all data for couple {exportingCouple.coupleId}
+              Export data for couple {exportingCouple.coupleId}
             </Text>
             <Text style={styles.deleteNames}>
               {exportingCouple.male.name} & {exportingCouple.female.name}
             </Text>
+            
+            {/* Export Selection - Who to export */}
+            <View style={{ marginTop: 20, width: '100%' }}>
+              <Text style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 10, fontWeight: '600' }}>EXPORT DATA FOR:</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    paddingHorizontal: 8,
+                    borderRadius: 10,
+                    backgroundColor: exportSelection === 'male' ? COLORS.primary : COLORS.background,
+                    borderWidth: 1,
+                    borderColor: exportSelection === 'male' ? COLORS.primary : COLORS.border,
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setExportSelection('male')}
+                >
+                  <Ionicons name="male" size={20} color={exportSelection === 'male' ? '#fff' : COLORS.textSecondary} />
+                  <Text style={{
+                    fontSize: 11,
+                    fontWeight: '600',
+                    color: exportSelection === 'male' ? '#fff' : COLORS.textSecondary,
+                    marginTop: 4,
+                  }}>
+                    {exportingCouple.male.name.split(' ')[0]}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    paddingHorizontal: 8,
+                    borderRadius: 10,
+                    backgroundColor: exportSelection === 'female' ? COLORS.accent : COLORS.background,
+                    borderWidth: 1,
+                    borderColor: exportSelection === 'female' ? COLORS.accent : COLORS.border,
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setExportSelection('female')}
+                >
+                  <Ionicons name="female" size={20} color={exportSelection === 'female' ? '#fff' : COLORS.textSecondary} />
+                  <Text style={{
+                    fontSize: 11,
+                    fontWeight: '600',
+                    color: exportSelection === 'female' ? '#fff' : COLORS.textSecondary,
+                    marginTop: 4,
+                  }}>
+                    {exportingCouple.female.name.split(' ')[0]}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    paddingHorizontal: 8,
+                    borderRadius: 10,
+                    backgroundColor: exportSelection === 'couple' ? COLORS.info : COLORS.background,
+                    borderWidth: 1,
+                    borderColor: exportSelection === 'couple' ? COLORS.info : COLORS.border,
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setExportSelection('couple')}
+                >
+                  <Ionicons name="people" size={20} color={exportSelection === 'couple' ? '#fff' : COLORS.textSecondary} />
+                  <Text style={{
+                    fontSize: 11,
+                    fontWeight: '600',
+                    color: exportSelection === 'couple' ? '#fff' : COLORS.textSecondary,
+                    marginTop: 4,
+                  }}>
+                    Both
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
             
             {/* Data Included */}
             <View style={{ backgroundColor: COLORS.background, padding: 12, borderRadius: 10, marginTop: 16, width: '100%' }}>
@@ -3025,6 +3180,105 @@ export default function AdminUsersScreen() {
                   <>
                     <Ionicons name="download" size={18} color="#fff" />
                     <Text style={[styles.deleteButtonText, { color: '#fff' }]}>Export</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // Export All Modal
+  const renderExportAllModal = () => {
+    return (
+      <Modal
+        visible={showExportAllModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowExportAllModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            {/* Export Icon */}
+            <View style={[styles.deleteIconCircle, { backgroundColor: COLORS.accent + '15' }]}>
+              <Ionicons name="cloud-download" size={40} color={COLORS.accent} />
+            </View>
+            
+            <Text style={styles.deleteTitle}>Export All Couples</Text>
+            <Text style={styles.deleteSubtitle}>
+              Export summary data for all {couples.length} couples
+            </Text>
+            
+            {/* Data Included */}
+            <View style={{ backgroundColor: COLORS.background, padding: 12, borderRadius: 10, marginTop: 16, width: '100%' }}>
+              <Text style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 6, fontWeight: '600' }}>DATA INCLUDED:</Text>
+              <Text style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 }}>
+                • Couple ID & Status{'\n'}
+                • Enrollment Date{'\n'}
+                • Male & Female Names{'\n'}
+                • Contact Information (Email, Phone){'\n'}
+                • Age & Account Status
+              </Text>
+            </View>
+            
+            {/* Export Format Selection */}
+            <View style={{ marginTop: 16, width: '100%' }}>
+              <Text style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 10, fontWeight: '600' }}>SELECT FORMAT:</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {(['pdf', 'csv', 'excel'] as const).map(format => (
+                  <TouchableOpacity
+                    key={format}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      paddingHorizontal: 8,
+                      borderRadius: 10,
+                      backgroundColor: exportAllFormat === format ? COLORS.accent : COLORS.background,
+                      borderWidth: 1,
+                      borderColor: exportAllFormat === format ? COLORS.accent : COLORS.border,
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setExportAllFormat(format)}
+                  >
+                    <Ionicons 
+                      name={format === 'pdf' ? 'document-text' : format === 'csv' ? 'grid' : 'document'} 
+                      size={20} 
+                      color={exportAllFormat === format ? '#fff' : COLORS.textSecondary} 
+                    />
+                    <Text style={{
+                      fontSize: 12,
+                      fontWeight: '600',
+                      color: exportAllFormat === format ? '#fff' : COLORS.textSecondary,
+                      marginTop: 4,
+                      textTransform: 'uppercase',
+                    }}>
+                      {format}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={[styles.deleteButtonRow, { marginTop: 24 }]}>
+              <TouchableOpacity
+                style={[styles.deleteButton, styles.deleteButtonCancel]}
+                onPress={() => setShowExportAllModal(false)}
+              >
+                <Text style={[styles.deleteButtonText, { color: COLORS.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteButton, { backgroundColor: COLORS.accent }]}
+                onPress={handleExportAllCouples}
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="download" size={18} color="#fff" />
+                    <Text style={[styles.deleteButtonText, { color: '#fff' }]}>Export All</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -3115,6 +3369,7 @@ export default function AdminUsersScreen() {
       {renderTestModal()}
       {renderDeleteModal()}
       {renderExportModal()}
+      {renderExportAllModal()}
       {toast.visible && renderToast()}
       
       {/* Loading overlay for actions */}
