@@ -111,7 +111,6 @@ export default function AdminUsersScreen() {
   const [exportFormat, setExportFormat] = useState<'pdf' | 'csv' | 'excel'>('pdf');
   const [exportSelection, setExportSelection] = useState<'male' | 'female' | 'couple'>('couple');
   const [showExportAllModal, setShowExportAllModal] = useState(false);
-  const [exportAllFormat, setExportAllFormat] = useState<'pdf' | 'csv' | 'excel'>('csv');
 
   // Lipid Test modal state
   const [showTestModal, setShowTestModal] = useState(false);
@@ -1010,29 +1009,29 @@ export default function AdminUsersScreen() {
           <div class="detail-value" style="color: ${user.status === 'active' ? '#16a34a' : '#dc2626'}">${user.status?.toUpperCase() || 'UNKNOWN'}</div>
         </div>
       </div>
-      ${gender === 'female' && user.fertilityInfo ? `
+      ${gender === 'female' && (user.dateOfOvarianInduction || user.noOfIUICycle || user.durationOfInfertility || user.typeOfInfertility || user.lastMenstrualPeriod) ? `
       <div class="fertility-section" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.1);">
         <h3 style="font-size: 14px; font-weight: 600; color: #7da33e; margin-bottom: 12px;">🌸 Fertility Information</h3>
         <div class="profile-details" style="grid-template-columns: repeat(3, 1fr);">
           <div class="detail-item">
             <div class="detail-label">Date of Ovarian Induction</div>
-            <div class="detail-value">${user.fertilityInfo.dateOfOvarianInduction ? formatDate(user.fertilityInfo.dateOfOvarianInduction) : 'Not provided'}</div>
+            <div class="detail-value">${user.dateOfOvarianInduction ? formatDate(user.dateOfOvarianInduction) : 'Not provided'}</div>
           </div>
           <div class="detail-item">
             <div class="detail-label">No. of IUI Cycle</div>
-            <div class="detail-value">${user.fertilityInfo.noOfIUICycle || 'Not provided'}</div>
+            <div class="detail-value">${user.noOfIUICycle || 'Not provided'}</div>
           </div>
           <div class="detail-item">
             <div class="detail-label">Duration of Infertility</div>
-            <div class="detail-value">${user.fertilityInfo.durationOfInfertility || 'Not provided'}</div>
+            <div class="detail-value">${user.durationOfInfertility || 'Not provided'}</div>
           </div>
           <div class="detail-item">
             <div class="detail-label">Type of Infertility</div>
-            <div class="detail-value">${user.fertilityInfo.typeOfInfertility || 'Not provided'}</div>
+            <div class="detail-value">${user.typeOfInfertility || 'Not provided'}</div>
           </div>
           <div class="detail-item">
             <div class="detail-label">Last Menstrual Period</div>
-            <div class="detail-value">${user.fertilityInfo.lastMenstrualPeriod ? formatDate(user.fertilityInfo.lastMenstrualPeriod) : 'Not provided'}</div>
+            <div class="detail-value">${user.lastMenstrualPeriod ? formatDate(user.lastMenstrualPeriod) : 'Not provided'}</div>
           </div>
         </div>
       </div>
@@ -1243,6 +1242,8 @@ export default function AdminUsersScreen() {
           femaleWeight,
           maleExercise,
           femaleExercise,
+          maleQuestionnaire,
+          femaleQuestionnaire,
         });
 
         if (isWeb) {
@@ -1262,7 +1263,7 @@ export default function AdminUsersScreen() {
           showToast('CSV file ready to share!', 'success');
         }
       } else if (exportFormat === 'excel') {
-        // Generate CSV with Excel-compatible format (semicolon separated)
+        // Generate Excel-compatible CSV with semicolon separator and questionnaire data
         const csvContent = generateUserExportCSV({
           couple,
           maleSteps,
@@ -1271,22 +1272,24 @@ export default function AdminUsersScreen() {
           femaleWeight,
           maleExercise,
           femaleExercise,
+          maleQuestionnaire,
+          femaleQuestionnaire,
         }, ';');
 
         if (isWeb) {
-          const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+          const blob = new Blob(['\ufeff' + csvContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `${couple.coupleId}_user_data_${formatDateStr(today)}.csv`;
+          link.download = `${couple.coupleId}_user_data_${formatDateStr(today)}.xls`;
           link.click();
           URL.revokeObjectURL(url);
-          showToast('Excel-compatible file downloaded!', 'success');
+          showToast('Excel file downloaded!', 'success');
         } else {
-          const fileName = `${couple.coupleId}_user_data_${formatDateStr(today)}.csv`;
+          const fileName = `${couple.coupleId}_user_data_${formatDateStr(today)}.xls`;
           const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
           await FileSystem.writeAsStringAsync(fileUri, '\ufeff' + csvContent);
-          await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export User Data' });
+          await Sharing.shareAsync(fileUri, { mimeType: 'application/vnd.ms-excel', dialogTitle: 'Export User Data' });
           showToast('Excel file ready to share!', 'success');
         }
       }
@@ -1306,143 +1309,179 @@ export default function AdminUsersScreen() {
     
     try {
       const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       const formatDateStr = (date: Date) => date.toISOString().split('T')[0];
       
-      if (exportAllFormat === 'csv') {
-        // Generate CSV with all couples summary data
-        let csv = '\ufeff'; // BOM for Excel
-        const s = ',';
-        csv += `FIT FOR BABY - ALL COUPLES EXPORT\n`;
+      showToast('Fetching complete data for all couples...', 'success');
+
+      // Fetch activity data for ALL couples
+      const allCouplesData = await Promise.all(couples.map(async (couple) => {
+        const [maleSteps, femaleSteps, maleWeight, femaleWeight, maleExercise, femaleExercise, maleFood, femaleFood, maleQuestionnaire, femaleQuestionnaire] = await Promise.all([
+          coupleStepsService.getByDateRange(couple.coupleId, 'male', formatDateStr(thirtyDaysAgo), formatDateStr(today)).catch(() => []),
+          coupleStepsService.getByDateRange(couple.coupleId, 'female', formatDateStr(thirtyDaysAgo), formatDateStr(today)).catch(() => []),
+          coupleWeightLogService.getAll(couple.coupleId, 'male').catch(() => []),
+          coupleWeightLogService.getAll(couple.coupleId, 'female').catch(() => []),
+          coupleExerciseService.getByDateRange(couple.coupleId, 'male', formatDateStr(thirtyDaysAgo), formatDateStr(today)).catch(() => []),
+          coupleExerciseService.getByDateRange(couple.coupleId, 'female', formatDateStr(thirtyDaysAgo), formatDateStr(today)).catch(() => []),
+          coupleFoodLogService.getByDateRange(couple.coupleId, 'male', formatDateStr(sevenDaysAgo), formatDateStr(today)).catch(() => []),
+          coupleFoodLogService.getByDateRange(couple.coupleId, 'female', formatDateStr(sevenDaysAgo), formatDateStr(today)).catch(() => []),
+          questionnaireService.getProgress(couple.coupleId, 'male').catch(() => null),
+          questionnaireService.getProgress(couple.coupleId, 'female').catch(() => null),
+        ]);
+        
+        return {
+          couple,
+          maleSteps: maleSteps || [],
+          femaleSteps: femaleSteps || [],
+          maleWeight: maleWeight || [],
+          femaleWeight: femaleWeight || [],
+          maleExercise: maleExercise || [],
+          femaleExercise: femaleExercise || [],
+          maleFood: maleFood || [],
+          femaleFood: femaleFood || [],
+          maleQuestionnaire,
+          femaleQuestionnaire
+        };
+      }));
+      
+      // Generate CSV with VERTICAL layout - one user per row with User ID
+      let csv = '\ufeff'; // BOM for Excel
+      const s = ',';
+      csv += `FIT FOR BABY - ALL COUPLES COMPLETE EXPORT\n`;
         csv += `Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
-        csv += `Total Couples: ${couples.length}\n\n`;
-        csv += `COUPLES SUMMARY\n`;
-        csv += `Couple ID${s}Status${s}Enrollment Date${s}Male Name${s}Male Email${s}Male Phone${s}Male Age${s}Male Status${s}Female Name${s}Female Email${s}Female Phone${s}Female Age${s}Female Status\n`;
-        for (const couple of couples) {
+        csv += `Total Couples: ${couples.length} (${couples.length * 2} users)\n\n`;
+        
+        // Header row
+        csv += `User ID${s}Couple ID${s}Gender${s}Name${s}Email${s}Phone${s}Age${s}DOB${s}Weight${s}Height${s}BMI${s}Status${s}Address Line 1${s}Address Line 2${s}City${s}State${s}Pincode${s}`;
+        csv += `Enrollment Date${s}Couple Status${s}`;
+        csv += `Total Steps (30d)${s}Avg Steps/Day${s}Total Exercise Mins (30d)${s}Total Food Logs (7d)${s}Weight Logs Count${s}Latest Weight${s}`;
+        csv += `Questionnaire Status${s}Questionnaire Progress${s}Questions Answered${s}Questionnaire Answers${s}`;
+        csv += `Ovarian Induction Date${s}IUI Cycles${s}Infertility Duration${s}Infertility Type${s}Last Menstrual Period\n`;
+        
+        // Data rows - one row per user
+        for (const data of allCouplesData) {
+          const { couple, maleSteps, femaleSteps, maleWeight, femaleWeight, maleExercise, femaleExercise, maleFood, femaleFood, maleQuestionnaire, femaleQuestionnaire } = data;
+          
+          // Male row
+          const maleTotalSteps = maleSteps.reduce((sum, s) => sum + (s.stepCount || 0), 0);
+          const maleAvgSteps = maleSteps.length > 0 ? Math.round(maleTotalSteps / maleSteps.length) : 0;
+          const maleExerciseMins = maleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
+          const maleLatestWeight = maleWeight.length > 0 ? maleWeight[0].weight : '';
+          
+          csv += `${couple.coupleId}_M${s}`;
           csv += `${couple.coupleId}${s}`;
-          csv += `${couple.status}${s}`;
-          csv += `${couple.enrollmentDate}${s}`;
+          csv += `Male${s}`;
           csv += `${couple.male.name}${s}`;
           csv += `${couple.male.email || ''}${s}`;
           csv += `${couple.male.phone || ''}${s}`;
           csv += `${couple.male.age || ''}${s}`;
+          csv += `${couple.male.dateOfBirth || ''}${s}`;
+          csv += `${couple.male.weight || ''}${s}`;
+          csv += `${couple.male.height || ''}${s}`;
+          csv += `${couple.male.bmi || ''}${s}`;
           csv += `${couple.male.status}${s}`;
+          csv += `${couple.male.address?.addressLine1 || ''}${s}`;
+          csv += `${couple.male.address?.addressLine2 || ''}${s}`;
+          csv += `${couple.male.address?.city || ''}${s}`;
+          csv += `${couple.male.address?.state || ''}${s}`;
+          csv += `${couple.male.address?.pincode || ''}${s}`;
+          csv += `${couple.enrollmentDate}${s}`;
+          csv += `${couple.status}${s}`;
+          csv += `${maleTotalSteps}${s}`;
+          csv += `${maleAvgSteps}${s}`;
+          csv += `${maleExerciseMins}${s}`;
+          csv += `${maleFood.length}${s}`;
+          csv += `${maleWeight.length}${s}`;
+          csv += `${maleLatestWeight}${s}`;
+          csv += `${maleQuestionnaire?.isComplete ? 'Completed' : maleQuestionnaire ? 'In Progress' : 'Not Started'}${s}`;
+          csv += `${maleQuestionnaire?.progress?.percentComplete || 0}%${s}`;
+          const maleAnswerCount = maleQuestionnaire?.answers ? Object.keys(maleQuestionnaire.answers).length : 0;
+          csv += `${maleAnswerCount}${s}`;
+          let maleQA = '';
+          if (maleQuestionnaire?.answers) {
+            const qaList = Object.entries(maleQuestionnaire.answers).map(([_, answer]: [string, any]) => {
+              const q = (answer.questionText || '').replace(/,/g, ' ').replace(/;/g, ' ').replace(/\n/g, ' ');
+              const a = (Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer || 'N/A').toString().replace(/,/g, ' ').replace(/;/g, ' ').replace(/\n/g, ' ');
+              return `${q}: ${a}`;
+            });
+            maleQA = qaList.join(' | ');
+          }
+          csv += `${maleQA}${s}`;
+          csv += `${s}${s}${s}${s}\n`; // Empty fertility fields for male
+          
+          // Female row
+          const femaleTotalSteps = femaleSteps.reduce((sum, s) => sum + (s.stepCount || 0), 0);
+          const femaleAvgSteps = femaleSteps.length > 0 ? Math.round(femaleTotalSteps / femaleSteps.length) : 0;
+          const femaleExerciseMins = femaleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
+          const femaleLatestWeight = femaleWeight.length > 0 ? femaleWeight[0].weight : '';
+          
+          csv += `${couple.coupleId}_F${s}`;
+          csv += `${couple.coupleId}${s}`;
+          csv += `Female${s}`;
           csv += `${couple.female.name}${s}`;
           csv += `${couple.female.email || ''}${s}`;
           csv += `${couple.female.phone || ''}${s}`;
           csv += `${couple.female.age || ''}${s}`;
-          csv += `${couple.female.status}\n`;
+          csv += `${couple.female.dateOfBirth || ''}${s}`;
+          csv += `${couple.female.weight || ''}${s}`;
+          csv += `${couple.female.height || ''}${s}`;
+          csv += `${couple.female.bmi || ''}${s}`;
+          csv += `${couple.female.status}${s}`;
+          csv += `${couple.female.address?.addressLine1 || ''}${s}`;
+          csv += `${couple.female.address?.addressLine2 || ''}${s}`;
+          csv += `${couple.female.address?.city || ''}${s}`;
+          csv += `${couple.female.address?.state || ''}${s}`;
+          csv += `${couple.female.address?.pincode || ''}${s}`;
+          csv += `${couple.enrollmentDate}${s}`;
+          csv += `${couple.status}${s}`;
+          csv += `${femaleTotalSteps}${s}`;
+          csv += `${femaleAvgSteps}${s}`;
+          csv += `${femaleExerciseMins}${s}`;
+          csv += `${femaleFood.length}${s}`;
+          csv += `${femaleWeight.length}${s}`;
+          csv += `${femaleLatestWeight}${s}`;
+          csv += `${femaleQuestionnaire?.isComplete ? 'Completed' : femaleQuestionnaire ? 'In Progress' : 'Not Started'}${s}`;
+          csv += `${femaleQuestionnaire?.progress?.percentComplete || 0}%${s}`;
+          const femaleAnswerCount = femaleQuestionnaire?.answers ? Object.keys(femaleQuestionnaire.answers).length : 0;
+          csv += `${femaleAnswerCount}${s}`;
+          let femaleQA = '';
+          if (femaleQuestionnaire?.answers) {
+            const qaList = Object.entries(femaleQuestionnaire.answers).map(([_, answer]: [string, any]) => {
+              const q = (answer.questionText || '').replace(/,/g, ' ').replace(/;/g, ' ').replace(/\n/g, ' ');
+              const a = (Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer || 'N/A').toString().replace(/,/g, ' ').replace(/;/g, ' ').replace(/\n/g, ' ');
+              return `${q}: ${a}`;
+            });
+            femaleQA = qaList.join(' | ');
+          }
+          csv += `${femaleQA}${s}`;
+          csv += `${couple.female.dateOfOvarianInduction || ''}${s}`;
+          csv += `${couple.female.noOfIUICycle || ''}${s}`;
+          csv += `${couple.female.durationOfInfertility || ''}${s}`;
+          csv += `${couple.female.typeOfInfertility || ''}${s}`;
+          csv += `${couple.female.lastMenstrualPeriod || ''}\n`;
+          
+          csv += `\n`; // Empty row between couples
         }
+        
         if (isWeb) {
           const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `all_couples_export_${formatDateStr(today)}.csv`;
+          link.download = `all_couples_complete_export_${formatDateStr(today)}.csv`;
           link.click();
           URL.revokeObjectURL(url);
-          showToast('All couples data exported!', 'success');
+          showToast('Complete data exported successfully!', 'success');
         } else {
-          const fileName = `all_couples_export_${formatDateStr(today)}.csv`;
+          const fileName = `all_couples_complete_export_${formatDateStr(today)}.csv`;
           const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
           await FileSystem.writeAsStringAsync(fileUri, csv);
           await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export All Couples' });
-          showToast('All couples data ready to share!', 'success');
+          showToast('Complete data ready to share!', 'success');
         }
-      } else if (exportAllFormat === 'excel') {
-        // Generate Excel-compatible CSV (semicolon separated)
-        let csv = '\ufeff'; // BOM for Excel
-        const s = ';';
-        csv += `FIT FOR BABY - ALL COUPLES EXPORT\n`;
-        csv += `Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
-        csv += `Total Couples: ${couples.length}\n\n`;
-        csv += `COUPLES SUMMARY\n`;
-        csv += `Couple ID${s}Status${s}Enrollment Date${s}Male Name${s}Male Email${s}Male Phone${s}Male Age${s}Male Status${s}Female Name${s}Female Email${s}Female Phone${s}Female Age${s}Female Status\n`;
-        for (const couple of couples) {
-          csv += `${couple.coupleId}${s}`;
-          csv += `${couple.status}${s}`;
-          csv += `${couple.enrollmentDate}${s}`;
-          csv += `${couple.male.name}${s}`;
-          csv += `${couple.male.email || ''}${s}`;
-          csv += `${couple.male.phone || ''}${s}`;
-          csv += `${couple.male.age || ''}${s}`;
-          csv += `${couple.male.status}${s}`;
-          csv += `${couple.female.name}${s}`;
-          csv += `${couple.female.email || ''}${s}`;
-          csv += `${couple.female.phone || ''}${s}`;
-          csv += `${couple.female.age || ''}${s}`;
-          csv += `${couple.female.status}\n`;
-        }
-        if (isWeb) {
-          const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `all_couples_export_${formatDateStr(today)}.csv`;
-          link.click();
-          URL.revokeObjectURL(url);
-          showToast('Excel-compatible file downloaded!', 'success');
-        } else {
-          const fileName = `all_couples_export_${formatDateStr(today)}.csv`;
-          const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-          await FileSystem.writeAsStringAsync(fileUri, '\ufeff' + csv);
-          await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export All Couples' });
-          showToast('Excel file ready to share!', 'success');
-        }
-      } else if (exportAllFormat === 'pdf') {
-        // Generate styled HTML for PDF export with Print/Save button
-        let html = `<!DOCTYPE html><html><head><meta charset='utf-8'><title>All Couples Export</title><style>
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; background: #fff; color: #1e293b; }
-          h2 { font-size: 2rem; color: #006dab; margin-bottom: 10px; }
-          .meta { font-size: 1rem; color: #64748b; margin-bottom: 8px; }
-          .count { font-size: 1.1rem; color: #0f172a; margin-bottom: 20px; }
-          table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-          th, td { border: 1px solid #e2e8f0; padding: 10px 8px; text-align: left; font-size: 1rem; }
-          th { background: #006dab; color: #fff; font-weight: 600; }
-          tr:nth-child(even) { background: #f8fafc; }
-          .print-btn { background: linear-gradient(135deg, #006dab 0%, #0088d4 100%); color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 20px; }
-          @media print { .no-print { display: none; } body { padding: 20px; } }
-        </style></head><body>`;
-        html += `<h2>FIT FOR BABY - ALL COUPLES EXPORT</h2>`;
-        html += `<div class="meta">Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>`;
-        html += `<div class="count">Total Couples: ${couples.length}</div>`;
-        html += `<table><thead><tr><th>Couple ID</th><th>Status</th><th>Enrollment Date</th><th>Male Name</th><th>Male Email</th><th>Male Phone</th><th>Male Age</th><th>Male Status</th><th>Female Name</th><th>Female Email</th><th>Female Phone</th><th>Female Age</th><th>Female Status</th></tr></thead><tbody>`;
-        for (const couple of couples) {
-          html += `<tr>`;
-          html += `<td>${couple.coupleId}</td>`;
-          html += `<td>${couple.status}</td>`;
-          html += `<td>${couple.enrollmentDate}</td>`;
-          html += `<td>${couple.male.name}</td>`;
-          html += `<td>${couple.male.email || ''}</td>`;
-          html += `<td>${couple.male.phone || ''}</td>`;
-          html += `<td>${couple.male.age || ''}</td>`;
-          html += `<td>${couple.male.status}</td>`;
-          html += `<td>${couple.female.name}</td>`;
-          html += `<td>${couple.female.email || ''}</td>`;
-          html += `<td>${couple.female.phone || ''}</td>`;
-          html += `<td>${couple.female.age || ''}</td>`;
-          html += `<td>${couple.female.status}</td>`;
-          html += `</tr>`;
-        }
-        html += `</tbody></table>`;
-        html += `<div class="no-print" style="text-align: center; margin-top: 30px;">
-          <button onclick="window.print()" class="print-btn">🖨️ Print / Save as PDF</button>
-        </div>`;
-        html += `</body></html>`;
-        if (isWeb) {
-          const newWindow = window.open('', '_blank');
-          if (newWindow) {
-            newWindow.document.write(html);
-            newWindow.document.close();
-          }
-          showToast('PDF report opened in new tab. Use Print → Save as PDF', 'success');
-        } else {
-          const fileName = `all_couples_export_${formatDateStr(today)}.html`;
-          const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-          await FileSystem.writeAsStringAsync(fileUri, html);
-          await Sharing.shareAsync(fileUri, { mimeType: 'text/html', dialogTitle: 'Export All Couples' });
-          showToast('PDF report ready to share!', 'success');
-        }
-      }
       
       setShowExportAllModal(false);
     } catch (error) {
@@ -1848,8 +1887,10 @@ export default function AdminUsersScreen() {
     femaleWeight: any[];
     maleExercise: any[];
     femaleExercise: any[];
+    maleQuestionnaire?: any;
+    femaleQuestionnaire?: any;
   }, separator: string = ',') => {
-    const { couple, maleSteps, femaleSteps, maleWeight, femaleWeight, maleExercise, femaleExercise } = data;
+    const { couple, maleSteps, femaleSteps, maleWeight, femaleWeight, maleExercise, femaleExercise, maleQuestionnaire, femaleQuestionnaire } = data;
     const s = separator;
     
     let csv = '';
@@ -1917,6 +1958,41 @@ export default function AdminUsersScreen() {
       csv += `${w.date}${s}${w.weight}${s}${(w.notes || '').replace(/,/g, ' ')}\n`;
     });
     csv += `\n`;
+    
+    // Questionnaire Data
+    if (maleQuestionnaire) {
+      csv += `QUESTIONNAIRE (MALE)\n`;
+      csv += `Status${s}${maleQuestionnaire.isComplete ? 'Completed' : maleQuestionnaire.status === 'in-progress' ? 'In Progress' : 'Not Started'}\n`;
+      csv += `Progress${s}${Math.round(maleQuestionnaire.progress?.percentComplete || 0)}%\n`;
+      if (maleQuestionnaire.answers && Object.keys(maleQuestionnaire.answers).length > 0) {
+        csv += `\n`;
+        csv += `Question${s}Answer\n`;
+        Object.entries(maleQuestionnaire.answers).forEach(([key, answer]: [string, any]) => {
+          const questionText = (answer.questionText || key).replace(/,/g, ' ').replace(/;/g, ' ');
+          const answerText = (Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer || 'N/A').toString().replace(/,/g, ' ').replace(/;/g, ' ');
+          const conditional = answer.conditionalAnswer ? ` (${answer.conditionalAnswer})` : '';
+          csv += `${questionText}${s}${answerText}${conditional}\n`;
+        });
+      }
+      csv += `\n`;
+    }
+    
+    if (femaleQuestionnaire) {
+      csv += `QUESTIONNAIRE (FEMALE)\n`;
+      csv += `Status${s}${femaleQuestionnaire.isComplete ? 'Completed' : femaleQuestionnaire.status === 'in-progress' ? 'In Progress' : 'Not Started'}\n`;
+      csv += `Progress${s}${Math.round(femaleQuestionnaire.progress?.percentComplete || 0)}%\n`;
+      if (femaleQuestionnaire.answers && Object.keys(femaleQuestionnaire.answers).length > 0) {
+        csv += `\n`;
+        csv += `Question${s}Answer\n`;
+        Object.entries(femaleQuestionnaire.answers).forEach(([key, answer]: [string, any]) => {
+          const questionText = (answer.questionText || key).replace(/,/g, ' ').replace(/;/g, ' ');
+          const answerText = (Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer || 'N/A').toString().replace(/,/g, ' ').replace(/;/g, ' ');
+          const conditional = answer.conditionalAnswer ? ` (${answer.conditionalAnswer})` : '';
+          csv += `${questionText}${s}${answerText}${conditional}\n`;
+        });
+      }
+      csv += `\n`;
+    }
     
     // Exercise Data
     csv += `EXERCISE DATA (MALE)\n`;
@@ -3513,44 +3589,6 @@ export default function AdminUsersScreen() {
               </Text>
             </View>
             
-            {/* Export Format Selection */}
-            <View style={{ marginTop: 16, width: '100%' }}>
-              <Text style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 10, fontWeight: '600' }}>SELECT FORMAT:</Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {(['pdf', 'csv', 'excel'] as const).map(format => (
-                  <TouchableOpacity
-                    key={format}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 12,
-                      paddingHorizontal: 8,
-                      borderRadius: 10,
-                      backgroundColor: exportAllFormat === format ? COLORS.accent : COLORS.background,
-                      borderWidth: 1,
-                      borderColor: exportAllFormat === format ? COLORS.accent : COLORS.border,
-                      alignItems: 'center',
-                    }}
-                    onPress={() => setExportAllFormat(format)}
-                  >
-                    <Ionicons 
-                      name={format === 'pdf' ? 'document-text' : format === 'csv' ? 'grid' : 'document'} 
-                      size={20} 
-                      color={exportAllFormat === format ? '#fff' : COLORS.textSecondary} 
-                    />
-                    <Text style={{
-                      fontSize: 12,
-                      fontWeight: '600',
-                      color: exportAllFormat === format ? '#fff' : COLORS.textSecondary,
-                      marginTop: 4,
-                      textTransform: 'uppercase',
-                    }}>
-                      {format}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
             <View style={[styles.deleteButtonRow, { marginTop: 24 }]}>
               <TouchableOpacity
                 style={[styles.deleteButton, styles.deleteButtonCancel]}
