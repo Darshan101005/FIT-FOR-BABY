@@ -1308,49 +1308,140 @@ export default function AdminUsersScreen() {
       const today = new Date();
       const formatDateStr = (date: Date) => date.toISOString().split('T')[0];
       
-      // Generate CSV with all couples summary data
-      let csv = '\ufeff'; // BOM for Excel
-      const s = ',';
-      
-      csv += `FIT FOR BABY - ALL COUPLES EXPORT\n`;
-      csv += `Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
-      csv += `Total Couples: ${couples.length}\n\n`;
-      
-      // Couples Summary Header
-      csv += `COUPLES SUMMARY\n`;
-      csv += `Couple ID${s}Status${s}Enrollment Date${s}Male Name${s}Male Email${s}Male Phone${s}Male Age${s}Male Status${s}Female Name${s}Female Email${s}Female Phone${s}Female Age${s}Female Status\n`;
-      
-      for (const couple of couples) {
-        csv += `${couple.coupleId}${s}`;
-        csv += `${couple.status}${s}`;
-        csv += `${couple.enrollmentDate}${s}`;
-        csv += `${couple.male.name}${s}`;
-        csv += `${couple.male.email || ''}${s}`;
-        csv += `${couple.male.phone || ''}${s}`;
-        csv += `${couple.male.age || ''}${s}`;
-        csv += `${couple.male.status}${s}`;
-        csv += `${couple.female.name}${s}`;
-        csv += `${couple.female.email || ''}${s}`;
-        csv += `${couple.female.phone || ''}${s}`;
-        csv += `${couple.female.age || ''}${s}`;
-        csv += `${couple.female.status}\n`;
-      }
-      
-      if (isWeb) {
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `all_couples_export_${formatDateStr(today)}.csv`;
-        link.click();
-        URL.revokeObjectURL(url);
-        showToast('All couples data exported!', 'success');
-      } else {
-        const fileName = `all_couples_export_${formatDateStr(today)}.csv`;
-        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, csv);
-        await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export All Couples' });
-        showToast('All couples data ready to share!', 'success');
+      if (exportAllFormat === 'csv') {
+        // Generate CSV with all couples summary data
+        let csv = '\ufeff'; // BOM for Excel
+        const s = ',';
+        csv += `FIT FOR BABY - ALL COUPLES EXPORT\n`;
+        csv += `Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
+        csv += `Total Couples: ${couples.length}\n\n`;
+        csv += `COUPLES SUMMARY\n`;
+        csv += `Couple ID${s}Status${s}Enrollment Date${s}Male Name${s}Male Email${s}Male Phone${s}Male Age${s}Male Status${s}Female Name${s}Female Email${s}Female Phone${s}Female Age${s}Female Status\n`;
+        for (const couple of couples) {
+          csv += `${couple.coupleId}${s}`;
+          csv += `${couple.status}${s}`;
+          csv += `${couple.enrollmentDate}${s}`;
+          csv += `${couple.male.name}${s}`;
+          csv += `${couple.male.email || ''}${s}`;
+          csv += `${couple.male.phone || ''}${s}`;
+          csv += `${couple.male.age || ''}${s}`;
+          csv += `${couple.male.status}${s}`;
+          csv += `${couple.female.name}${s}`;
+          csv += `${couple.female.email || ''}${s}`;
+          csv += `${couple.female.phone || ''}${s}`;
+          csv += `${couple.female.age || ''}${s}`;
+          csv += `${couple.female.status}\n`;
+        }
+        if (isWeb) {
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `all_couples_export_${formatDateStr(today)}.csv`;
+          link.click();
+          URL.revokeObjectURL(url);
+          showToast('All couples data exported!', 'success');
+        } else {
+          const fileName = `all_couples_export_${formatDateStr(today)}.csv`;
+          const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+          await FileSystem.writeAsStringAsync(fileUri, csv);
+          await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export All Couples' });
+          showToast('All couples data ready to share!', 'success');
+        }
+      } else if (exportAllFormat === 'excel') {
+        // Generate Excel-compatible CSV (semicolon separated)
+        let csv = '\ufeff'; // BOM for Excel
+        const s = ';';
+        csv += `FIT FOR BABY - ALL COUPLES EXPORT\n`;
+        csv += `Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
+        csv += `Total Couples: ${couples.length}\n\n`;
+        csv += `COUPLES SUMMARY\n`;
+        csv += `Couple ID${s}Status${s}Enrollment Date${s}Male Name${s}Male Email${s}Male Phone${s}Male Age${s}Male Status${s}Female Name${s}Female Email${s}Female Phone${s}Female Age${s}Female Status\n`;
+        for (const couple of couples) {
+          csv += `${couple.coupleId}${s}`;
+          csv += `${couple.status}${s}`;
+          csv += `${couple.enrollmentDate}${s}`;
+          csv += `${couple.male.name}${s}`;
+          csv += `${couple.male.email || ''}${s}`;
+          csv += `${couple.male.phone || ''}${s}`;
+          csv += `${couple.male.age || ''}${s}`;
+          csv += `${couple.male.status}${s}`;
+          csv += `${couple.female.name}${s}`;
+          csv += `${couple.female.email || ''}${s}`;
+          csv += `${couple.female.phone || ''}${s}`;
+          csv += `${couple.female.age || ''}${s}`;
+          csv += `${couple.female.status}\n`;
+        }
+        if (isWeb) {
+          const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `all_couples_export_${formatDateStr(today)}.csv`;
+          link.click();
+          URL.revokeObjectURL(url);
+          showToast('Excel-compatible file downloaded!', 'success');
+        } else {
+          const fileName = `all_couples_export_${formatDateStr(today)}.csv`;
+          const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+          await FileSystem.writeAsStringAsync(fileUri, '\ufeff' + csv);
+          await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export All Couples' });
+          showToast('Excel file ready to share!', 'success');
+        }
+      } else if (exportAllFormat === 'pdf') {
+        // Generate styled HTML for PDF export with Print/Save button
+        let html = `<!DOCTYPE html><html><head><meta charset='utf-8'><title>All Couples Export</title><style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; background: #fff; color: #1e293b; }
+          h2 { font-size: 2rem; color: #006dab; margin-bottom: 10px; }
+          .meta { font-size: 1rem; color: #64748b; margin-bottom: 8px; }
+          .count { font-size: 1.1rem; color: #0f172a; margin-bottom: 20px; }
+          table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+          th, td { border: 1px solid #e2e8f0; padding: 10px 8px; text-align: left; font-size: 1rem; }
+          th { background: #006dab; color: #fff; font-weight: 600; }
+          tr:nth-child(even) { background: #f8fafc; }
+          .print-btn { background: linear-gradient(135deg, #006dab 0%, #0088d4 100%); color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 20px; }
+          @media print { .no-print { display: none; } body { padding: 20px; } }
+        </style></head><body>`;
+        html += `<h2>FIT FOR BABY - ALL COUPLES EXPORT</h2>`;
+        html += `<div class="meta">Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>`;
+        html += `<div class="count">Total Couples: ${couples.length}</div>`;
+        html += `<table><thead><tr><th>Couple ID</th><th>Status</th><th>Enrollment Date</th><th>Male Name</th><th>Male Email</th><th>Male Phone</th><th>Male Age</th><th>Male Status</th><th>Female Name</th><th>Female Email</th><th>Female Phone</th><th>Female Age</th><th>Female Status</th></tr></thead><tbody>`;
+        for (const couple of couples) {
+          html += `<tr>`;
+          html += `<td>${couple.coupleId}</td>`;
+          html += `<td>${couple.status}</td>`;
+          html += `<td>${couple.enrollmentDate}</td>`;
+          html += `<td>${couple.male.name}</td>`;
+          html += `<td>${couple.male.email || ''}</td>`;
+          html += `<td>${couple.male.phone || ''}</td>`;
+          html += `<td>${couple.male.age || ''}</td>`;
+          html += `<td>${couple.male.status}</td>`;
+          html += `<td>${couple.female.name}</td>`;
+          html += `<td>${couple.female.email || ''}</td>`;
+          html += `<td>${couple.female.phone || ''}</td>`;
+          html += `<td>${couple.female.age || ''}</td>`;
+          html += `<td>${couple.female.status}</td>`;
+          html += `</tr>`;
+        }
+        html += `</tbody></table>`;
+        html += `<div class="no-print" style="text-align: center; margin-top: 30px;">
+          <button onclick="window.print()" class="print-btn">🖨️ Print / Save as PDF</button>
+        </div>`;
+        html += `</body></html>`;
+        if (isWeb) {
+          const newWindow = window.open('', '_blank');
+          if (newWindow) {
+            newWindow.document.write(html);
+            newWindow.document.close();
+          }
+          showToast('PDF report opened in new tab. Use Print → Save as PDF', 'success');
+        } else {
+          const fileName = `all_couples_export_${formatDateStr(today)}.html`;
+          const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+          await FileSystem.writeAsStringAsync(fileUri, html);
+          await Sharing.shareAsync(fileUri, { mimeType: 'text/html', dialogTitle: 'Export All Couples' });
+          showToast('PDF report ready to share!', 'success');
+        }
       }
       
       setShowExportAllModal(false);
@@ -1385,10 +1476,10 @@ export default function AdminUsersScreen() {
     };
 
     // Calculate totals
-    const maleTotalSteps = maleSteps.reduce((sum, s) => sum + (s.steps || 0), 0);
-    const femaleTotalSteps = femaleSteps.reduce((sum, s) => sum + (s.steps || 0), 0);
-    const maleAvgSteps = maleSteps.length > 0 ? Math.round(maleTotalSteps / maleSteps.length) : 0;
-    const femaleAvgSteps = femaleSteps.length > 0 ? Math.round(femaleTotalSteps / femaleSteps.length) : 0;
+  const maleTotalSteps = maleSteps.reduce((sum, s) => sum + (typeof s.stepCount === 'number' ? s.stepCount : s.steps || 0), 0);
+  const femaleTotalSteps = femaleSteps.reduce((sum, s) => sum + (typeof s.stepCount === 'number' ? s.stepCount : s.steps || 0), 0);
+  const maleAvgSteps = maleSteps.length > 0 ? Math.round(maleTotalSteps / maleSteps.length) : 0;
+  const femaleAvgSteps = femaleSteps.length > 0 ? Math.round(femaleTotalSteps / femaleSteps.length) : 0;
     const maleExerciseMinutes = maleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
     const femaleExerciseMinutes = femaleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
 
@@ -1533,21 +1624,99 @@ export default function AdminUsersScreen() {
           <h4 style="color: #006dab; margin-bottom: 10px;">♂ ${couple.male.name}</h4>
           ${maleSteps.length > 0 ? `
           <table class="data-table">
-            <thead><tr><th>Date</th><th>Steps</th><th>Goal</th></tr></thead>
+            <thead><tr><th>Date</th><th>Steps</th><th>Goal</th><th>Status</th></tr></thead>
             <tbody>
-              ${maleSteps.slice(0, 15).map(s => `<tr><td>${formatDate(s.date)}</td><td>${(s.steps || 0).toLocaleString()}</td><td>${(s.goal || 10000).toLocaleString()}</td></tr>`).join('')}
+              ${maleSteps.slice(0, 15).map(s => {
+                // Use admin-side daily step target if available, otherwise fallback
+                let goal = 3000;
+                if (s.dailyStepTarget) {
+                  goal = typeof s.dailyStepTarget === 'number' ? s.dailyStepTarget : parseInt(s.dailyStepTarget);
+                } else if (typeof s.goal === 'number') {
+                  goal = s.goal;
+                } else if (s.goal) {
+                  goal = parseInt(s.goal);
+                }
+                const steps = (typeof s.stepCount === 'number' ? s.stepCount : s.steps) || 0;
+                const today = new Date();
+                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                let dateStr = '';
+                if (s.date) {
+                  if (typeof s.date === 'string') {
+                    dateStr = s.date;
+                  } else if (s.date.toDate) {
+                    const d = s.date.toDate();
+                    dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  } else if (s.date.toISOString) {
+                    dateStr = s.date.toISOString().split('T')[0];
+                  }
+                }
+                let status = '';
+                let statusColor = '';
+                if (dateStr === todayStr) {
+                  status = '⏳ In Progress';
+                  statusColor = '#f59e0b';
+                } else {
+                  if (steps >= goal) {
+                    status = '✅ Completed';
+                    statusColor = '#16a34a';
+                  } else {
+                    status = '❌ Not Completed';
+                    statusColor = '#ef4444';
+                  }
+                }
+                return `<tr><td>${formatDate(s.date)}</td><td>${steps.toLocaleString()}</td><td>${goal.toLocaleString()}</td><td style=\"color: ${statusColor};\">${status}</td></tr>`;
+              }).join('')}
             </tbody>
-          </table>` : '<p style="color: #94a3b8;">No data</p>'}
+          </table>` : '<p style=\"color: #94a3b8;\">No data</p>'}
         </div>
         <div>
           <h4 style="color: #7da33e; margin-bottom: 10px;">♀ ${couple.female.name}</h4>
           ${femaleSteps.length > 0 ? `
           <table class="data-table">
-            <thead><tr><th>Date</th><th>Steps</th><th>Goal</th></tr></thead>
+            <thead><tr><th>Date</th><th>Steps</th><th>Goal</th><th>Status</th></tr></thead>
             <tbody>
-              ${femaleSteps.slice(0, 15).map(s => `<tr><td>${formatDate(s.date)}</td><td>${(s.steps || 0).toLocaleString()}</td><td>${(s.goal || 10000).toLocaleString()}</td></tr>`).join('')}
+              ${femaleSteps.slice(0, 15).map(s => {
+                // Use admin-side daily step target if available, otherwise fallback
+                let goal = 3000;
+                if (s.dailyStepTarget) {
+                  goal = typeof s.dailyStepTarget === 'number' ? s.dailyStepTarget : parseInt(s.dailyStepTarget);
+                } else if (typeof s.goal === 'number') {
+                  goal = s.goal;
+                } else if (s.goal) {
+                  goal = parseInt(s.goal);
+                }
+                const steps = (typeof s.stepCount === 'number' ? s.stepCount : s.steps) || 0;
+                const today = new Date();
+                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                let dateStr = '';
+                if (s.date) {
+                  if (typeof s.date === 'string') {
+                    dateStr = s.date;
+                  } else if (s.date.toDate) {
+                    const d = s.date.toDate();
+                    dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  } else if (s.date.toISOString) {
+                    dateStr = s.date.toISOString().split('T')[0];
+                  }
+                }
+                let status = '';
+                let statusColor = '';
+                if (dateStr === todayStr) {
+                  status = '⏳ In Progress';
+                  statusColor = '#f59e0b';
+                } else {
+                  if (steps >= goal) {
+                    status = '✅ Completed';
+                    statusColor = '#16a34a';
+                  } else {
+                    status = '❌ Not Completed';
+                    statusColor = '#ef4444';
+                  }
+                }
+                return `<tr><td>${formatDate(s.date)}</td><td>${steps.toLocaleString()}</td><td>${goal.toLocaleString()}</td><td style=\"color: ${statusColor};\">${status}</td></tr>`;
+              }).join('')}
             </tbody>
-          </table>` : '<p style="color: #94a3b8;">No data</p>'}
+          </table>` : '<p style=\"color: #94a3b8;\">No data</p>'}
         </div>
       </div>
     </div>
@@ -1611,9 +1780,9 @@ export default function AdminUsersScreen() {
           <h4 style="color: #006dab; margin-bottom: 10px;">♂ ${couple.male.name} (${maleFood.length} entries)</h4>
           ${maleFood.length > 0 ? `
           <table class="data-table">
-            <thead><tr><th>Date</th><th>Meal</th><th>Food</th><th>Cal</th></tr></thead>
+            <thead><tr><th>Date</th><th>Meal</th><th>Food</th></tr></thead>
             <tbody>
-              ${maleFood.slice(0, 10).map(f => `<tr><td>${formatDate(f.date)}</td><td>${f.mealType || 'Meal'}</td><td>${f.foodName || f.name || 'Food'}</td><td>${f.calories || '-'}</td></tr>`).join('')}
+              ${maleFood.slice(0, 10).map(f => `<tr><td>${formatDate(f.date)}</td><td>${f.mealType || 'Meal'}</td><td>${f.foodName || f.name || 'Food'}</td></tr>`).join('')}
             </tbody>
           </table>` : '<p style="color: #94a3b8;">No data</p>'}
         </div>
@@ -1621,9 +1790,9 @@ export default function AdminUsersScreen() {
           <h4 style="color: #7da33e; margin-bottom: 10px;">♀ ${couple.female.name} (${femaleFood.length} entries)</h4>
           ${femaleFood.length > 0 ? `
           <table class="data-table">
-            <thead><tr><th>Date</th><th>Meal</th><th>Food</th><th>Cal</th></tr></thead>
+            <thead><tr><th>Date</th><th>Meal</th><th>Food</th></tr></thead>
             <tbody>
-              ${femaleFood.slice(0, 10).map(f => `<tr><td>${formatDate(f.date)}</td><td>${f.mealType || 'Meal'}</td><td>${f.foodName || f.name || 'Food'}</td><td>${f.calories || '-'}</td></tr>`).join('')}
+              ${femaleFood.slice(0, 10).map(f => `<tr><td>${formatDate(f.date)}</td><td>${f.mealType || 'Meal'}</td><td>${f.foodName || f.name || 'Food'}</td></tr>`).join('')}
             </tbody>
           </table>` : '<p style="color: #94a3b8;">No data</p>'}
         </div>
@@ -1633,17 +1802,25 @@ export default function AdminUsersScreen() {
     <div class="section">
       <h2 class="section-title">📋 Questionnaire Progress</h2>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-        <div style="background: #f8fafc; padding: 16px; border-radius: 10px; border-left: 4px solid #006dab;">
+        <div style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
           <h4 style="color: #006dab; margin-bottom: 10px;">♂ ${couple.male.name}</h4>
-          <p><strong>Status:</strong> ${maleQuestionnaire?.isComplete ? '✅ Completed' : '⏳ In Progress'}</p>
-          <p><strong>Progress:</strong> ${maleQuestionnaire?.progress || 0}%</p>
-          <p><strong>Answers:</strong> ${maleQuestionnaire?.answers ? Object.keys(maleQuestionnaire.answers).length : 0}</p>
+          <div style="font-size: 15px;">
+            <p><strong>Status:</strong> ${maleQuestionnaire?.isComplete ? '✅ Completed' : (maleQuestionnaire ? '⏳ In Progress' : '📝 Not Started')}</p>
+            <p><strong>Progress:</strong> ${typeof maleQuestionnaire?.progress === 'object' && maleQuestionnaire?.progress?.percentComplete !== undefined ? maleQuestionnaire.progress.percentComplete : (typeof maleQuestionnaire?.progress === 'number' ? maleQuestionnaire.progress : 0)}%</p>
+            <p><strong>Questions Answered:</strong> ${maleQuestionnaire?.progress?.answeredQuestions !== undefined ? maleQuestionnaire.progress.answeredQuestions : (maleQuestionnaire?.answers ? Object.keys(maleQuestionnaire.answers).length : 0)} / ${maleQuestionnaire?.progress?.totalQuestions !== undefined ? maleQuestionnaire.progress.totalQuestions : (maleQuestionnaire?.totalQuestions || 0)}</p>
+            ${maleQuestionnaire?.lastUpdatedAt ? `<p><strong>Last Updated:</strong> ${maleQuestionnaire.lastUpdatedAt.toDate ? maleQuestionnaire.lastUpdatedAt.toDate().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</p>` : ''}
+            ${maleQuestionnaire?.language ? `<p><strong>Language:</strong> ${maleQuestionnaire.language === 'english' ? '🇬🇧 English' : '🇮🇳 தமிழ்'}</p>` : ''}
+          </div>
         </div>
-        <div style="background: #f8fafc; padding: 16px; border-radius: 10px; border-left: 4px solid #98be4e;">
+        <div style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
           <h4 style="color: #7da33e; margin-bottom: 10px;">♀ ${couple.female.name}</h4>
-          <p><strong>Status:</strong> ${femaleQuestionnaire?.isComplete ? '✅ Completed' : '⏳ In Progress'}</p>
-          <p><strong>Progress:</strong> ${femaleQuestionnaire?.progress || 0}%</p>
-          <p><strong>Answers:</strong> ${femaleQuestionnaire?.answers ? Object.keys(femaleQuestionnaire.answers).length : 0}</p>
+          <div style="font-size: 15px;">
+            <p><strong>Status:</strong> ${femaleQuestionnaire?.isComplete ? '✅ Completed' : (femaleQuestionnaire ? '⏳ In Progress' : '📝 Not Started')}</p>
+            <p><strong>Progress:</strong> ${typeof femaleQuestionnaire?.progress === 'object' && femaleQuestionnaire?.progress?.percentComplete !== undefined ? femaleQuestionnaire.progress.percentComplete : (typeof femaleQuestionnaire?.progress === 'number' ? femaleQuestionnaire.progress : 0)}%</p>
+            <p><strong>Questions Answered:</strong> ${femaleQuestionnaire?.progress?.answeredQuestions !== undefined ? femaleQuestionnaire.progress.answeredQuestions : (femaleQuestionnaire?.answers ? Object.keys(femaleQuestionnaire.answers).length : 0)} / ${femaleQuestionnaire?.progress?.totalQuestions !== undefined ? femaleQuestionnaire.progress.totalQuestions : (femaleQuestionnaire?.totalQuestions || 0)}</p>
+            ${femaleQuestionnaire?.lastUpdatedAt ? `<p><strong>Last Updated:</strong> ${femaleQuestionnaire.lastUpdatedAt.toDate ? femaleQuestionnaire.lastUpdatedAt.toDate().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</p>` : ''}
+            ${femaleQuestionnaire?.language ? `<p><strong>Language:</strong> ${femaleQuestionnaire.language === 'english' ? '🇬🇧 English' : '🇮🇳 தமிழ்'}</p>` : ''}
+          </div>
         </div>
       </div>
     </div>
