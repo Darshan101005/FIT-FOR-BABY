@@ -1023,6 +1023,13 @@ export interface CoupleUser {
   weight?: number;
   height?: number;
   bmi?: number;
+
+  // Female Fertility Fields (for female users only)
+  dateOfOvarianInduction?: string;
+  noOfIUICycle?: number;
+  durationOfInfertility?: string;
+  typeOfInfertility?: string;
+  lastMenstrualPeriod?: string;
   
   // Address (India-specific)
   address?: {

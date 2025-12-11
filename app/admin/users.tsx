@@ -7,17 +7,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -92,6 +92,12 @@ export default function AdminUsersScreen() {
     city: '',
     state: '',
     pincode: '',
+    // Female fertility fields
+    dateOfOvarianInduction: '',
+    noOfIUICycle: '',
+    durationOfInfertility: '',
+    typeOfInfertility: '',
+    lastMenstrualPeriod: '',
   });
 
   // Delete confirmation modal state
@@ -367,6 +373,12 @@ export default function AdminUsersScreen() {
               city: user.address?.city || '',
               state: user.address?.state || '',
               pincode: user.address?.pincode || '',
+              // Female fertility fields
+              dateOfOvarianInduction: user.dateOfOvarianInduction || '',
+              noOfIUICycle: user.noOfIUICycle !== undefined && user.noOfIUICycle !== null ? user.noOfIUICycle.toString() : '',
+              durationOfInfertility: user.durationOfInfertility || '',
+              typeOfInfertility: user.typeOfInfertility || '',
+              lastMenstrualPeriod: user.lastMenstrualPeriod || '',
             });
             setShowEditModal(true);
           }
@@ -449,7 +461,16 @@ export default function AdminUsersScreen() {
         };
       }
       
-      await (coupleService as any).update(coupleId, updates);
+      // Female fertility fields (only for female users)
+      if (gender === 'female') {
+        if (editForm.dateOfOvarianInduction) updates[`${gender}.dateOfOvarianInduction`] = editForm.dateOfOvarianInduction.trim();
+        if (editForm.noOfIUICycle) updates[`${gender}.noOfIUICycle`] = parseInt(editForm.noOfIUICycle);
+        if (editForm.durationOfInfertility) updates[`${gender}.durationOfInfertility`] = editForm.durationOfInfertility.trim();
+        if (editForm.typeOfInfertility) updates[`${gender}.typeOfInfertility`] = editForm.typeOfInfertility.trim();
+        if (editForm.lastMenstrualPeriod) updates[`${gender}.lastMenstrualPeriod`] = editForm.lastMenstrualPeriod.trim();
+      }
+      
+      await coupleService.updateUserField(coupleId, gender, updates);
       
       setShowEditModal(false);
       setEditingUser(null);
@@ -989,6 +1010,33 @@ export default function AdminUsersScreen() {
           <div class="detail-value" style="color: ${user.status === 'active' ? '#16a34a' : '#dc2626'}">${user.status?.toUpperCase() || 'UNKNOWN'}</div>
         </div>
       </div>
+      ${gender === 'female' && user.fertilityInfo ? `
+      <div class="fertility-section" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.1);">
+        <h3 style="font-size: 14px; font-weight: 600; color: #7da33e; margin-bottom: 12px;">🌸 Fertility Information</h3>
+        <div class="profile-details" style="grid-template-columns: repeat(3, 1fr);">
+          <div class="detail-item">
+            <div class="detail-label">Date of Ovarian Induction</div>
+            <div class="detail-value">${user.fertilityInfo.dateOfOvarianInduction ? formatDate(user.fertilityInfo.dateOfOvarianInduction) : 'Not provided'}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">No. of IUI Cycle</div>
+            <div class="detail-value">${user.fertilityInfo.noOfIUICycle || 'Not provided'}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Duration of Infertility</div>
+            <div class="detail-value">${user.fertilityInfo.durationOfInfertility || 'Not provided'}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Type of Infertility</div>
+            <div class="detail-value">${user.fertilityInfo.typeOfInfertility || 'Not provided'}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Last Menstrual Period</div>
+            <div class="detail-value">${user.fertilityInfo.lastMenstrualPeriod ? formatDate(user.fertilityInfo.lastMenstrualPeriod) : 'Not provided'}</div>
+          </div>
+        </div>
+      </div>
+      ` : ''}
     </div>
     
     <!-- Stats Summary -->
@@ -2672,6 +2720,71 @@ export default function AdminUsersScreen() {
                     keyboardType="number-pad"
                   />
                 </View>
+
+                {/* Female Fertility Information - Only shown for female users */}
+                {editingUser?.gender === 'female' && (
+                  <>
+                    <Text style={[styles.formSectionTitle, { marginTop: 20 }]}>Fertility Information</Text>
+                    
+                    <View style={styles.inputRow}>
+                      <View style={[styles.inputGroup, { flex: 1 }]}>
+                        <Text style={styles.inputLabel}>Date of Ovarian Induction</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={editForm.dateOfOvarianInduction}
+                          onChangeText={(text) => setEditForm({ ...editForm, dateOfOvarianInduction: text })}
+                          placeholder="YYYY-MM-DD"
+                          placeholderTextColor={COLORS.textMuted}
+                        />
+                      </View>
+                      <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
+                        <Text style={styles.inputLabel}>No. of IUI Cycle</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={editForm.noOfIUICycle}
+                          onChangeText={(text) => setEditForm({ ...editForm, noOfIUICycle: text })}
+                          placeholder="Enter number"
+                          placeholderTextColor={COLORS.textMuted}
+                          keyboardType="number-pad"
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.inputRow}>
+                      <View style={[styles.inputGroup, { flex: 1 }]}>
+                        <Text style={styles.inputLabel}>Duration of Infertility</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={editForm.durationOfInfertility}
+                          onChangeText={(text) => setEditForm({ ...editForm, durationOfInfertility: text })}
+                          placeholder="e.g., 2 years"
+                          placeholderTextColor={COLORS.textMuted}
+                        />
+                      </View>
+                      <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
+                        <Text style={styles.inputLabel}>Type of Infertility</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={editForm.typeOfInfertility}
+                          onChangeText={(text) => setEditForm({ ...editForm, typeOfInfertility: text })}
+                          placeholder="Primary/Secondary"
+                          placeholderTextColor={COLORS.textMuted}
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Last Menstrual Period</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={editForm.lastMenstrualPeriod}
+                        onChangeText={(text) => setEditForm({ ...editForm, lastMenstrualPeriod: text })}
+                        placeholder="YYYY-MM-DD"
+                        placeholderTextColor={COLORS.textMuted}
+                      />
+                    </View>
+                  </>
+                )}
               </View>
             </ScrollView>
 
