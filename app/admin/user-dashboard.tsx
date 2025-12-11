@@ -3,15 +3,15 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 import { CoupleExerciseLog, CoupleFoodLog, CoupleStepEntry, CoupleWeightLog, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService, formatDateString } from '../../services/firestore.service';
 
@@ -570,9 +570,50 @@ export default function UserDashboardScreen() {
           <Ionicons name="male" size={18} color={COLORS.primary} />
           <Text style={[styles.userSummaryTitle, { color: COLORS.primary }]}>{maleUser?.name}</Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={isMobile} style={isMobile ? { marginHorizontal: -8 } : undefined} contentContainerStyle={isMobile ? { paddingHorizontal: 8 } : undefined}>
-          <View style={[styles.summaryCards, isMobile && styles.summaryCardsMobile]}>
-            <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary }, isMobile && { minWidth: 120 }]}>
+        {isMobile ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={isMobile} style={{ marginHorizontal: -8 }} contentContainerStyle={{ paddingHorizontal: 8 }}>
+            <View style={[styles.summaryCards, styles.summaryCardsMobile]}>
+              <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary, minWidth: 120 }]}>
+                <View style={[styles.summaryIcon, { backgroundColor: COLORS.success + '15' }]}>
+                  <Ionicons name="fitness" size={20} color={COLORS.success} />
+                </View>
+                <View>
+                  <Text style={styles.summaryValue}>{maleTotalExerciseDuration + calculateTimeFromSteps(getTodaySteps('male'))} min</Text>
+                  <Text style={styles.summaryLabel}>Exercise</Text>
+                </View>
+              </View>
+              <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary, minWidth: 120 }]}>
+                <View style={[styles.summaryIcon, { backgroundColor: COLORS.warning + '15' }]}>
+                  <Ionicons name="flame" size={20} color={COLORS.warning} />
+                </View>
+                <View>
+                  <Text style={styles.summaryValue}>{maleTotalExerciseCalories + calculateCaloriesFromSteps(getTodaySteps('male'), getUserWeight('male'))}</Text>
+                  <Text style={styles.summaryLabel}>Burned</Text>
+                </View>
+              </View>
+              <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary, minWidth: 120 }]}>
+                <View style={[styles.summaryIcon, { backgroundColor: COLORS.success + '15' }]}>
+                  <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.success} />
+                </View>
+                <View>
+                  <Text style={styles.summaryValue}>{getTodaySteps('male').toLocaleString()}</Text>
+                  <Text style={styles.summaryLabel}>Steps</Text>
+                </View>
+              </View>
+              <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary, minWidth: 120 }]}>
+                <View style={[styles.summaryIcon, { backgroundColor: COLORS.info + '15' }]}>
+                  <Ionicons name="nutrition" size={20} color={COLORS.info} />
+                </View>
+                <View>
+                  <Text style={styles.summaryValue}>{maleTotalMealCalories}</Text>
+                  <Text style={styles.summaryLabel}>Cal Intake</Text>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={styles.summaryCards}>
+            <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary }]}>
               <View style={[styles.summaryIcon, { backgroundColor: COLORS.success + '15' }]}>
                 <Ionicons name="fitness" size={20} color={COLORS.success} />
               </View>
@@ -581,7 +622,7 @@ export default function UserDashboardScreen() {
                 <Text style={styles.summaryLabel}>Exercise</Text>
               </View>
             </View>
-            <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary }, isMobile && { minWidth: 120 }]}>
+            <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary }]}>
               <View style={[styles.summaryIcon, { backgroundColor: COLORS.warning + '15' }]}>
                 <Ionicons name="flame" size={20} color={COLORS.warning} />
               </View>
@@ -590,7 +631,7 @@ export default function UserDashboardScreen() {
                 <Text style={styles.summaryLabel}>Burned</Text>
               </View>
             </View>
-            <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary }, isMobile && { minWidth: 120 }]}>
+            <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary }]}>
               <View style={[styles.summaryIcon, { backgroundColor: COLORS.success + '15' }]}>
                 <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.success} />
               </View>
@@ -599,7 +640,7 @@ export default function UserDashboardScreen() {
                 <Text style={styles.summaryLabel}>Steps</Text>
               </View>
             </View>
-            <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary }, isMobile && { minWidth: 120 }]}>
+            <View style={[styles.summaryCard, { borderLeftColor: COLORS.primary }]}>
               <View style={[styles.summaryIcon, { backgroundColor: COLORS.info + '15' }]}>
                 <Ionicons name="nutrition" size={20} color={COLORS.info} />
               </View>
@@ -609,7 +650,7 @@ export default function UserDashboardScreen() {
               </View>
             </View>
           </View>
-        </ScrollView>
+        )}
       </View>
 
       {/* Female User Summary */}
@@ -618,9 +659,50 @@ export default function UserDashboardScreen() {
           <Ionicons name="female" size={18} color="#e91e8c" />
           <Text style={[styles.userSummaryTitle, { color: '#e91e8c' }]}>{femaleUser?.name}</Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={isMobile} style={isMobile ? { marginHorizontal: -8 } : undefined} contentContainerStyle={isMobile ? { paddingHorizontal: 8 } : undefined}>
-          <View style={[styles.summaryCards, isMobile && styles.summaryCardsMobile]}>
-            <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c' }, isMobile && { minWidth: 120 }]}>
+        {isMobile ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={isMobile} style={{ marginHorizontal: -8 }} contentContainerStyle={{ paddingHorizontal: 8 }}>
+            <View style={[styles.summaryCards, styles.summaryCardsMobile]}>
+              <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c', minWidth: 120 }]}>
+                <View style={[styles.summaryIcon, { backgroundColor: COLORS.success + '15' }]}>
+                  <Ionicons name="fitness" size={20} color={COLORS.success} />
+                </View>
+                <View>
+                  <Text style={styles.summaryValue}>{femaleTotalExerciseDuration + calculateTimeFromSteps(getTodaySteps('female'))} min</Text>
+                  <Text style={styles.summaryLabel}>Exercise</Text>
+                </View>
+              </View>
+              <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c', minWidth: 120 }]}>
+                <View style={[styles.summaryIcon, { backgroundColor: COLORS.warning + '15' }]}>
+                  <Ionicons name="flame" size={20} color={COLORS.warning} />
+                </View>
+                <View>
+                  <Text style={styles.summaryValue}>{femaleTotalExerciseCalories + calculateCaloriesFromSteps(getTodaySteps('female'), getUserWeight('female'))}</Text>
+                  <Text style={styles.summaryLabel}>Burned</Text>
+                </View>
+              </View>
+              <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c', minWidth: 120 }]}>
+                <View style={[styles.summaryIcon, { backgroundColor: COLORS.success + '15' }]}>
+                  <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.success} />
+                </View>
+                <View>
+                  <Text style={styles.summaryValue}>{getTodaySteps('female').toLocaleString()}</Text>
+                  <Text style={styles.summaryLabel}>Steps</Text>
+                </View>
+              </View>
+              <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c', minWidth: 120 }]}>
+                <View style={[styles.summaryIcon, { backgroundColor: COLORS.info + '15' }]}>
+                  <Ionicons name="nutrition" size={20} color={COLORS.info} />
+                </View>
+                <View>
+                  <Text style={styles.summaryValue}>{femaleTotalMealCalories}</Text>
+                  <Text style={styles.summaryLabel}>Cal Intake</Text>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={styles.summaryCards}>
+            <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c' }]}>
               <View style={[styles.summaryIcon, { backgroundColor: COLORS.success + '15' }]}>
                 <Ionicons name="fitness" size={20} color={COLORS.success} />
               </View>
@@ -629,7 +711,7 @@ export default function UserDashboardScreen() {
                 <Text style={styles.summaryLabel}>Exercise</Text>
               </View>
             </View>
-            <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c' }, isMobile && { minWidth: 120 }]}>
+            <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c' }]}>
               <View style={[styles.summaryIcon, { backgroundColor: COLORS.warning + '15' }]}>
                 <Ionicons name="flame" size={20} color={COLORS.warning} />
               </View>
@@ -638,7 +720,7 @@ export default function UserDashboardScreen() {
                 <Text style={styles.summaryLabel}>Burned</Text>
               </View>
             </View>
-            <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c' }, isMobile && { minWidth: 120 }]}>
+            <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c' }]}>
               <View style={[styles.summaryIcon, { backgroundColor: COLORS.success + '15' }]}>
                 <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.success} />
               </View>
@@ -647,7 +729,7 @@ export default function UserDashboardScreen() {
                 <Text style={styles.summaryLabel}>Steps</Text>
               </View>
             </View>
-            <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c' }, isMobile && { minWidth: 120 }]}>
+            <View style={[styles.summaryCard, { borderLeftColor: '#e91e8c' }]}>
               <View style={[styles.summaryIcon, { backgroundColor: COLORS.info + '15' }]}>
                 <Ionicons name="nutrition" size={20} color={COLORS.info} />
               </View>
@@ -657,7 +739,7 @@ export default function UserDashboardScreen() {
               </View>
             </View>
           </View>
-        </ScrollView>
+        )}
       </View>
 
       {/* Step Log Proofs Section */}
@@ -1330,17 +1412,17 @@ export default function UserDashboardScreen() {
             </View>
             <View style={[styles.nutritionItem, { backgroundColor: COLORS.error + '15' }]}>
               <MaterialCommunityIcons name="food-steak" size={18} color={COLORS.error} />
-              <Text style={styles.nutritionValue}>{maleTotals.protein}g</Text>
+              <Text style={styles.nutritionValue}>{Number(maleTotals.protein).toFixed(1)}g</Text>
               <Text style={styles.nutritionLabel}>Protein</Text>
             </View>
             <View style={[styles.nutritionItem, { backgroundColor: COLORS.info + '15' }]}>
               <MaterialCommunityIcons name="bread-slice" size={18} color={COLORS.info} />
-              <Text style={styles.nutritionValue}>{maleTotals.carbs}g</Text>
+              <Text style={styles.nutritionValue}>{Number(maleTotals.carbs).toFixed(1)}g</Text>
               <Text style={styles.nutritionLabel}>Carbs</Text>
             </View>
             <View style={[styles.nutritionItem, { backgroundColor: COLORS.accent + '15' }]}>
               <MaterialCommunityIcons name="oil" size={18} color={COLORS.accent} />
-              <Text style={styles.nutritionValue}>{maleTotals.fat}g</Text>
+              <Text style={styles.nutritionValue}>{Number(maleTotals.fat).toFixed(1)}g</Text>
               <Text style={styles.nutritionLabel}>Fat</Text>
             </View>
           </View>
@@ -1360,17 +1442,17 @@ export default function UserDashboardScreen() {
             </View>
             <View style={[styles.nutritionItem, { backgroundColor: COLORS.error + '15' }]}>
               <MaterialCommunityIcons name="food-steak" size={18} color={COLORS.error} />
-              <Text style={styles.nutritionValue}>{femaleTotals.protein}g</Text>
+              <Text style={styles.nutritionValue}>{Number(femaleTotals.protein).toFixed(1)}g</Text>
               <Text style={styles.nutritionLabel}>Protein</Text>
             </View>
             <View style={[styles.nutritionItem, { backgroundColor: COLORS.info + '15' }]}>
               <MaterialCommunityIcons name="bread-slice" size={18} color={COLORS.info} />
-              <Text style={styles.nutritionValue}>{femaleTotals.carbs}g</Text>
+              <Text style={styles.nutritionValue}>{Number(femaleTotals.carbs).toFixed(1)}g</Text>
               <Text style={styles.nutritionLabel}>Carbs</Text>
             </View>
             <View style={[styles.nutritionItem, { backgroundColor: COLORS.accent + '15' }]}>
               <MaterialCommunityIcons name="oil" size={18} color={COLORS.accent} />
-              <Text style={styles.nutritionValue}>{femaleTotals.fat}g</Text>
+              <Text style={styles.nutritionValue}>{Number(femaleTotals.fat).toFixed(1)}g</Text>
               <Text style={styles.nutritionLabel}>Fat</Text>
             </View>
           </View>
@@ -2445,6 +2527,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    width: '100%',
   },
   summaryCardsMobile: {
     flexDirection: 'row',

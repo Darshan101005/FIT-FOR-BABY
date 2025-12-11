@@ -8,18 +8,18 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Animated,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  Alert,
+  Animated,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -627,9 +627,7 @@ export default function ChatScreen() {
           </View>
         ) : (
           <View style={[styles.inputContainer, { maxWidth: maxContentWidth, paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <TouchableOpacity style={styles.attachButton} onPress={handleAttachFile}>
-              <Ionicons name="attach" size={24} color="#64748b" />
-            </TouchableOpacity>
+            {/* Removed multimedia (attach) icon */}
             <View style={[styles.inputWrapper, { backgroundColor: isDarkMode ? '#334155' : '#f1f5f9' }]}>
               <TextInput
                 style={[styles.textInput, { color: isDarkMode ? '#fff' : '#0f172a' }]}
