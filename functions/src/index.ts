@@ -524,7 +524,8 @@ export const registerFCMToken = functions.https.onCall(async (data, context) => 
     }
 
     const coupleData = coupleDoc.data() as Couple;
-    const currentTokens = coupleData[gender]?.deviceTokens || [];
+    const userData = gender === 'male' ? coupleData.male : coupleData.female;
+    const currentTokens = userData?.deviceTokens || [];
 
     // Only add if not already present
     if (!currentTokens.includes(token)) {
