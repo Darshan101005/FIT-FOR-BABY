@@ -1,4 +1,5 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
+import APP_VERSION from '@/constants/appVersion';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,8 +20,8 @@ import {
 const isWeb = Platform.OS === 'web';
 
 const appInfo = {
-  version: '1.0.0',
-  build: '2025.12.07',
+  version: APP_VERSION.version,
+  build: APP_VERSION.build,
   releaseDate: 'December 2025',
 };
 

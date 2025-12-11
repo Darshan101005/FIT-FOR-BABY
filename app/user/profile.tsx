@@ -1,5 +1,6 @@
 import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { MobileProfileCardSkeleton, QuestionnaireCardSkeleton, WebProfileCardSkeleton } from '@/components/ui/SkeletonLoader';
+import APP_VERSION from '@/constants/appVersion';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -1572,7 +1573,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           {/* App Version */}
-          <Text style={[styles.version, { color: colors.textMuted }]}>Fit for Baby v1.0.0</Text>
+          <Text style={[styles.version, { color: colors.textMuted }]}>Fit for Baby v{APP_VERSION.version}</Text>
         </View>
       </ScrollView>
       

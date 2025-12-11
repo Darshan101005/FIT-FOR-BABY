@@ -595,18 +595,6 @@ export default function AdminHomeScreen() {
         <TouchableOpacity style={styles.headerButton} onPress={openSearchModal}>
           <Ionicons name="search" size={22} color={COLORS.textSecondary} />
         </TouchableOpacity>
-        {!isMobile && (
-          <TouchableOpacity style={styles.headerButton} onPress={openNotificationModal}>
-            <Ionicons name="notifications-outline" size={22} color={COLORS.textSecondary} />
-            {totalUnreadCount > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>
-                  {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        )}
       </View>
     </View>
   );
