@@ -2,10 +2,11 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import React, { useRef, useState, useEffect } from 'react';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
+const DOWNLOAD_APK_URL = 'https://github.com/Darshan101005/FIT-FOR-BABY/releases/download/APK/FIT-FOR-BABY-v1.0.0.apk';
 
 const LandingScreen: React.FC = () => {
   const router = useRouter();
@@ -13,6 +14,18 @@ const LandingScreen: React.FC = () => {
   const scrollViewRef = useRef<ScrollView>(null);
   const [isLoginHovered, setIsLoginHovered] = useState(false);
   const [isCtaHeartHovered, setIsCtaHeartHovered] = useState(false);
+
+  // MOBILE REDIRECT LOGIC
+  useEffect(() => {
+    if (screenWidth < 768) {
+      router.replace('/get-started');
+    }
+  }, [screenWidth, router]);
+
+  // Prevent rendering the landing page content on mobile
+  if (screenWidth < 768) {
+    return null; 
+  }
 
   const primaryButtonGradientColors = ['#0EA5E9', '#06B6D4', '#10B981', '#98be4e'] as const;
 
@@ -37,6 +50,10 @@ const LandingScreen: React.FC = () => {
     scrollViewRef.current?.scrollTo({ y: yOffset, animated: true });
   };
 
+  const handleDownload = () => {
+    Linking.openURL(DOWNLOAD_APK_URL);
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, isWeb && styles.headerGlassy]}>
@@ -55,6 +72,11 @@ const LandingScreen: React.FC = () => {
           <TouchableOpacity onPress={() => scrollToSection('howitworks')} activeOpacity={0.8}>
             <Text style={styles.navLink}>How It Works</Text>
           </TouchableOpacity>
+          
+          <TouchableOpacity onPress={handleDownload} style={styles.downloadBtn} activeOpacity={0.8}>
+            <Text style={styles.downloadBtnText}>Download APK</Text>
+          </TouchableOpacity>
+
           <Pressable
             style={({ pressed, hovered }) => [
               styles.loginBtn,
@@ -122,7 +144,7 @@ const LandingScreen: React.FC = () => {
         <View style={styles.mobileAccessSection}>
           <Text style={styles.mobileAccessTitle}>Access on Mobile</Text>
           <Text style={styles.mobileAccessSubtitle}>
-            Scan the QR code to access Fit for Baby on your phone instantly.
+            Scan the QR code to access Fit for Baby App.
           </Text>
           <View style={styles.qrCodeContainer}>
             <Image
@@ -139,7 +161,7 @@ const LandingScreen: React.FC = () => {
             </View>
             <View style={styles.qrFeatureItem}>
               <MaterialCommunityIcons name="cloud-download-outline" size={20} color="#10B981" />
-              <Text style={styles.qrFeatureText}>No app download required</Text>
+              <Text style={styles.qrFeatureText}>No app download required (PWA Supported)</Text>
             </View>
             <View style={styles.qrFeatureItem}>
               <MaterialCommunityIcons name="speedometer" size={20} color="#10B981" />
@@ -293,7 +315,7 @@ Easily record your daily steps, meals, exercise, and overall wellness
                 style={styles.footerLogo}
                 contentFit="cover"
               />
-              <Text style={styles.footerContact}>support@fitforbaby.com</Text>
+              <Text style={styles.footerContact}>fitforbaby.sriher@gmail.com</Text>
               <View style={styles.socialIcons}>
                 <TouchableOpacity style={styles.socialIcon}>
                   <MaterialCommunityIcons name="facebook" size={24} color="#94a3b8" />
@@ -401,6 +423,22 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     fontSize: 16,
     fontWeight: '600',
+  },
+  downloadBtn: {
+    backgroundColor: '#006dab',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    shadowColor: '#006dab',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  downloadBtnText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   loginBtn: {
     backgroundColor: '#006dab',
