@@ -563,27 +563,30 @@ export default function DeviceManagementScreen() {
           )}
 
           {/* Device Info */}
-          <View style={[styles.infoCard, { backgroundColor: colors.cardBackground }]}>
+          <View style={[styles.infoCard, { backgroundColor: colors.cardBackground }]}> 
             <Text style={[styles.infoTitle, { color: colors.text }]}>About Device Management</Text>
             <View style={styles.infoItem}>
               <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}> 
                 Your account can be active on multiple devices at once.
               </Text>
             </View>
             <View style={styles.infoItem}>
               <Ionicons name="lock-closed-outline" size={18} color={colors.textSecondary} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}> 
                 If you see an unfamiliar device, log it out immediately.
               </Text>
             </View>
             <View style={styles.infoItem}>
               <Ionicons name="notifications-outline" size={18} color={colors.textSecondary} />
-              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}> 
                 You'll receive a notification when a new device logs in.
               </Text>
             </View>
           </View>
+
+          {/* Spacer between About Device Management and Logout All Others Button */}
+          <View style={{ height: 24 }} />
 
           {/* Logout All Others Button - placed below About Device Management */}
           {devices.filter(d => d.id !== currentDeviceId && d.status === 'active').length > 0 && (
