@@ -9,19 +9,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Linking,
-    Modal,
-    Platform,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Animated,
+  Linking,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -226,12 +226,13 @@ export default function ContactSupportScreen() {
       return;
     }
 
-    if (!phoneNumber.trim()) {
+    const phoneTrimmed = phoneNumber.trim();
+    if (!/^[0-9]{10}$/.test(phoneTrimmed)) {
       setMessageModal({
         visible: true,
         type: 'error',
-        title: 'Error',
-        message: 'Please enter a phone number.',
+        title: 'Invalid Phone Number',
+        message: 'Please enter a valid 10 digit number.',
       });
       return;
     }
@@ -416,9 +417,14 @@ export default function ContactSupportScreen() {
                     <TextInput
                       style={styles.phoneInput}
                       value={phoneNumber}
-                      onChangeText={setPhoneNumber}
+                      onChangeText={text => {
+                        // Only allow numbers and max 10 digits
+                        const cleaned = text.replace(/[^0-9]/g, '').slice(0, 10);
+                        setPhoneNumber(cleaned);
+                      }}
                       placeholder={t('support.enterPhone')}
                       keyboardType="phone-pad"
+                      maxLength={10}
                       autoFocus
                     />
                   ) : (

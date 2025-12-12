@@ -4,7 +4,7 @@
     "slug": "fit-for-baby",
     "version": "1.0.0",
     "orientation": "portrait",
-  "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "fitforbaby",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -14,8 +14,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-  "foregroundImage": "./assets/images/icon.png"
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/adaptive-icon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -72,11 +72,14 @@
       },
       "router": {}
     },
-    "owner": "fit_for_baby"
-    ,
+    "owner": "fit_for_baby",
     "updates": {
       "enabled": true,
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/5945cd3a-d246-465a-825c-3aeb6b5ac96d"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }
