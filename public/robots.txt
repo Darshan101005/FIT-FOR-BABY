@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /user/
+Disallow: /questionnaire/
+Disallow: /reset-password
+
+Sitemap: https://fitforbaby.site/sitemap.xml

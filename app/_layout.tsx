@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/context/ThemeContext';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { initPWA } from '@/services/pwa.service';
 import { Stack } from 'expo-router';
+import Head from 'expo-router/head';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
@@ -41,6 +42,16 @@ function RootNavigator() {
 
   return (
     <>
+      <Head>
+        <title>FIT FOR BABY</title>
+        <meta name="description" content="A comprehensive pregnancy wellness app. Track your health, get expert advice, and stay fit during your journey." />
+        <meta name="google-site-verification" content="OZ1fHfsqBmfx2MLJIc1EIpJlYt5WnC5YAx9mVBu9S6g" />
+        <meta property="og:title" content="Fit For Baby | Pregnancy Wellness App" />
+        <meta property="og:description" content="A comprehensive pregnancy wellness app. Track your health, get expert advice, and stay fit during your journey." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://fitforbaby.site" />
+        <meta property="og:image" content="https://fitforbaby.site/assets/images/withbg.png" />
+      </Head>
       <Stack screenOptions={{ headerShown: false }}>
         {/* Auth & Onboarding Routes */}
         <Stack.Screen name="index" />
@@ -50,24 +61,24 @@ function RootNavigator() {
         <Stack.Screen name="admin-login" />
         <Stack.Screen name="reset-password" />
         <Stack.Screen name="questionnaire" />
-        
+
         {/* Nested Route Groups */}
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="admin" />
         <Stack.Screen name="user" />
-        
+
         {/* 404 Not Found */}
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
-      
+
       {/* PWA Install Banner - shows only on mobile web browsers */}
       {isWeb && <PWAInstallBanner />}
-      
+
       {/* Offline Modal - shows when no internet connection */}
-      <OfflineModal 
-        visible={isOfflineModalVisible} 
-        onExit={() => setIsOfflineModalVisible(false)} 
+      <OfflineModal
+        visible={isOfflineModalVisible}
+        onExit={() => setIsOfflineModalVisible(false)}
       />
     </>
   );
