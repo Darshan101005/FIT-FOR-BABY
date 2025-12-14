@@ -18,17 +18,17 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -1533,7 +1533,7 @@ export default function ProfileScreen() {
               icon: 'help-circle',
               label: t('profile.helpCenter'),
               type: 'link',
-              onPress: () => router.push('/user/help-center' as any),
+              onPress: () => router.push('/help-center' as any),
             },
             {
               id: 'feedback',

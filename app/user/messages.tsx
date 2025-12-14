@@ -60,7 +60,7 @@ export default function MessagesScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const scrollViewRef = useRef<ScrollView>(null);
-  const { colors } = useTheme();
+  const { colors, isDarkMode } = useTheme();
   const { language, t } = useLanguage();
   const insets = useSafeAreaInsets();
   
@@ -330,18 +330,18 @@ export default function MessagesScreen() {
   };
 
   const renderHeader = () => (
-    <View style={styles.header}>
+    <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
       <TouchableOpacity 
         onPress={() => (view === 'chat' || view === 'faq') ? setView('threads') : router.back()} 
-        style={styles.backButton}
+        style={[styles.backButton, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}
       >
-        <Ionicons name="arrow-back" size={24} color="#0f172a" />
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
         {view === 'threads' ? (
           <>
-            <Text style={styles.headerTitle}>{t('messages.title')}</Text>
-            <Text style={styles.headerSubtitle}>{t('messages.chatWithSupportCouncellors')}</Text>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>{t('messages.title')}</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>{t('messages.chatWithSupportCouncellors')}</Text>
           </>
         ) : view === 'faq' ? (
           <>
@@ -367,7 +367,7 @@ export default function MessagesScreen() {
                 <Text style={styles.avatarEmoji}>{selectedThread?.avatar}</Text>
               )}
               <View>
-                <Text style={styles.headerTitle}>{selectedThread?.title}</Text>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>{selectedThread?.title}</Text>
                 <Text style={styles.onlineStatus}>
                   {isTyping ? (language === 'ta' ? 'தட்டச்சு செய்கிறது...' : 'Typing...') : (language === 'ta' ? 'வழக்கமாக 1 மணி நேரத்தில் பதிலளிக்கும்' : 'Usually replies within 1 hour')}
                 </Text>
@@ -391,33 +391,33 @@ export default function MessagesScreen() {
     <View style={styles.content}>
       {/* Contact Support - Request Callback */}
       <TouchableOpacity 
-        style={styles.contactSupportCard}
+        style={[styles.contactSupportCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
         onPress={() => router.push('/user/contact-support')}
         activeOpacity={0.85}
       >
         <View style={styles.contactSupportContent}>
-          <View style={styles.contactSupportIconWrap}>
+          <View style={[styles.contactSupportIconWrap, { backgroundColor: isDarkMode ? '#1e3a5f' : '#eff6ff' }]}>
             <Image 
               source={require('../../assets/images/customer-service.png')} 
               style={styles.supporterImage}
             />
           </View>
           <View style={styles.contactSupportText}>
-            <Text style={styles.contactSupportTitle}>{t('messages.contactSupport')}</Text>
-            <Text style={styles.contactSupportSubtitle}>{t('messages.requestCallVideo')}</Text>
+            <Text style={[styles.contactSupportTitle, { color: colors.text }]}>{t('messages.contactSupport')}</Text>
+            <Text style={[styles.contactSupportSubtitle, { color: colors.textSecondary }]}>{t('messages.requestCallVideo')}</Text>
           </View>
           <View style={styles.contactSupportArrow}>
-            <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </View>
         </View>
       </TouchableOpacity>
 
       {/* Conversations */}
-      <Text style={styles.sectionTitle}>{t('messages.conversations')}</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('messages.conversations')}</Text>
       
       {/* Nursing Department Chat - only show if there are messages */}
       {isLoadingChat ? (
-        <View style={styles.threadCard}>
+        <View style={[styles.threadCard, { backgroundColor: colors.cardBackground }]}>
           <SkeletonLoader width={50} height={50} style={{ borderRadius: 25 }} />
           <View style={styles.threadContent}>
             <SkeletonLoader width="60%" height={16} style={{ marginBottom: 8 }} />
@@ -426,11 +426,11 @@ export default function MessagesScreen() {
         </View>
       ) : nursingChat?.lastMessage && nursingChat.lastMessage.trim() !== '' ? (
         <TouchableOpacity
-          style={styles.threadCard}
+          style={[styles.threadCard, { backgroundColor: colors.cardBackground }]}
           onPress={() => router.push('/user/chat')}
           activeOpacity={0.85}
         >
-          <View style={styles.threadAvatar}>
+          <View style={[styles.threadAvatar, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
             <Image 
               source={require('../../assets/images/nurse.png')} 
               style={styles.nurseAvatarImage}
@@ -444,14 +444,15 @@ export default function MessagesScreen() {
           </View>
           <View style={styles.threadContent}>
             <View style={[styles.threadHeader, isMobile && styles.threadHeaderMobile]}>
-              <Text style={[styles.threadTitle, isMobile && styles.threadTitleMobile]} numberOfLines={1}>{t('messages.chatWithNursing')}</Text>
-              <Text style={[styles.threadTime, isMobile && styles.threadTimeMobile]}>
+              <Text style={[styles.threadTitle, { color: colors.text }, isMobile && styles.threadTitleMobile]} numberOfLines={1}>{t('messages.chatWithNursing')}</Text>
+              <Text style={[styles.threadTime, { color: colors.textSecondary }, isMobile && styles.threadTimeMobile]}>
                 {nursingChat?.lastMessageAt ? formatChatTime(nursingChat.lastMessageAt) : ''}
               </Text>
             </View>
             <Text 
               style={[
                 styles.threadPreview,
+                { color: colors.textSecondary },
                 chatUnreadCount > 0 && styles.threadPreviewUnread,
               ]}
               numberOfLines={1}
@@ -463,25 +464,25 @@ export default function MessagesScreen() {
       ) : (
         /* No active conversations - show a prompt to start one */
         <TouchableOpacity
-          style={styles.startChatCard}
+          style={[styles.startChatCard, { backgroundColor: colors.cardBackground }]}
           onPress={() => router.push('/user/chat')}
           activeOpacity={0.85}
         >
-          <View style={styles.startChatIcon}>
+          <View style={[styles.startChatIcon, { backgroundColor: isDarkMode ? '#1e3a5f' : '#eff6ff' }]}>
             <Ionicons name="chatbubbles-outline" size={28} color="#006dab" />
           </View>
           <View style={styles.startChatContent}>
-            <Text style={styles.startChatTitle}>{t('messages.startConversation')}</Text>
-            <Text style={styles.startChatSubtitle}>{t('messages.chatForSupport')}</Text>
+            <Text style={[styles.startChatTitle, { color: colors.text }]}>{t('messages.startConversation')}</Text>
+            <Text style={[styles.startChatSubtitle, { color: colors.textSecondary }]}>{t('messages.chatForSupport')}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
         </TouchableOpacity>
       )}
 
       {/* Broadcasts / Announcements Section */}
       <View style={styles.broadcastsSection}>
         <View style={styles.broadcastsHeader}>
-          <Text style={styles.sectionTitle}>{t('messages.announcements')}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('messages.announcements')}</Text>
           {unreadBroadcastCount > 0 && (
             <View style={styles.broadcastBadge}>
               <Text style={styles.broadcastBadgeText}>{unreadBroadcastCount}</Text>
@@ -495,14 +496,14 @@ export default function MessagesScreen() {
             <SkeletonLoader width="100%" height={80} style={{ borderRadius: 14 }} />
           </View>
         ) : broadcasts.length === 0 ? (
-          <View style={styles.noBroadcastsCard}>
-            <Ionicons name="notifications-off-outline" size={32} color="#94a3b8" />
-            <Text style={styles.noBroadcastsText}>{t('messages.noAnnouncements')}</Text>
-            <Text style={styles.noBroadcastsSubtext}>{t('messages.updatesHere')}</Text>
+          <View style={[styles.noBroadcastsCard, { backgroundColor: colors.cardBackground }]}>
+            <Ionicons name="notifications-off-outline" size={32} color={colors.textMuted} />
+            <Text style={[styles.noBroadcastsText, { color: colors.text }]}>{t('messages.noAnnouncements')}</Text>
+            <Text style={[styles.noBroadcastsSubtext, { color: colors.textMuted }]}>{t('messages.updatesHere')}</Text>
           </View>
         ) : (
           broadcasts.map((broadcast) => (
-            <View key={broadcast.id} style={styles.broadcastCard}>
+            <View key={broadcast.id} style={[styles.broadcastCard, { backgroundColor: colors.cardBackground }]}>
               <View style={styles.broadcastIconContainer}>
                 <LinearGradient 
                   colors={
@@ -525,10 +526,10 @@ export default function MessagesScreen() {
               </View>
               <View style={styles.broadcastContent}>
                 <View style={styles.broadcastHeader}>
-                  <Text style={styles.broadcastTitle}>{broadcast.title}</Text>
-                  <Text style={styles.broadcastTime}>{formatBroadcastTime(broadcast.sentAt || broadcast.createdAt)}</Text>
+                  <Text style={[styles.broadcastTitle, { color: colors.text }]}>{broadcast.title}</Text>
+                  <Text style={[styles.broadcastTime, { color: colors.textMuted }]}>{formatBroadcastTime(broadcast.sentAt || broadcast.createdAt)}</Text>
                 </View>
-                <Text style={styles.broadcastMessage} numberOfLines={3}>
+                <Text style={[styles.broadcastMessage, { color: colors.textSecondary }]} numberOfLines={3}>
                   {broadcast.message}
                 </Text>
                 {broadcast.priority && broadcast.priority !== 'normal' && (
@@ -553,23 +554,23 @@ export default function MessagesScreen() {
       </View>
 
       {/* Technical Support Options */}
-      <Text style={styles.sectionTitle}>{t('messages.technicalSupport')}</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('messages.technicalSupport')}</Text>
       
       <View style={styles.helpOptions}>
-        <TouchableOpacity style={styles.helpOption} onPress={handleCallSupport}>
+        <TouchableOpacity style={[styles.helpOption, { backgroundColor: colors.cardBackground }]} onPress={handleCallSupport}>
           <View style={[styles.helpIcon, { backgroundColor: '#dcfce7' }]}>
             <Ionicons name="call" size={24} color="#22c55e" />
           </View>
-          <Text style={styles.helpLabel}>{t('messages.contactUs')}</Text>
-          <Text style={styles.helpDetail}>9449632431</Text>
+          <Text style={[styles.helpLabel, { color: colors.text }]}>{t('messages.contactUs')}</Text>
+          <Text style={[styles.helpDetail, { color: colors.textSecondary }]}>9449632431</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.helpOption} onPress={handleEmailSupport}>
-          <View style={[styles.helpIcon, { backgroundColor: '#dbeafe' }]}>
+        <TouchableOpacity style={[styles.helpOption, { backgroundColor: colors.cardBackground }]} onPress={handleEmailSupport}>
+          <View style={[styles.helpIcon, { backgroundColor: isDarkMode ? '#1e3a5f' : '#dbeafe' }]}>
             <Ionicons name="mail" size={24} color="#3b82f6" />
           </View>
-          <Text style={styles.helpLabel}>{t('messages.emailUs')}</Text>
-          <Text style={styles.helpDetail}>fitforbaby.sriher@gmail.com</Text>
+          <Text style={[styles.helpLabel, { color: colors.text }]}>{t('messages.emailUs')}</Text>
+          <Text style={[styles.helpDetail, { color: colors.textSecondary }]}>fitforbaby.sriher@gmail.com</Text>
         </TouchableOpacity>
       </View>
 
@@ -594,34 +595,34 @@ export default function MessagesScreen() {
 
   const renderFAQ = () => (
     <View style={styles.content}>
-      <Text style={styles.faqPageTitle}>{t('messages.faqTitle')}</Text>
-      <Text style={styles.faqPageSubtitle}>{t('messages.faqSubtitle')}</Text>
+      <Text style={[styles.faqPageTitle, { color: colors.text }]}>{t('messages.faqTitle')}</Text>
+      <Text style={[styles.faqPageSubtitle, { color: colors.textSecondary }]}>{t('messages.faqSubtitle')}</Text>
       
       {getFAQs().map((faq) => (
         <TouchableOpacity
           key={faq.id}
-          style={styles.faqItem}
+          style={[styles.faqItem, { backgroundColor: colors.cardBackground }]}
           onPress={() => setExpandedFAQ(expandedFAQ === faq.id ? null : faq.id)}
           activeOpacity={0.8}
         >
           <View style={styles.faqQuestion}>
-            <Text style={styles.faqQuestionText}>{faq.question}</Text>
+            <Text style={[styles.faqQuestionText, { color: colors.text }]}>{faq.question}</Text>
             <Ionicons 
               name={expandedFAQ === faq.id ? 'chevron-up' : 'chevron-down'} 
               size={20} 
-              color="#64748b" 
+              color={colors.textSecondary} 
             />
           </View>
           {expandedFAQ === faq.id && (
-            <View style={styles.faqAnswer}>
-              <Text style={styles.faqAnswerText}>{faq.answer}</Text>
+            <View style={[styles.faqAnswer, { borderTopColor: colors.border }]}>
+              <Text style={[styles.faqAnswerText, { color: colors.textSecondary }]}>{faq.answer}</Text>
             </View>
           )}
         </TouchableOpacity>
       ))}
       
       <View style={styles.faqFooter}>
-        <Text style={styles.faqFooterText}>{t('messages.stillHaveQuestions')}</Text>
+        <Text style={[styles.faqFooterText, { color: colors.textSecondary }]}>{t('messages.stillHaveQuestions')}</Text>
         <TouchableOpacity 
           style={styles.faqContactButton}
           onPress={() => setView('threads')}
@@ -650,9 +651,9 @@ export default function MessagesScreen() {
       >
         {/* Date divider */}
         <View style={styles.dateDivider}>
-          <View style={styles.dateLine} />
-          <Text style={styles.dateText}>{t('common.today')}</Text>
-          <View style={styles.dateLine} />
+          <View style={[styles.dateLine, { backgroundColor: colors.border }]} />
+          <Text style={[styles.dateText, { color: colors.textSecondary }]}>{t('common.today')}</Text>
+          <View style={[styles.dateLine, { backgroundColor: colors.border }]} />
         </View>
 
         {messages.map((message) => {
@@ -674,13 +675,13 @@ export default function MessagesScreen() {
               <View 
                 style={[
                   styles.messageBubble,
-                  isUser ? styles.messageBubbleUser : styles.messageBubbleSupport,
+                  isUser ? styles.messageBubbleUser : [styles.messageBubbleSupport, { backgroundColor: colors.cardBackground }],
                 ]}
               >
                 <Text 
                   style={[
                     styles.messageText,
-                    isUser && styles.messageTextUser,
+                    isUser ? styles.messageTextUser : { color: colors.text },
                   ]}
                 >
                   {message.text}
@@ -689,7 +690,7 @@ export default function MessagesScreen() {
                   <Text 
                     style={[
                       styles.messageTime,
-                      isUser && styles.messageTimeUser,
+                      isUser ? styles.messageTimeUser : { color: colors.textMuted },
                     ]}
                   >
                     {formatTime(message.timestamp)}
@@ -712,7 +713,7 @@ export default function MessagesScreen() {
             <View style={styles.messageAvatar}>
               <Text style={styles.messageAvatarEmoji}>👨‍💻</Text>
             </View>
-            <View style={[styles.messageBubble, styles.messageBubbleSupport, styles.typingBubble]}>
+            <View style={[styles.messageBubble, styles.messageBubbleSupport, styles.typingBubble, { backgroundColor: colors.cardBackground }]}>
               <View style={styles.typingIndicator}>
                 <View style={[styles.typingDot, styles.typingDot1]} />
                 <View style={[styles.typingDot, styles.typingDot2]} />
@@ -724,17 +725,17 @@ export default function MessagesScreen() {
       </ScrollView>
 
       {/* Input Area */}
-      <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: colors.cardBackground, borderTopColor: colors.border }]}>
         <TouchableOpacity style={styles.attachButton}>
-          <Ionicons name="attach" size={24} color="#64748b" />
+          <Ionicons name="attach" size={24} color={colors.textSecondary} />
         </TouchableOpacity>
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { color: colors.text }]}
             value={newMessage}
             onChangeText={setNewMessage}
             placeholder={t('messages.typeMessage')}
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.textMuted}
             multiline
             maxLength={500}
           />

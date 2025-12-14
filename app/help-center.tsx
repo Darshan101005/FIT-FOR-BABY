@@ -126,6 +126,7 @@ export default function HelpCenterScreen() {
 	const router = useRouter();
 	const { width: screenWidth } = useWindowDimensions();
 	const isMobile = screenWidth < 768;
+	const { colors, isDarkMode } = useTheme();
 	const [searchQuery, setSearchQuery] = useState('');
 	const [expandedItems, setExpandedItems] = useState<{ [key: string]: boolean }>({});
 
@@ -139,12 +140,12 @@ export default function HelpCenterScreen() {
 	};
 
 	return (
-		<View style={styles.container}>
-			<View style={styles.header}>
-				<TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-					<Ionicons name="arrow-back" size={24} color="#1e293b" />
+		<View style={[styles.container, { backgroundColor: colors.background }]}>
+			<View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: isDarkMode ? '#374151' : '#e5e7eb' }]}>
+				<TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
+					<Ionicons name="arrow-back" size={24} color={colors.text} />
 				</TouchableOpacity>
-				<Text style={styles.headerTitle}>Help Center</Text>
+				<Text style={[styles.headerTitle, { color: colors.text }]}>Help Center</Text>
 			</View>
 
 			<ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -154,15 +155,16 @@ export default function HelpCenterScreen() {
 						Find answers to your questions and get the support you need
 					</Text>
 
-					<View style={[styles.searchContainer, isMobile && styles.searchContainerMobile]}>
-						<Ionicons name="search" size={20} color="#64748b" />
+					<View style={[styles.searchContainer, isMobile && styles.searchContainerMobile, { backgroundColor: isDarkMode ? '#374151' : '#ffffff' }]}>
+						<Ionicons name="search" size={20} color={isDarkMode ? '#9ca3af' : '#64748b'} />
 						<TextInput
 							style={[
                                 styles.searchInput,
-                                isWeb && ({ outlineStyle: 'none' } as any)
+                                isWeb && ({ outlineStyle: 'none' } as any),
+                                { color: colors.text }
                             ]}
 							placeholder="Search for help..."
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor={isDarkMode ? '#9ca3af' : '#94a3b8'}
 							value={searchQuery}
 							onChangeText={setSearchQuery}
 						/>
@@ -170,44 +172,44 @@ export default function HelpCenterScreen() {
 				</View>
 
 				{/* Categories Grid */}
-                <View style={[styles.categoriesGrid, isMobile && styles.categoriesGridMobile]}>
+                <View style={[styles.categoriesGrid, isMobile && styles.categoriesGridMobile, { backgroundColor: colors.background }]}>
 					{helpCategories.map((category, categoryIndex) => (
-						<View key={categoryIndex} style={[styles.categoryCard, isMobile && styles.categoryCardMobile]}>
+						<View key={categoryIndex} style={[styles.categoryCard, isMobile && styles.categoryCardMobile, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
 							<View style={styles.categoryHeader}>
-								<View style={styles.iconContainer}>
+								<View style={[styles.iconContainer, { backgroundColor: isDarkMode ? '#1e3a5f' : '#EFF6FF' }]}>
 									<Ionicons name={category.icon as any} size={28} color="#006dab" />
 								</View>
 								<View style={styles.categoryTitleContainer}>
-									<Text style={styles.categoryTitle}>{category.title}</Text>
-									<Text style={styles.categoryDescription}>{category.description}</Text>
+									<Text style={[styles.categoryTitle, { color: colors.text }]}>{category.title}</Text>
+									<Text style={[styles.categoryDescription, { color: colors.textSecondary }]}>{category.description}</Text>
 								</View>
                             </View>
-							<View style={styles.articlesList}>
+							<View style={[styles.articlesList, { borderTopColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
 								{category.articles.map((article, articleIndex) => {
 									const key = `${categoryIndex}-${articleIndex}`;
 									const isExpanded = expandedItems[key];
 									return (
 										<TouchableOpacity
 											key={articleIndex}
-											style={[styles.articleItem, isExpanded && styles.articleItemExpanded]}
+											style={[styles.articleItem, isExpanded && styles.articleItemExpanded, isExpanded && { backgroundColor: isDarkMode ? '#374151' : '#f8fafc' }]}
 											onPress={() => toggleItem(key)}
 											activeOpacity={0.7}
 										>
 											<View style={styles.questionRow}>
 												<View style={styles.questionLeft}>
-													<Ionicons name="document-text-outline" size={18} color="#64748b" />
+													<Ionicons name="document-text-outline" size={18} color={isDarkMode ? '#9ca3af' : '#64748b'} />
 													<Text style={styles.articleText}>{article.q}</Text>
 												</View>
 												<Ionicons 
 													name={isExpanded ? "chevron-up" : "chevron-down"} 
 													size={16} 
-													color="#94a3b8" 
+													color={isDarkMode ? '#9ca3af' : '#94a3b8'} 
 												/>
 											</View>
 											
 											{isExpanded && (
 												<View style={styles.answerBox}>
-													<Text style={styles.answerText}>{article.a}</Text>
+													<Text style={[styles.answerText, { color: colors.textSecondary }]}>{article.a}</Text>
 												</View>
 											)}
 										</TouchableOpacity>
@@ -218,9 +220,9 @@ export default function HelpCenterScreen() {
 					))}
 				</View>
 
-				<View style={styles.contactSection}>
-					<Text style={styles.contactTitle}>Still need help?</Text>
-					<Text style={styles.contactText}>
+				<View style={[styles.contactSection, { backgroundColor: isDarkMode ? '#1f2937' : '#f8fafc' }]}>
+					<Text style={[styles.contactTitle, { color: colors.text }]}>Still need help?</Text>
+					<Text style={[styles.contactText, { color: colors.textSecondary }]}>
 						Our support team is available 24/7 to assist you with any questions.
 					</Text>
 					<TouchableOpacity style={styles.contactButton} onPress={() => router.push('/contact-us')}>
@@ -229,7 +231,7 @@ export default function HelpCenterScreen() {
 					</TouchableOpacity>
 				</View>
 
-				<View style={styles.footer}>
+				<View style={[styles.footer, { backgroundColor: isDarkMode ? '#111827' : '#1e293b' }]}>
 					<Text style={styles.footerText}>© 2025 Fit for Baby. All rights reserved.</Text>
 				</View>
 			</ScrollView>

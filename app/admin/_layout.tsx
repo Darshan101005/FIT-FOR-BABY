@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
-    Image,
+    Image,  
     Platform,
     Pressable,
     ScrollView,
@@ -411,7 +411,7 @@ export default function AdminLayout() {
         </ScrollView>
 
         {/* Drawer Footer */}
-        <View style={styles.drawerFooter}>
+        <View style={[styles.drawerFooter, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TouchableOpacity style={styles.drawerProfileSection}>
             <View style={styles.profileAvatar}>
               <Text style={styles.profileInitials}>{adminInitials}</Text>

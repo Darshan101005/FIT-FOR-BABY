@@ -1389,7 +1389,7 @@ export default function AdminMonitoringScreen() {
           </View>
         </View>
 
-        <View style={styles.searchContainer}>
+        <View style={[styles.searchContainer, isMobile && { flex: 0, width: '100%' }]}>
           <Ionicons name="search" size={18} color={COLORS.textMuted} />
           <TextInput
             style={styles.searchInput}

@@ -45,7 +45,7 @@ export default function LogFoodScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
-  const { colors } = useTheme();
+  const { colors, isDarkMode } = useTheme();
   const { refreshDailyData } = useUserData();
   const { language, t } = useLanguage();
 
@@ -402,19 +402,19 @@ export default function LogFoodScreen() {
   };
 
   const renderHeader = () => (
-    <View style={styles.header}>
-      <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-        <Ionicons name="arrow-back" size={24} color="#0f172a" />
+    <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+      <TouchableOpacity onPress={handleBack} style={[styles.backButton, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>{t('log.food.title')}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{t('log.food.title')}</Text>
         {selectedMealTime && (
-          <Text style={styles.headerSubtitle}>{language === 'ta' ? mealTimes.find(m => m.id === selectedMealTime)?.labelTamil || currentMealLabel : currentMealLabel}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>{language === 'ta' ? mealTimes.find(m => m.id === selectedMealTime)?.labelTamil || currentMealLabel : currentMealLabel}</Text>
         )}
       </View>
       {selectedFoods.length > 0 && step !== 'summary' && (
         <TouchableOpacity 
-          style={styles.cartButton}
+          style={[styles.cartButton, { backgroundColor: isDarkMode ? '#1e3a5f' : '#eff6ff' }]}
           onPress={() => setStep('summary')}
         >
           <Ionicons name="cart" size={22} color="#006dab" />
@@ -426,22 +426,22 @@ export default function LogFoodScreen() {
     </View>
   );
 
-  // Get subtle background color for meal cards - white cards on gray background
+  // Get subtle background color for meal cards - adapts to dark mode
   const getMealColor = (id: string) => {
-    // All cards use white background with subtle border
-    return { bg: '#ffffff', icon: '#64748b', border: '#e2e8f0' };
+    // All cards use theme-aware background with subtle border
+    return { bg: colors.cardBackground, icon: colors.textSecondary, border: colors.border };
   };
 
   const renderMealTimeSelection = () => (
     <View style={styles.content}>
-      <Text style={styles.stepTitle}>{t('log.food.selectMealTime')}</Text>
-      <Text style={styles.stepDescription}>
+      <Text style={[styles.stepTitle, { color: colors.text }]}>{t('log.food.selectMealTime')}</Text>
+      <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
         {t('log.food.whenMeal')}
       </Text>
       
       <View style={styles.mealTimeGridNew}>
         {mealTimes.map((meal) => {
-          const colors = getMealColor(meal.id);
+          const mealColors = getMealColor(meal.id);
           const isSelected = selectedMealTime === meal.id;
           
           return (
@@ -449,19 +449,19 @@ export default function LogFoodScreen() {
               key={meal.id}
               style={[
                 styles.mealCardPlain,
-                { backgroundColor: colors.bg, borderColor: isSelected ? colors.icon : colors.border },
+                { backgroundColor: mealColors.bg, borderColor: isSelected ? mealColors.icon : mealColors.border },
                 isSelected && styles.mealCardPlainSelected,
               ]}
               onPress={() => handleSelectMealTime(meal.id)}
               activeOpacity={0.8}
             >
-              <View style={[styles.mealIconPlain, { backgroundColor: colors.icon + '20' }]}>
-                <Ionicons name={meal.icon as any} size={26} color={colors.icon} />
+              <View style={[styles.mealIconPlain, { backgroundColor: mealColors.icon + '20' }]}>
+                <Ionicons name={meal.icon as any} size={26} color={mealColors.icon} />
               </View>
-              <Text style={styles.mealLabelPlain}>{language === 'ta' && meal.labelTamil ? meal.labelTamil : meal.label}</Text>
-              <Text style={styles.mealTimePlain}>{meal.time}</Text>
+              <Text style={[styles.mealLabelPlain, { color: colors.text }]}>{language === 'ta' && meal.labelTamil ? meal.labelTamil : meal.label}</Text>
+              <Text style={[styles.mealTimePlain, { color: colors.textMuted }]}>{meal.time}</Text>
               {isSelected && (
-                <View style={[styles.mealCheckmark, { backgroundColor: colors.icon }]}>
+                <View style={[styles.mealCheckmark, { backgroundColor: mealColors.icon }]}>
                   <Ionicons name="checkmark" size={12} color="#ffffff" />
                 </View>
               )}
@@ -474,15 +474,15 @@ export default function LogFoodScreen() {
 
   const renderCategorySelection = () => (
     <View style={styles.content}>
-      <Text style={styles.stepTitle}>{t('log.food.selectCategory')}</Text>
-      <Text style={styles.stepDescription}>
+      <Text style={[styles.stepTitle, { color: colors.text }]}>{t('log.food.selectCategory')}</Text>
+      <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
         {language === 'ta' ? 'என்ன வகையான உணவு சாப்பிட்டீர்கள்?' : 'What type of food did you have?'}
       </Text>
       <View style={styles.categoryGrid}>
         {foodCategories.map((category) => (
           <TouchableOpacity
             key={category.id}
-            style={styles.categoryCard}
+            style={[styles.categoryCard, { backgroundColor: colors.cardBackground }]}
             onPress={() => handleSelectCategory(category.id)}
             activeOpacity={0.7}
           >
@@ -492,7 +492,7 @@ export default function LogFoodScreen() {
             >
               <MaterialCommunityIcons name={category.icon as any} size={28} color="#fff" />
             </LinearGradient>
-            <Text style={styles.categoryLabel}>{category.label}</Text>
+            <Text style={[styles.categoryLabel, { color: colors.text }]}>{category.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -502,12 +502,12 @@ export default function LogFoodScreen() {
   const renderFoodSelection = () => (
     <View style={styles.content}>
       {/* Search Box */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#94a3b8" style={styles.searchIcon} />
+      <View style={[styles.searchContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+        <Ionicons name="search" size={20} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.text }]}
           placeholder={t('log.food.searchFoods')}
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
@@ -528,6 +528,7 @@ export default function LogFoodScreen() {
         <TouchableOpacity
           style={[
             styles.categoryTab,
+            { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' },
             selectedFilterCategory === 'all' && styles.categoryTabActive
           ]}
           onPress={() => {
@@ -537,6 +538,7 @@ export default function LogFoodScreen() {
         >
           <Text style={[
             styles.categoryTabText,
+            { color: colors.textSecondary },
             selectedFilterCategory === 'all' && styles.categoryTabTextActive
           ]}>{t('log.food.allCategories')}</Text>
         </TouchableOpacity>
@@ -551,6 +553,7 @@ export default function LogFoodScreen() {
             key={category.id}
             style={[
               styles.categoryTab,
+              { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' },
               selectedFilterCategory === category.id && styles.categoryTabActive
             ]}
             onPress={() => {
@@ -560,6 +563,7 @@ export default function LogFoodScreen() {
           >
             <Text style={[
               styles.categoryTabText,
+              { color: colors.textSecondary },
               selectedFilterCategory === category.id && styles.categoryTabTextActive
             ]}>{language === 'ta' && category.labelTamil ? category.labelTamil : category.label}</Text>
           </TouchableOpacity>
@@ -568,7 +572,7 @@ export default function LogFoodScreen() {
       </ScrollView>
 
       {/* Food count display for debugging */}
-      <Text style={styles.resultCount}>
+      <Text style={[styles.resultCount, { color: colors.textSecondary }]}>
         {filteredFoods.length} {language === 'ta' ? 'உணவுகள்' : 'foods'} {selectedFilterCategory !== 'all' ? `${language === 'ta' ? 'இல்' : 'in'} ${language === 'ta' ? foodCategories.find(c => c.id === selectedFilterCategory)?.labelTamil : foodCategories.find(c => c.id === selectedFilterCategory)?.label}` : (language === 'ta' ? 'மொத்தம்' : 'total')}
       </Text>
 
@@ -578,9 +582,9 @@ export default function LogFoodScreen() {
       >
         {filteredFoods.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="search-outline" size={48} color="#94a3b8" />
-            <Text style={styles.emptyStateText}>{language === 'ta' ? 'உணவுகள் கிடைக்கவில்லை' : 'No foods found'}</Text>
-            <Text style={styles.emptyStateSubtext}>
+            <Ionicons name="search-outline" size={48} color={colors.textMuted} />
+            <Text style={[styles.emptyStateText, { color: colors.text }]}>{language === 'ta' ? 'உணவுகள் கிடைக்கவில்லை' : 'No foods found'}</Text>
+            <Text style={[styles.emptyStateSubtext, { color: colors.textSecondary }]}>
               {language === 'ta' ? 'வேறு வகை அல்லது தேடல் வார்த்தையை முயற்சிக்கவும்' : 'Try a different category or search term'}
             </Text>
           </View>
@@ -588,14 +592,14 @@ export default function LogFoodScreen() {
           filteredFoods.map((food) => (
             <TouchableOpacity
               key={food.id}
-              style={styles.foodCard}
+              style={[styles.foodCard, { backgroundColor: colors.cardBackground }]}
               onPress={() => handleSelectFood(food)}
               activeOpacity={0.7}
             >
               <View style={styles.foodInfo}>
-                <Text style={styles.foodName}>{language === 'ta' ? food.nameTamil : food.name}</Text>
-                {language !== 'ta' && <Text style={styles.foodNameTamil}>{food.nameTamil}</Text>}
-                <Text style={styles.foodCalories}>
+                <Text style={[styles.foodName, { color: colors.text }]}>{language === 'ta' ? food.nameTamil : food.name}</Text>
+                {language !== 'ta' && <Text style={[styles.foodNameTamil, { color: colors.textSecondary }]}>{food.nameTamil}</Text>}
+                <Text style={[styles.foodCalories, { color: colors.textMuted }]}>
                   {food.caloriesPer100g} {t('log.food.cal')}/100g • {food.subCategory}
                 </Text>
               </View>
@@ -641,18 +645,19 @@ export default function LogFoodScreen() {
     return (
       <View style={styles.content}>
         <View style={styles.selectedFoodHeader}>
-          <Text style={styles.selectedFoodName}>{language === 'ta' ? currentFood.nameTamil : currentFood.name}</Text>
-          {language !== 'ta' && <Text style={styles.selectedFoodTamil}>{currentFood.nameTamil}</Text>}
+          <Text style={[styles.selectedFoodName, { color: colors.text }]}>{language === 'ta' ? currentFood.nameTamil : currentFood.name}</Text>
+          {language !== 'ta' && <Text style={[styles.selectedFoodTamil, { color: colors.textSecondary }]}>{currentFood.nameTamil}</Text>}
         </View>
 
         <View style={styles.servingSection}>
-          <Text style={styles.sectionLabel}>{t('log.food.servingSize')}</Text>
+          <Text style={[styles.sectionLabel, { color: colors.text }]}>{t('log.food.servingSize')}</Text>
           <View style={styles.servingOptions}>
             {currentFood.commonServings.map((serving, index) => (
               <TouchableOpacity
                 key={index}
                 style={[
                   styles.servingOption,
+                  { backgroundColor: colors.cardBackground, borderColor: colors.border },
                   currentServingIndex === index && styles.servingOptionSelected,
                 ]}
                 onPress={() => {
@@ -672,6 +677,7 @@ export default function LogFoodScreen() {
                 <Text
                   style={[
                     styles.servingOptionText,
+                    { color: colors.text },
                     currentServingIndex === index && styles.servingOptionTextSelected,
                   ]}
                 >
@@ -681,6 +687,7 @@ export default function LogFoodScreen() {
                   <Text
                     style={[
                       styles.servingOptionGrams,
+                      { color: colors.textSecondary },
                       currentServingIndex === index && styles.servingOptionTextSelected,
                     ]}
                   >
@@ -695,17 +702,17 @@ export default function LogFoodScreen() {
         {/* Custom Serving Input - Two Fields */}
         {isCustomServing && (
           <View style={styles.customServingSection}>
-            <Text style={styles.sectionLabel}>{t('log.food.customServingDetails')}</Text>
+            <Text style={[styles.sectionLabel, { color: colors.text }]}>{t('log.food.customServingDetails')}</Text>
             
             {/* Serving Count Input */}
-            <Text style={styles.customInputLabel}>
+            <Text style={[styles.customInputLabel, { color: colors.textSecondary }]}>
               {language === 'ta' ? `பரிமாறல்களின் எண்ணிக்கை (${currentFood.servingUnit})` : `Number of servings (${currentFood.servingUnit})`}
             </Text>
-            <View style={styles.customServingInputContainer}>
+            <View style={[styles.customServingInputContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
               <TextInput
-                style={styles.customServingInput}
+                style={[styles.customServingInput, { color: colors.text }]}
                 placeholder="e.g., 2"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={colors.textMuted}
                 keyboardType="numeric"
                 value={customServingCount}
                 onChangeText={(value) => {
@@ -716,23 +723,23 @@ export default function LogFoodScreen() {
                   setCustomServingGrams(totalGrams.toString());
                 }}
               />
-              <Text style={styles.customServingUnit}>{currentFood.servingUnit}</Text>
+              <Text style={[styles.customServingUnit, { color: colors.textSecondary }]}>{currentFood.servingUnit}</Text>
             </View>
             
             {/* Total Grams Display - READ ONLY */}
-            <Text style={styles.customInputLabel}>
+            <Text style={[styles.customInputLabel, { color: colors.textSecondary }]}>
               {language === 'ta' ? 'மொத்த கிராம் (தானாக கணக்கிடப்பட்டது)' : 'Total grams (auto-calculated)'}
             </Text>
-            <View style={[styles.customServingInputContainer, { marginTop: 8, backgroundColor: '#f8fafc' }]}>
+            <View style={[styles.customServingInputContainer, { marginTop: 8, backgroundColor: isDarkMode ? '#1e3a5f' : '#f8fafc', borderColor: colors.border }]}>
               <Text style={[styles.customServingInput, { color: '#006dab', fontWeight: '700' }]}>
                 {customServingGrams || '0'}
               </Text>
-              <Text style={styles.customServingUnit}>{t('log.food.grams')}</Text>
+              <Text style={[styles.customServingUnit, { color: colors.textSecondary }]}>{t('log.food.grams')}</Text>
             </View>
             
             {/* Helper Text */}
             {customServingCount && customServingGrams && (
-              <Text style={styles.customHelperText}>
+              <Text style={[styles.customHelperText, { color: colors.textSecondary }]}>
                 {parseFloat(customServingCount)} {currentFood.servingUnit} × {currentFood.defaultServingSize}g = {parseFloat(customServingGrams)}g
               </Text>
             )}
@@ -740,17 +747,17 @@ export default function LogFoodScreen() {
         )}
 
         <View style={styles.quantitySection}>
-          <Text style={styles.sectionLabel}>{t('log.food.quantity')}</Text>
+          <Text style={[styles.sectionLabel, { color: colors.text }]}>{t('log.food.quantity')}</Text>
           <View style={styles.quantityControls}>
             <TouchableOpacity
-              style={styles.quantityButton}
+              style={[styles.quantityButton, { backgroundColor: isDarkMode ? '#1e3a5f' : '#eff6ff' }]}
               onPress={() => setCurrentQuantity(Math.max(1, currentQuantity - 1))}
             >
               <Ionicons name="remove" size={24} color="#006dab" />
             </TouchableOpacity>
-            <Text style={styles.quantityValue}>{currentQuantity}</Text>
+            <Text style={[styles.quantityValue, { color: colors.text }]}>{currentQuantity}</Text>
             <TouchableOpacity
-              style={styles.quantityButton}
+              style={[styles.quantityButton, { backgroundColor: isDarkMode ? '#1e3a5f' : '#eff6ff' }]}
               onPress={() => setCurrentQuantity(currentQuantity + 1)}
             >
               <Ionicons name="add" size={24} color="#006dab" />
@@ -760,16 +767,16 @@ export default function LogFoodScreen() {
           {/* Calculation Result Below Quantity */}
           {isCustomServing ? (
             customServingCount && customServingGrams && (
-              <View style={styles.totalCalculationBox}>
-                <Text style={styles.totalCalculationLabel}>{language === 'ta' ? 'மொத்த அளவு:' : 'Total Amount:'}</Text>
+              <View style={[styles.totalCalculationBox, { backgroundColor: isDarkMode ? '#1e3a5f' : '#f0f9ff' }]}>
+                <Text style={[styles.totalCalculationLabel, { color: colors.textSecondary }]}>{language === 'ta' ? 'மொத்த அளவு:' : 'Total Amount:'}</Text>
                 <Text style={styles.totalCalculationValue}>
                   {customServingCount} {currentFood.servingUnit} × {currentQuantity} {language === 'ta' ? 'எண்' : 'qty'} = {parseFloat(customServingCount) * currentQuantity} {currentFood.servingUnit}
                 </Text>
               </View>
             )
           ) : (
-            <View style={styles.totalCalculationBox}>
-              <Text style={styles.totalCalculationLabel}>{language === 'ta' ? 'மொத்த அளவு:' : 'Total Amount:'}</Text>
+            <View style={[styles.totalCalculationBox, { backgroundColor: isDarkMode ? '#1e3a5f' : '#f0f9ff' }]}>
+              <Text style={[styles.totalCalculationLabel, { color: colors.textSecondary }]}>{language === 'ta' ? 'மொத்த அளவு:' : 'Total Amount:'}</Text>
               <Text style={styles.totalCalculationValue}>
                 1 {language === 'ta' ? 'பரிமாறல்' : 'serving'} × {currentQuantity} {language === 'ta' ? 'எண்' : 'qty'} = {currentQuantity} {language === 'ta' ? 'பரிமாறல்கள்' : 'servings'}
               </Text>
@@ -777,29 +784,29 @@ export default function LogFoodScreen() {
           )}
         </View>
 
-        <View style={styles.nutritionCard}>
-          <Text style={styles.nutritionTitle}>{language === 'ta' ? 'ஊட்டச்சத்து தகவல்' : 'Nutrition Info'}</Text>
+        <View style={[styles.nutritionCard, { backgroundColor: colors.cardBackground }]}>
+          <Text style={[styles.nutritionTitle, { color: colors.text }]}>{language === 'ta' ? 'ஊட்டச்சத்து தகவல்' : 'Nutrition Info'}</Text>
           {isCustomServing && (!customServingCount || !customServingGrams) ? (
-            <Text style={styles.nutritionPlaceholder}>
+            <Text style={[styles.nutritionPlaceholder, { color: colors.textSecondary }]}>
               {language === 'ta' ? 'ஊட்டச்சத்து தகவலைப் பார்க்க பரிமாற எண்ணிக்கை மற்றும் கிராம் இரண்டையும் உள்ளிடவும்' : 'Enter both serving count and grams to see nutrition info'}
             </Text>
           ) : (
             <View style={styles.nutritionGrid}>
               <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionValue}>{nutrition.calories}</Text>
-                <Text style={styles.nutritionLabel}>{t('log.food.calories')}</Text>
+                <Text style={[styles.nutritionValue, { color: colors.text }]}>{nutrition.calories}</Text>
+                <Text style={[styles.nutritionLabel, { color: colors.textSecondary }]}>{t('log.food.calories')}</Text>
               </View>
               <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionValue}>{nutrition.protein}g</Text>
-                <Text style={styles.nutritionLabel}>{t('log.food.protein')}</Text>
+                <Text style={[styles.nutritionValue, { color: colors.text }]}>{nutrition.protein}g</Text>
+                <Text style={[styles.nutritionLabel, { color: colors.textSecondary }]}>{t('log.food.protein')}</Text>
               </View>
               <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionValue}>{nutrition.carbs}g</Text>
-                <Text style={styles.nutritionLabel}>{t('log.food.carbs')}</Text>
+                <Text style={[styles.nutritionValue, { color: colors.text }]}>{nutrition.carbs}g</Text>
+                <Text style={[styles.nutritionLabel, { color: colors.textSecondary }]}>{t('log.food.carbs')}</Text>
               </View>
               <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionValue}>{nutrition.fat}g</Text>
-                <Text style={styles.nutritionLabel}>{t('log.food.fat')}</Text>
+                <Text style={[styles.nutritionValue, { color: colors.text }]}>{nutrition.fat}g</Text>
+                <Text style={[styles.nutritionLabel, { color: colors.textSecondary }]}>{t('log.food.fat')}</Text>
               </View>
             </View>
           )}
@@ -821,8 +828,8 @@ export default function LogFoodScreen() {
 
   const renderSummary = () => (
     <View style={styles.content}>
-      <Text style={styles.stepTitle}>{t('log.food.mealSummary')}</Text>
-      <Text style={styles.stepDescription}>
+      <Text style={[styles.stepTitle, { color: colors.text }]}>{t('log.food.mealSummary')}</Text>
+      <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
         {language === 'ta' && mealTimes.find(m => m.id === selectedMealTime)?.labelTamil ? mealTimes.find(m => m.id === selectedMealTime)?.labelTamil : currentMealLabel} • {new Date().toLocaleDateString(language === 'ta' ? 'ta-IN' : 'en-US')}
       </Text>
 
@@ -857,15 +864,15 @@ export default function LogFoodScreen() {
           }
           
           return (
-            <View key={index} style={styles.summaryItem}>
+            <View key={index} style={[styles.summaryItem, { backgroundColor: colors.cardBackground }]}>
               <View style={styles.summaryItemInfo}>
-                <Text style={styles.summaryItemName}>{item.food.name}</Text>
-                <Text style={styles.summaryItemServing}>
+                <Text style={[styles.summaryItemName, { color: colors.text }]}>{item.food.name}</Text>
+                <Text style={[styles.summaryItemServing, { color: colors.textSecondary }]}>
                   {item.quantity} × {isCustomServing 
                     ? `${item.customServingCount} ${item.food.servingUnit} (${item.customGrams}g)` 
                     : `${serving.label} (${serving.grams}g)`}
                 </Text>
-                <Text style={styles.summaryItemCalories}>
+                <Text style={[styles.summaryItemCalories, { color: colors.textMuted }]}>
                   {nutrition.calories} cal • {totalGrams}g total
                 </Text>
               </View>
@@ -880,31 +887,31 @@ export default function LogFoodScreen() {
         })}
       </ScrollView>
 
-      <View style={styles.totalCard}>
-        <Text style={styles.totalTitle}>{t('log.food.totalNutrition')}</Text>
+      <View style={[styles.totalCard, { backgroundColor: colors.cardBackground }]}>
+        <Text style={[styles.totalTitle, { color: colors.text }]}>{t('log.food.totalNutrition')}</Text>
         <View style={styles.totalGrid}>
           <View style={styles.totalItem}>
-            <Text style={styles.totalValue}>{totalNutrition.calories}</Text>
-            <Text style={styles.totalLabel}>{t('log.food.calories')}</Text>
+            <Text style={[styles.totalValue, { color: colors.text }]}>{totalNutrition.calories}</Text>
+            <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>{t('log.food.calories')}</Text>
           </View>
           <View style={styles.totalItem}>
-            <Text style={styles.totalValue}>{totalNutrition.protein.toFixed(1)}g</Text>
-            <Text style={styles.totalLabel}>{t('log.food.protein')}</Text>
+            <Text style={[styles.totalValue, { color: colors.text }]}>{totalNutrition.protein.toFixed(1)}g</Text>
+            <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>{t('log.food.protein')}</Text>
           </View>
           <View style={styles.totalItem}>
-            <Text style={styles.totalValue}>{totalNutrition.carbs.toFixed(1)}g</Text>
-            <Text style={styles.totalLabel}>{t('log.food.carbs')}</Text>
+            <Text style={[styles.totalValue, { color: colors.text }]}>{totalNutrition.carbs.toFixed(1)}g</Text>
+            <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>{t('log.food.carbs')}</Text>
           </View>
           <View style={styles.totalItem}>
-            <Text style={styles.totalValue}>{totalNutrition.fat.toFixed(1)}g</Text>
-            <Text style={styles.totalLabel}>{t('log.food.fat')}</Text>
+            <Text style={[styles.totalValue, { color: colors.text }]}>{totalNutrition.fat.toFixed(1)}g</Text>
+            <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>{t('log.food.fat')}</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.summaryActions}>
         <TouchableOpacity
-          style={styles.addMoreButton}
+          style={[styles.addMoreButton, { backgroundColor: isDarkMode ? '#1e3a5f' : '#eff6ff' }]}
           onPress={() => setStep('food')}
         >
           <Ionicons name="add" size={20} color="#006dab" />

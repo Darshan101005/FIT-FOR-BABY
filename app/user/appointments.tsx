@@ -2,6 +2,7 @@ import BottomNavBar from '@/components/navigation/BottomNavBar';
 import { Skeleton } from '@/components/ui/SkeletonLoader';
 import { useApp } from '@/context/AppContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { doctorVisitService, formatDateString, nursingVisitService } from '@/services/firestore.service';
 import { DoctorVisit, NursingDepartmentVisit } from '@/types/firebase.types';
@@ -10,17 +11,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -34,6 +35,7 @@ export default function AppointmentsScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
   const { t, language } = useLanguage();
+  const { colors, isDarkMode } = useTheme();
 
   // Translated weekdays and months
   const WEEKDAYS = [
@@ -319,42 +321,42 @@ export default function AppointmentsScreen() {
   };
 
   const renderHeader = () => (
-    <View style={styles.header}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <Ionicons name="arrow-back" size={24} color="#0f172a" />
+    <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+      <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>{t('appointments.title')}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{t('appointments.title')}</Text>
       </View>
     </View>
   );
 
   const renderSectionTabs = () => (
-    <View style={styles.sectionTabs}>
+    <View style={[styles.sectionTabs, { backgroundColor: colors.cardBackground }]}>
       <TouchableOpacity
-        style={[styles.sectionTab, activeSection === 'appointments' && styles.sectionTabActive]}
+        style={[styles.sectionTab, { backgroundColor: isDarkMode ? colors.background : '#f1f5f9' }, activeSection === 'appointments' && styles.sectionTabActive]}
         onPress={() => setActiveSection('appointments')}
       >
         <Ionicons 
           name="calendar-outline" 
           size={18} 
-          color={activeSection === 'appointments' ? '#006dab' : '#64748b'} 
+          color={activeSection === 'appointments' ? colors.primary : colors.textSecondary} 
         />
-        <Text style={[styles.sectionTabText, activeSection === 'appointments' && styles.sectionTabTextActive]}>
+        <Text style={[styles.sectionTabText, { color: colors.textSecondary }, activeSection === 'appointments' && styles.sectionTabTextActive]}>
           Doctor Visit
         </Text>
       </TouchableOpacity>
       
       <TouchableOpacity
-        style={[styles.sectionTab, activeSection === 'nurseVisit' && styles.sectionTabActive]}
+        style={[styles.sectionTab, { backgroundColor: isDarkMode ? colors.background : '#f1f5f9' }, activeSection === 'nurseVisit' && styles.sectionTabActive]}
         onPress={() => setActiveSection('nurseVisit')}
       >
         <Ionicons 
           name="medkit-outline" 
           size={18} 
-          color={activeSection === 'nurseVisit' ? '#006dab' : '#64748b'} 
+          color={activeSection === 'nurseVisit' ? colors.primary : colors.textSecondary} 
         />
-        <Text style={[styles.sectionTabText, activeSection === 'nurseVisit' && styles.sectionTabTextActive]}>
+        <Text style={[styles.sectionTabText, { color: colors.textSecondary }, activeSection === 'nurseVisit' && styles.sectionTabTextActive]}>
           Nursing Dept Visit
         </Text>
       </TouchableOpacity>
@@ -365,22 +367,22 @@ export default function AppointmentsScreen() {
     const days = getDaysInMonth(currentMonth);
     
     return (
-      <View style={styles.calendarCard}>
+      <View style={[styles.calendarCard, { backgroundColor: colors.cardBackground }]}>
         <View style={styles.monthNavigation}>
           <TouchableOpacity onPress={goToPreviousMonth} style={styles.monthNavButton}>
-            <Ionicons name="chevron-back" size={20} color="#006dab" />
+            <Ionicons name="chevron-back" size={20} color={colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.monthTitle}>
+          <Text style={[styles.monthTitle, { color: colors.text }]}>
             {MONTH_FULL[currentMonth.getMonth()]} {currentMonth.getFullYear()}
           </Text>
           <TouchableOpacity onPress={goToNextMonth} style={styles.monthNavButton}>
-            <Ionicons name="chevron-forward" size={20} color="#006dab" />
+            <Ionicons name="chevron-forward" size={20} color={colors.primary} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.weekdayRow}>
           {WEEKDAYS.map((day, idx) => (
-            <Text key={idx} style={styles.weekdayText}>{day}</Text>
+            <Text key={idx} style={[styles.weekdayText, { color: colors.textSecondary }]}>{day}</Text>
           ))}
         </View>
 
@@ -403,9 +405,10 @@ export default function AppointmentsScreen() {
                     <View style={styles.dayCellContent}>
                       <Text style={[
                         styles.dayText,
+                        { color: colors.text },
                         isSelected ? styles.dayTextSelected : null,
                         isToday(day) && !isSelected ? styles.dayTextToday : null,
-                        isPast ? styles.dayTextPast : null,
+                        isPast ? [styles.dayTextPast, { color: colors.textMuted }] : null,
                       ]}>
                         {day}
                       </Text>
@@ -428,14 +431,14 @@ export default function AppointmentsScreen() {
 
   const renderTimePicker = () => (
     <View style={styles.timeSection}>
-      <Text style={styles.inputLabel}>{t('appointments.time')}</Text>
+      <Text style={[styles.inputLabel, { color: colors.text }]}>{t('appointments.time')}</Text>
       <TouchableOpacity 
-        style={styles.timeButton}
+        style={[styles.timeButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
         onPress={() => setShowTimePicker(true)}
       >
-        <Ionicons name="time-outline" size={18} color="#006dab" />
-        <Text style={styles.timeButtonText}>{formatTime()}</Text>
-        <Ionicons name="chevron-down" size={16} color="#94a3b8" />
+        <Ionicons name="time-outline" size={18} color={colors.primary} />
+        <Text style={[styles.timeButtonText, { color: colors.text }]}>{formatTime()}</Text>
+        <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
       </TouchableOpacity>
 
       <Modal
@@ -445,7 +448,7 @@ export default function AppointmentsScreen() {
         onRequestClose={() => setShowTimePicker(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.timePickerModal}>
+          <View style={[styles.timePickerModal, { backgroundColor: colors.cardBackground }]}>
             <View style={styles.timePickerHeader}>
               <Text style={styles.timePickerTitle}>{t('appointments.selectTime')}</Text>
               <TouchableOpacity onPress={() => setShowTimePicker(false)}>
@@ -530,25 +533,25 @@ export default function AppointmentsScreen() {
         {renderTimePicker()}
         
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>{t('appointments.doctorOptional')}</Text>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>{t('appointments.doctorOptional')}</Text>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
             value={doctorName}
             onChangeText={setDoctorName}
             placeholder={t('appointments.doctorPlaceholder')}
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.textMuted}
           />
         </View>
       </View>
 
       <View style={styles.inputGroupFull}>
-        <Text style={styles.inputLabel}>{t('appointments.purposeOptional')}</Text>
+        <Text style={[styles.inputLabel, { color: colors.text }]}>{t('appointments.purposeOptional')}</Text>
         <TextInput
-          style={styles.textInput}
+          style={[styles.textInput, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
           value={appointmentPurpose}
           onChangeText={setAppointmentPurpose}
           placeholder={t('appointments.purposePlaceholder')}
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.textMuted}
         />
       </View>
 
@@ -582,9 +585,9 @@ export default function AppointmentsScreen() {
       <View style={styles.loggedSection}>
         {sortedDoctorVisits.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>{t('appointments.logged')}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('appointments.logged')}</Text>
             {sortedDoctorVisits.map((apt) => (
-              <View key={apt.id} style={styles.appointmentCard}>
+              <View key={apt.id} style={[styles.appointmentCard, { backgroundColor: colors.cardBackground }]}>
                 <View style={styles.appointmentDateBox}>
                   <Text style={styles.appointmentDayNum}>{new Date(apt.date).getDate()}</Text>
                   <Text style={styles.appointmentMonth}>
@@ -592,9 +595,9 @@ export default function AppointmentsScreen() {
                   </Text>
                 </View>
                 <View style={styles.appointmentCardContent}>
-                  <Text style={styles.appointmentTime}>{apt.time}</Text>
+                  <Text style={[styles.appointmentTime, { color: colors.text }]}>{apt.time}</Text>
                   {apt.doctorName && (
-                    <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
+                    <Text style={[styles.appointmentDoctor, { color: colors.textSecondary }]}>{apt.doctorName}</Text>
                   )}
                   {apt.purpose && (
                     <Text style={styles.appointmentPurpose}>{apt.purpose}</Text>
@@ -661,6 +664,7 @@ export default function AppointmentsScreen() {
             <Text
               style={[
                 styles.nvCalendarDayText,
+                { color: colors.text },
                 hasVisit && styles.nvCalendarDayTextVisit,
                 isPast && styles.nvCalendarDayTextPast,
                 isToday && styles.nvCalendarDayTextToday,
@@ -677,41 +681,41 @@ export default function AppointmentsScreen() {
     }
 
     return (
-      <View style={styles.nvCalendarCard}>
+      <View style={[styles.nvCalendarCard, { backgroundColor: colors.cardBackground }]}>
         <View style={styles.nvMonthNavigation}>
           <TouchableOpacity
             style={styles.nvMonthNavButton}
             onPress={() => setNurseVisitMonth(new Date(year, month - 1, 1))}
           >
-            <Ionicons name="chevron-back" size={18} color="#64748b" />
+            <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
-          <Text style={styles.nvMonthTitle}>
+          <Text style={[styles.nvMonthTitle, { color: colors.text }]}>
             {MONTH_FULL[month]} {year}
           </Text>
           <TouchableOpacity
             style={styles.nvMonthNavButton}
             onPress={() => setNurseVisitMonth(new Date(year, month + 1, 1))}
           >
-            <Ionicons name="chevron-forward" size={18} color="#64748b" />
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.nvWeekdaysRow}>
           {WEEKDAYS.map((day, index) => (
-            <Text key={index} style={styles.nvWeekdayText}>{day}</Text>
+            <Text key={index} style={[styles.nvWeekdayText, { color: colors.textSecondary }]}>{day}</Text>
           ))}
         </View>
 
         <View style={styles.nvDaysGrid}>{days}</View>
 
-        <View style={styles.nvCalendarLegend}>
+        <View style={[styles.nvCalendarLegend, { borderTopColor: colors.border }]}>
           <View style={styles.nvLegendItem}>
             <View style={[styles.nvLegendDot, { backgroundColor: '#006dab' }]} />
-            <Text style={styles.nvLegendText}>{t('appointments.scheduledVisit')}</Text>
+            <Text style={[styles.nvLegendText, { color: colors.textSecondary }]}>{t('appointments.scheduledVisit')}</Text>
           </View>
           <View style={styles.nvLegendItem}>
             <View style={[styles.nvLegendDot, { backgroundColor: '#94a3b8' }]} />
-            <Text style={styles.nvLegendText}>{t('appointments.completed')}</Text>
+            <Text style={[styles.nvLegendText, { color: colors.textSecondary }]}>{t('appointments.completed')}</Text>
           </View>
         </View>
       </View>
@@ -731,13 +735,13 @@ export default function AppointmentsScreen() {
 
     return (
       <View style={styles.nurseVisitSection}>
-        <View style={styles.nurseVisitHeader}>
-          <View style={styles.nurseVisitHeaderIcon}>
+        <View style={[styles.nurseVisitHeader, { backgroundColor: colors.cardBackground }]}>
+          <View style={[styles.nurseVisitHeaderIcon, { backgroundColor: isDarkMode ? '#1e3a5f' : '#e0f2fe' }]}>
             <Ionicons name="medkit" size={24} color="#006dab" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.nurseVisitTitle}>{t('appointments.nursingDeptVisits')}</Text>
-            <Text style={styles.nurseVisitSubtitle}>{t('appointments.scheduledByAdmin')}</Text>
+            <Text style={[styles.nurseVisitTitle, { color: colors.text }]}>{t('appointments.nursingDeptVisits')}</Text>
+            <Text style={[styles.nurseVisitSubtitle, { color: colors.textSecondary }]}>{t('appointments.scheduledByAdmin')}</Text>
           </View>
         </View>
 
@@ -745,10 +749,10 @@ export default function AppointmentsScreen() {
         {renderNurseVisitCalendar()}
 
         {nursingVisits.length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={48} color="#cbd5e1" />
-            <Text style={styles.emptyStateText}>{t('appointments.noVisitsScheduled')}</Text>
-            <Text style={styles.emptyStateSubtext}>{t('appointments.visitsAppearHere')}</Text>
+          <View style={[styles.emptyState, { backgroundColor: colors.cardBackground }]}>
+            <Ionicons name="calendar-outline" size={48} color={colors.textMuted} />
+            <Text style={[styles.emptyStateText, { color: colors.text }]}>{t('appointments.noVisitsScheduled')}</Text>
+            <Text style={[styles.emptyStateSubtext, { color: colors.textSecondary }]}>{t('appointments.visitsAppearHere')}</Text>
           </View>
         )}
 
@@ -792,27 +796,27 @@ export default function AppointmentsScreen() {
         {/* Upcoming Visits */}
         {upcomingVisits.length > 1 && (
           <View style={styles.visitCategory}>
-            <Text style={styles.visitCategoryTitle}>{t('appointments.upcomingVisits')}</Text>
+            <Text style={[styles.visitCategoryTitle, { color: colors.text }]}>{t('appointments.upcomingVisits')}</Text>
             {upcomingVisits.slice(1, 4).map((visit: NursingDepartmentVisit) => (
-              <View key={visit.id} style={styles.nurseVisitCard}>
-                <View style={styles.visitDateBox}>
-                  <Text style={styles.visitDayNum}>
+              <View key={visit.id} style={[styles.nurseVisitCard, { backgroundColor: colors.cardBackground }]}>
+                <View style={[styles.visitDateBox, { backgroundColor: isDarkMode ? '#1e3a5f' : '#e0f2fe' }]}>
+                  <Text style={[styles.visitDayNum, { color: isDarkMode ? '#60a5fa' : '#006dab' }]}>
                     {new Date(visit.date).getDate()}
                   </Text>
-                  <Text style={styles.visitMonth}>
+                  <Text style={[styles.visitMonth, { color: isDarkMode ? '#93c5fd' : '#0284c7' }]}>
                     {MONTHS[new Date(visit.date).getMonth()]}
                   </Text>
                 </View>
                 <View style={styles.visitContent}>
                   <View style={styles.visitTimeRow}>
                     <Ionicons name="time-outline" size={14} color="#006dab" />
-                    <Text style={styles.visitTime}>{visit.time}</Text>
+                    <Text style={[styles.visitTime, { color: colors.text }]}>{visit.time}</Text>
                   </View>
                   {visit.departmentName && (
-                    <Text style={styles.visitNurseName}>{visit.departmentName}</Text>
+                    <Text style={[styles.visitNurseName, { color: colors.textSecondary }]}>{visit.departmentName}</Text>
                   )}
                   {visit.visitNumber && (
-                    <Text style={styles.visitNumberText}>{t('appointments.visitNumber')} #{visit.visitNumber}</Text>
+                    <Text style={[styles.visitNumberText, { color: colors.textMuted }]}>{t('appointments.visitNumber')} #{visit.visitNumber}</Text>
                   )}
                   {visit.linkedDoctorVisitId && (
                     <View style={styles.linkedDoctorVisitBadgeSmall}>
@@ -832,9 +836,9 @@ export default function AppointmentsScreen() {
         {/* Past Visits */}
         {pastVisits.length > 0 && (
           <View style={styles.visitCategory}>
-            <Text style={styles.visitCategoryTitle}>{t('appointments.recentCompleted')}</Text>
+            <Text style={[styles.visitCategoryTitle, { color: colors.text }]}>{t('appointments.recentCompleted')}</Text>
             {[...pastVisits].reverse().map((visit: NursingDepartmentVisit) => (
-              <View key={visit.id} style={[styles.nurseVisitCard, styles.nurseVisitCardPast]}>
+              <View key={visit.id} style={[styles.nurseVisitCard, styles.nurseVisitCardPast, { backgroundColor: colors.cardBackground }]}>
                 <View style={[styles.visitDateBox, styles.visitDateBoxPast]}>
                   <Text style={[styles.visitDayNum, styles.visitDayNumPast]}>
                     {new Date(visit.date).getDate()}
@@ -852,7 +856,7 @@ export default function AppointmentsScreen() {
                     <Text style={[styles.visitNurseName, styles.visitNurseNamePast]}>{visit.departmentName}</Text>
                   )}
                   {visit.visitNumber && (
-                    <Text style={styles.visitNumberText}>{t('appointments.visitNumber')} #{visit.visitNumber}</Text>
+                    <Text style={[styles.visitNumberText, { color: colors.textMuted }]}>{t('appointments.visitNumber')} #{visit.visitNumber}</Text>
                   )}
                 </View>
                 <View style={[styles.visitStatusBadge, styles.visitStatusCompleted]}>
@@ -866,9 +870,9 @@ export default function AppointmentsScreen() {
         {/* Cancelled Visits */}
         {cancelledVisits.length > 0 && (
           <View style={styles.visitCategory}>
-            <Text style={styles.visitCategoryTitle}>{t('appointments.cancelledVisits')}</Text>
+            <Text style={[styles.visitCategoryTitle, { color: colors.text }]}>{t('appointments.cancelledVisits')}</Text>
             {cancelledVisits.map((visit: NursingDepartmentVisit) => (
-              <View key={visit.id} style={[styles.nurseVisitCard, styles.nurseVisitCardCancelled]}>
+              <View key={visit.id} style={[styles.nurseVisitCard, styles.nurseVisitCardCancelled, { backgroundColor: colors.cardBackground }]}>
                 <View style={[styles.visitDateBox, styles.visitDateBoxCancelled]}>
                   <Text style={[styles.visitDayNum, styles.visitDayNumCancelled]}>
                     {new Date(visit.date).getDate()}
@@ -1007,18 +1011,19 @@ export default function AppointmentsScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {toast.visible && (
         <Animated.View
           style={[
             styles.toast,
+            { backgroundColor: colors.cardBackground },
             toast.type === 'error' ? styles.toastError : styles.toastSuccess,
             { transform: [{ translateY: toastAnim }] },
           ]}
         >
           <View style={styles.toastContent}>
             <Text style={styles.toastIcon}>{toast.type === 'error' ? '✗' : '✓'}</Text>
-            <Text style={styles.toastText}>{toast.message}</Text>
+            <Text style={[styles.toastText, { color: colors.text }]}>{toast.message}</Text>
           </View>
         </Animated.View>
       )}

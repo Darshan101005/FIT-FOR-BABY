@@ -1,17 +1,18 @@
 {
-  "name": "Fit For Baby",
-  "short_name": "Fit For Baby",
-  "description": "A comprehensive pregnancy wellness app for expecting parents - track health, diet, exercise and more",
+  "name": "Fit For Baby - Pregnancy Wellness App",
+  "short_name": "FitForBaby",
+  "description": "Fit For Baby (FitForBaby) - Your comprehensive pregnancy wellness app for expecting parents. Track health, diet, exercise, fertility and couple wellness. Download the fit for baby app today!",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#006dab",
   "background_color": "#ffffff",
-  "categories": ["health", "lifestyle", "medical"],
+  "categories": ["health", "lifestyle", "medical", "fitness", "pregnancy"],
   "lang": "en",
   "dir": "ltr",
   "prefer_related_applications": false,
+  "id": "fitforbaby",
   "icons": [
     {
       "src": "/favicon.png",

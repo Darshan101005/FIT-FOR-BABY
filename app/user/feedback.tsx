@@ -485,10 +485,12 @@ const styles = StyleSheet.create({
   },
   ratingRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: 8,
   },
   ratingItem: {
-    padding: 12,
+    padding: 10,
     borderRadius: 14,
     borderWidth: 2,
     borderColor: 'transparent',
@@ -497,7 +499,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   ratingEmoji: {
-    fontSize: 32,
+    fontSize: 28,
   },
   ratingLabel: {
     fontSize: 14,

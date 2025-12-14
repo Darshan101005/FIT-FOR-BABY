@@ -62,7 +62,7 @@ export default function ProgressScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
-  const { colors } = useTheme();
+  const { colors, isDarkMode } = useTheme();
   const { t, language } = useLanguage();
 
   // Get cached data from context
@@ -681,13 +681,13 @@ export default function ProgressScreen() {
   };
 
   const renderHeader = () => (
-    <View style={styles.header}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <Ionicons name="arrow-back" size={24} color="#0f172a" />
+    <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+      <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>{t('progress.title')}</Text>
-        <Text style={styles.headerSubtitle}>{t('progress.trackHealthJourney')}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{t('progress.title')}</Text>
+        <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>{t('progress.trackHealthJourney')}</Text>
       </View>
       <View style={{ width: 40 }} />
     </View>
@@ -712,6 +712,7 @@ export default function ProgressScreen() {
           key={range.id}
           style={[
             styles.timeRangeButton,
+            { backgroundColor: colors.cardBackground },
             selectedRange === range.id && styles.timeRangeButtonActive,
           ]}
           onPress={() => setSelectedRange(range.id)}
@@ -719,6 +720,7 @@ export default function ProgressScreen() {
           <Text
             style={[
               styles.timeRangeText,
+              { color: colors.textSecondary },
               selectedRange === range.id && styles.timeRangeTextActive,
             ]}
           >
@@ -735,6 +737,7 @@ export default function ProgressScreen() {
         <TouchableOpacity 
           style={[
             styles.summaryCard,
+            { backgroundColor: colors.cardBackground },
             selectedMetric === 'steps' && styles.summaryCardActive,
           ]}
           activeOpacity={0.8}
@@ -767,6 +770,7 @@ export default function ProgressScreen() {
         <TouchableOpacity 
           style={[
             styles.summaryCard,
+            { backgroundColor: colors.cardBackground },
             selectedMetric === 'calories' && styles.summaryCardActive,
           ]}
           activeOpacity={0.8}
@@ -779,16 +783,18 @@ export default function ProgressScreen() {
             <MaterialCommunityIcons 
               name="fire" 
               size={28} 
-              color={selectedMetric === 'calories' ? '#ef4444' : '#94a3b8'} 
+              color={selectedMetric === 'calories' ? '#ef4444' : colors.textMuted} 
             />
             <Text style={[
               styles.summaryValue,
+              { color: colors.text },
               selectedMetric === 'calories' && { color: '#ef4444' },
             ]}>
               {formatValue(totalCalories)}
             </Text>
             <Text style={[
               styles.summaryLabel,
+              { color: colors.textSecondary },
               selectedMetric === 'calories' && { color: '#dc2626' },
             ]}>
               {t('progress.totalCalories')}
@@ -799,6 +805,7 @@ export default function ProgressScreen() {
         <TouchableOpacity 
           style={[
             styles.summaryCard,
+            { backgroundColor: colors.cardBackground },
             selectedMetric === 'exercise' && styles.summaryCardActive,
           ]}
           activeOpacity={0.8}
@@ -811,16 +818,18 @@ export default function ProgressScreen() {
             <MaterialCommunityIcons 
               name="run-fast" 
               size={28} 
-              color={selectedMetric === 'exercise' ? '#f59e0b' : '#94a3b8'} 
+              color={selectedMetric === 'exercise' ? '#f59e0b' : colors.textMuted} 
             />
             <Text style={[
               styles.summaryValue,
+              { color: colors.text },
               selectedMetric === 'exercise' && { color: '#f59e0b' },
             ]}>
               {formatValue(totalExercise)}
             </Text>
             <Text style={[
               styles.summaryLabel,
+              { color: colors.textSecondary },
               selectedMetric === 'exercise' && { color: '#d97706' },
             ]}>
               {t('progress.exerciseMin')}
@@ -851,12 +860,12 @@ export default function ProgressScreen() {
     const maxVal = getMaxValue();
 
     return (
-      <View style={styles.chartCard}>
+      <View style={[styles.chartCard, { backgroundColor: colors.cardBackground }]}>
         <View style={[styles.chartHeader, isMobile && styles.chartHeaderMobile]}>
-          <Text style={styles.chartTitle}>{getChartTitle()}</Text>
+          <Text style={[styles.chartTitle, { color: colors.text }]}>{getChartTitle()}</Text>
           <View style={styles.chartLegend}>
             <View style={[styles.legendDot, { backgroundColor: '#006dab' }]} />
-            <Text style={styles.legendText}>
+            <Text style={[styles.legendText, { color: colors.textSecondary }]}>
               {selectedMetric === 'steps' ? t('progress.steps') : 
                selectedMetric === 'calories' ? t('progress.calories') : t('progress.minutes')}
             </Text>
@@ -887,7 +896,7 @@ export default function ProgressScreen() {
 
             return (
               <View key={data.label} style={styles.chartBar}>
-                <Text style={[styles.chartValue, isMobile && styles.chartValueMobile]}>
+                <Text style={[styles.chartValue, { color: colors.text }, isMobile && styles.chartValueMobile]}>
                   {formatValue(value)}
                 </Text>
                 <View style={styles.chartBarContainer}>
@@ -897,7 +906,7 @@ export default function ProgressScreen() {
                     style={[styles.chartBarFill, { height: barHeight }]}
                   />
                 </View>
-                <Text style={[styles.chartDay, isHighlighted && styles.chartDayActive]}>
+                <Text style={[styles.chartDay, { color: colors.textSecondary }, isHighlighted && styles.chartDayActive]}>
                   {data.label}
                 </Text>
               </View>
@@ -940,17 +949,17 @@ export default function ProgressScreen() {
     const borderColor = isNoChange ? '#e2e8f0' : changeColor;
 
     return (
-      <View style={styles.chartCard}>
+      <View style={[styles.chartCard, { backgroundColor: colors.cardBackground }]}>
         <View style={[styles.chartHeader, isMobile && styles.chartHeaderMobile]}>
-          <Text style={styles.chartTitle}>{t('progress.weightProgress')}</Text>
+          <Text style={[styles.chartTitle, { color: colors.text }]}>{t('progress.weightProgress')}</Text>
         </View>
 
         <View style={styles.weightProgressContainer}>
           {/* Start Weight */}
-          <View style={styles.weightBox}>
-            <Text style={styles.weightBoxLabel}>{t('progress.start')}</Text>
-            <Text style={styles.weightBoxValue}>{startWeight}</Text>
-            <Text style={styles.weightBoxUnit}>{t('progress.kg')}</Text>
+          <View style={[styles.weightBox, { borderColor: colors.border }]}>
+            <Text style={[styles.weightBoxLabel, { color: colors.textSecondary }]}>{t('progress.start')}</Text>
+            <Text style={[styles.weightBoxValue, { color: colors.text }]}>{startWeight}</Text>
+            <Text style={[styles.weightBoxUnit, { color: colors.textSecondary }]}>{t('progress.kg')}</Text>
           </View>
 
           {/* Arrow and Change */}
@@ -963,9 +972,9 @@ export default function ProgressScreen() {
 
           {/* Current Weight */}
           <View style={[styles.weightBox, { borderColor: borderColor }]}>
-            <Text style={styles.weightBoxLabel}>{t('progress.current')}</Text>
-            <Text style={[styles.weightBoxValue, { color: isNoChange ? '#0f172a' : changeColor }]}>{currentWeight}</Text>
-            <Text style={[styles.weightBoxUnit, { color: isNoChange ? '#64748b' : changeColor }]}>{t('progress.kg')}</Text>
+            <Text style={[styles.weightBoxLabel, { color: colors.textSecondary }]}>{t('progress.current')}</Text>
+            <Text style={[styles.weightBoxValue, { color: isNoChange ? colors.text : changeColor }]}>{currentWeight}</Text>
+            <Text style={[styles.weightBoxUnit, { color: isNoChange ? colors.textSecondary : changeColor }]}>{t('progress.kg')}</Text>
           </View>
         </View>
       </View>
@@ -992,17 +1001,17 @@ export default function ProgressScreen() {
 
     return (
       <View style={styles.goalsSection}>
-        <Text style={styles.sectionTitle}>{t('progress.weeklyGoals')}</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('progress.weeklyGoals')}</Text>
         
         {/* Steps Goal */}
-        <View style={styles.goalCard}>
+        <View style={[styles.goalCard, { backgroundColor: colors.cardBackground }]}>
           <View style={styles.goalHeader}>
             <View style={[styles.goalIcon, { backgroundColor: '#98be4e20' }]}>
               <MaterialCommunityIcons name="walk" size={24} color="#98be4e" />
             </View>
             <View style={styles.goalInfo}>
-              <Text style={styles.goalTitle}>{t('progress.weeklySteps')}</Text>
-              <Text style={styles.goalStats}>
+              <Text style={[styles.goalTitle, { color: colors.text }]}>{t('progress.weeklySteps')}</Text>
+              <Text style={[styles.goalStats, { color: colors.textSecondary }]}>
                 <Text style={{ color: '#98be4e', fontWeight: '800' }}>
                   {currentSteps.toLocaleString()}
                 </Text>
@@ -1013,20 +1022,20 @@ export default function ProgressScreen() {
               {Math.round(stepsPercent)}%
             </Text>
           </View>
-          <View style={styles.goalProgressBar}>
+          <View style={[styles.goalProgressBar, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
             <View style={[styles.goalProgressFill, { width: `${stepsPercent}%`, backgroundColor: '#98be4e' }]} />
           </View>
         </View>
 
         {/* Couple Walking Goal */}
-        <View style={styles.goalCard}>
+        <View style={[styles.goalCard, { backgroundColor: colors.cardBackground }]}>
           <View style={styles.goalHeader}>
             <View style={[styles.goalIcon, { backgroundColor: '#3b82f620' }]}>
               <Ionicons name="people" size={24} color="#3b82f6" />
             </View>
             <View style={styles.goalInfo}>
-              <Text style={styles.goalTitle}>{t('progress.coupleWalking')}</Text>
-              <Text style={styles.goalStats}>
+              <Text style={[styles.goalTitle, { color: colors.text }]}>{t('progress.coupleWalking')}</Text>
+              <Text style={[styles.goalStats, { color: colors.textSecondary }]}>
                 <Text style={{ color: '#3b82f6', fontWeight: '800' }}>
                   {coupleWalkingMinutes}
                 </Text>
@@ -1037,20 +1046,20 @@ export default function ProgressScreen() {
               {Math.round(coupleWalkingPercent)}%
             </Text>
           </View>
-          <View style={styles.goalProgressBar}>
+          <View style={[styles.goalProgressBar, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
             <View style={[styles.goalProgressFill, { width: `${coupleWalkingPercent}%`, backgroundColor: '#3b82f6' }]} />
           </View>
         </View>
 
         {/* High Knees Goal */}
-        <View style={styles.goalCard}>
+        <View style={[styles.goalCard, { backgroundColor: colors.cardBackground }]}>
           <View style={styles.goalHeader}>
             <View style={[styles.goalIcon, { backgroundColor: '#f59e0b20' }]}>
               <MaterialCommunityIcons name="run-fast" size={24} color="#f59e0b" />
             </View>
             <View style={styles.goalInfo}>
-              <Text style={styles.goalTitle}>{t('progress.highKnees')}</Text>
-              <Text style={styles.goalStats}>
+              <Text style={[styles.goalTitle, { color: colors.text }]}>{t('progress.highKnees')}</Text>
+              <Text style={[styles.goalStats, { color: colors.textSecondary }]}>
                 <Text style={{ color: '#f59e0b', fontWeight: '800' }}>
                   {highKneesMinutes}
                 </Text>
@@ -1061,7 +1070,7 @@ export default function ProgressScreen() {
               {Math.round(highKneesPercent)}%
             </Text>
           </View>
-          <View style={styles.goalProgressBar}>
+          <View style={[styles.goalProgressBar, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
             <View style={[styles.goalProgressFill, { width: `${highKneesPercent}%`, backgroundColor: '#f59e0b' }]} />
           </View>
         </View>
@@ -1079,14 +1088,14 @@ export default function ProgressScreen() {
         {/* Recent Achievements (Unlocked) */}
         {unlockedAchievements.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>{t('progress.recentAchievements')}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('progress.recentAchievements')}</Text>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.achievementsScroll}
             >
               {unlockedAchievements.map((achievement) => (
-                <View key={achievement.id} style={styles.achievementCard}>
+                <View key={achievement.id} style={[styles.achievementCard, { backgroundColor: colors.cardBackground }]}>
                   <View style={[styles.achievementBadge, { backgroundColor: achievement.backgroundColor, overflow: 'hidden' }]}>
                     {achievement.image ? (
                       <Image 
@@ -1101,8 +1110,8 @@ export default function ProgressScreen() {
                   <View style={styles.unlockedBadge}>
                     <Ionicons name="checkmark-circle" size={16} color="#98be4e" />
                   </View>
-                  <Text style={styles.achievementTitle}>{achievement.title}</Text>
-                  <Text style={styles.achievementDesc}>{achievement.description}</Text>
+                  <Text style={[styles.achievementTitle, { color: colors.text }]}>{achievement.title}</Text>
+                  <Text style={[styles.achievementDesc, { color: colors.textSecondary }]}>{achievement.description}</Text>
                 </View>
               ))}
             </ScrollView>
@@ -1110,7 +1119,7 @@ export default function ProgressScreen() {
         )}
 
         {/* All Achievements (Locked with lock icon) */}
-        <Text style={[styles.sectionTitle, unlockedAchievements.length > 0 && { marginTop: 24 }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }, unlockedAchievements.length > 0 && { marginTop: 24 }]}>
           {t('progress.allAchievements')}
         </Text>
         <ScrollView 
@@ -1119,7 +1128,7 @@ export default function ProgressScreen() {
           contentContainerStyle={styles.achievementsScroll}
         >
           {lockedAchievements.map((achievement) => (
-            <View key={achievement.id} style={[styles.achievementCard, styles.lockedAchievementCard]}>
+            <View key={achievement.id} style={[styles.achievementCard, styles.lockedAchievementCard, { backgroundColor: colors.cardBackground }]}>
               <View style={[styles.achievementBadge, { backgroundColor: achievement.backgroundColor, overflow: 'hidden' }]}>
                 {achievement.image ? (
                   <Image 
@@ -1146,7 +1155,7 @@ export default function ProgressScreen() {
 
   const renderCoupleProgress = () => (
     <View style={styles.coupleSection}>
-      <View style={styles.coupleCard}>
+      <View style={[styles.coupleCard, { backgroundColor: isDarkMode ? '#3b2d5a' : '#ede9fe', borderColor: isDarkMode ? '#5b4b7a' : '#ddd6fe' }]}>
         <View style={styles.coupleHeader}>
           <View style={styles.coupleTitleRow}>
             <Image 
@@ -1154,14 +1163,14 @@ export default function ProgressScreen() {
               style={styles.coupleJourneyImage}
               contentFit="cover"
             />
-            <Text style={styles.coupleTitle}>{t('progress.coupleJourney')}</Text>
+            <Text style={[styles.coupleTitle, { color: isDarkMode ? '#c4b5fd' : '#7c3aed' }]}>{t('progress.coupleJourney')}</Text>
           </View>
-          <Text style={styles.coupleSubtitle}>{coupleWeeksJoined} {t('progress.weeksTogether')}</Text>
+          <Text style={[styles.coupleSubtitle, { color: isDarkMode ? '#a78bfa' : '#8b5cf6' }]}>{coupleWeeksJoined} {t('progress.weeksTogether')}</Text>
         </View>
         
         <View style={styles.coupleStatsCenter}>
-          <Text style={styles.coupleStatValueLarge}>{totalWalksTogether}</Text>
-          <Text style={styles.coupleStatLabelLarge}>{t('progress.walksTogether')}</Text>
+          <Text style={[styles.coupleStatValueLarge, { color: isDarkMode ? '#c4b5fd' : '#7c3aed' }]}>{totalWalksTogether}</Text>
+          <Text style={[styles.coupleStatLabelLarge, { color: isDarkMode ? '#a78bfa' : '#8b5cf6' }]}>{t('progress.walksTogether')}</Text>
         </View>
       </View>
     </View>

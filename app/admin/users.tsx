@@ -7,17 +7,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -1346,142 +1346,203 @@ export default function AdminUsersScreen() {
           femaleQuestionnaire
         };
       }));
+
+      // Helper function to escape CSV values
+      const escapeCSV = (value: any) => {
+        if (value === null || value === undefined) return '';
+        const str = String(value).replace(/"/g, '""');
+        return str.includes(',') || str.includes('"') || str.includes('\n') ? `"${str}"` : str;
+      };
+
+      // Collect all unique questionnaire questions from all users
+      const maleQuestionTexts: string[] = [];
+      const femaleQuestionTexts: string[] = [];
       
-      // Generate CSV with VERTICAL layout - one user per row with User ID
-      let csv = '\ufeff'; // BOM for Excel
+      for (const data of allCouplesData) {
+        if (data.maleQuestionnaire?.answers) {
+          Object.entries(data.maleQuestionnaire.answers).forEach(([_, answer]: [string, any]) => {
+            const questionText = answer.questionText || 'Unknown Question';
+            if (!maleQuestionTexts.includes(questionText)) {
+              maleQuestionTexts.push(questionText);
+            }
+          });
+        }
+        if (data.femaleQuestionnaire?.answers) {
+          Object.entries(data.femaleQuestionnaire.answers).forEach(([_, answer]: [string, any]) => {
+            const questionText = answer.questionText || 'Unknown Question';
+            if (!femaleQuestionTexts.includes(questionText)) {
+              femaleQuestionTexts.push(questionText);
+            }
+          });
+        }
+      }
+      
       const s = ',';
-      csv += `FIT FOR BABY - ALL COUPLES COMPLETE EXPORT\n`;
-        csv += `Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
-        csv += `Total Couples: ${couples.length} (${couples.length * 2} users)\n\n`;
+      let csv = '\ufeff'; // BOM for Excel
+      
+      // ===== MALE TABLE =====
+      csv += `FIT FOR BABY - MALE USERS DATA\n`;
+      csv += `Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
+      csv += `Total Male Users: ${couples.length}\n\n`;
+      
+      // Male header row
+      csv += `Couple ID${s}Name${s}Email${s}Phone${s}Age${s}DOB${s}Weight (kg)${s}Height (cm)${s}BMI${s}Status${s}`;
+      csv += `Address Line 1${s}Address Line 2${s}City${s}State${s}Pincode${s}`;
+      csv += `Enrollment Date${s}Couple Status${s}`;
+      csv += `Total Steps (30d)${s}Avg Steps/Day${s}Total Exercise Mins (30d)${s}Total Food Logs (7d)${s}Weight Logs Count${s}Latest Weight${s}`;
+      csv += `Questionnaire Status${s}Questionnaire Progress${s}Questions Answered`;
+      // Add individual questionnaire question columns for male
+      for (const q of maleQuestionTexts) {
+        csv += `${s}${escapeCSV(q)}`;
+      }
+      csv += `\n`;
+      
+      // Male data rows
+      for (const data of allCouplesData) {
+        const { couple, maleSteps, maleWeight, maleExercise, maleFood, maleQuestionnaire } = data;
         
-        // Header row
-        csv += `User ID${s}Couple ID${s}Gender${s}Name${s}Email${s}Phone${s}Age${s}DOB${s}Weight${s}Height${s}BMI${s}Status${s}Address Line 1${s}Address Line 2${s}City${s}State${s}Pincode${s}`;
-        csv += `Enrollment Date${s}Couple Status${s}`;
-        csv += `Total Steps (30d)${s}Avg Steps/Day${s}Total Exercise Mins (30d)${s}Total Food Logs (7d)${s}Weight Logs Count${s}Latest Weight${s}`;
-        csv += `Questionnaire Status${s}Questionnaire Progress${s}Questions Answered${s}Questionnaire Answers${s}`;
-        csv += `Ovarian Induction Date${s}IUI Cycles${s}Infertility Duration${s}Infertility Type${s}Last Menstrual Period\n`;
+        const maleTotalSteps = maleSteps.reduce((sum, step) => sum + (step.stepCount || 0), 0);
+        const maleAvgSteps = maleSteps.length > 0 ? Math.round(maleTotalSteps / maleSteps.length) : 0;
+        const maleExerciseMins = maleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
+        const maleLatestWeight = maleWeight.length > 0 ? maleWeight[0].weight : '';
         
-        // Data rows - one row per user
-        for (const data of allCouplesData) {
-          const { couple, maleSteps, femaleSteps, maleWeight, femaleWeight, maleExercise, femaleExercise, maleFood, femaleFood, maleQuestionnaire, femaleQuestionnaire } = data;
-          
-          // Male row
-          const maleTotalSteps = maleSteps.reduce((sum, s) => sum + (s.stepCount || 0), 0);
-          const maleAvgSteps = maleSteps.length > 0 ? Math.round(maleTotalSteps / maleSteps.length) : 0;
-          const maleExerciseMins = maleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
-          const maleLatestWeight = maleWeight.length > 0 ? maleWeight[0].weight : '';
-          
-          csv += `${couple.coupleId}_M${s}`;
-          csv += `${couple.coupleId}${s}`;
-          csv += `Male${s}`;
-          csv += `${couple.male.name}${s}`;
-          csv += `${couple.male.email || ''}${s}`;
-          csv += `${couple.male.phone || ''}${s}`;
-          csv += `${couple.male.age || ''}${s}`;
-          csv += `${couple.male.dateOfBirth || ''}${s}`;
-          csv += `${couple.male.weight || ''}${s}`;
-          csv += `${couple.male.height || ''}${s}`;
-          csv += `${couple.male.bmi || ''}${s}`;
-          csv += `${couple.male.status}${s}`;
-          csv += `${couple.male.address?.addressLine1 || ''}${s}`;
-          csv += `${couple.male.address?.addressLine2 || ''}${s}`;
-          csv += `${couple.male.address?.city || ''}${s}`;
-          csv += `${couple.male.address?.state || ''}${s}`;
-          csv += `${couple.male.address?.pincode || ''}${s}`;
-          csv += `${couple.enrollmentDate}${s}`;
-          csv += `${couple.status}${s}`;
-          csv += `${maleTotalSteps}${s}`;
-          csv += `${maleAvgSteps}${s}`;
-          csv += `${maleExerciseMins}${s}`;
-          csv += `${maleFood.length}${s}`;
-          csv += `${maleWeight.length}${s}`;
-          csv += `${maleLatestWeight}${s}`;
-          csv += `${maleQuestionnaire?.isComplete ? 'Completed' : maleQuestionnaire ? 'In Progress' : 'Not Started'}${s}`;
-          csv += `${maleQuestionnaire?.progress?.percentComplete || 0}%${s}`;
-          const maleAnswerCount = maleQuestionnaire?.answers ? Object.keys(maleQuestionnaire.answers).length : 0;
-          csv += `${maleAnswerCount}${s}`;
-          let maleQA = '';
+        csv += `${escapeCSV(couple.coupleId)}${s}`;
+        csv += `${escapeCSV(couple.male.name)}${s}`;
+        csv += `${escapeCSV(couple.male.email || '')}${s}`;
+        csv += `${escapeCSV(couple.male.phone || '')}${s}`;
+        csv += `${escapeCSV(couple.male.age || '')}${s}`;
+        csv += `${escapeCSV(couple.male.dateOfBirth || '')}${s}`;
+        csv += `${escapeCSV(couple.male.weight || '')}${s}`;
+        csv += `${escapeCSV(couple.male.height || '')}${s}`;
+        csv += `${escapeCSV(couple.male.bmi || '')}${s}`;
+        csv += `${escapeCSV(couple.male.status)}${s}`;
+        csv += `${escapeCSV(couple.male.address?.addressLine1 || '')}${s}`;
+        csv += `${escapeCSV(couple.male.address?.addressLine2 || '')}${s}`;
+        csv += `${escapeCSV(couple.male.address?.city || '')}${s}`;
+        csv += `${escapeCSV(couple.male.address?.state || '')}${s}`;
+        csv += `${escapeCSV(couple.male.address?.pincode || '')}${s}`;
+        csv += `${escapeCSV(couple.enrollmentDate)}${s}`;
+        csv += `${escapeCSV(couple.status)}${s}`;
+        csv += `${maleTotalSteps}${s}`;
+        csv += `${maleAvgSteps}${s}`;
+        csv += `${maleExerciseMins}${s}`;
+        csv += `${maleFood.length}${s}`;
+        csv += `${maleWeight.length}${s}`;
+        csv += `${escapeCSV(maleLatestWeight)}${s}`;
+        csv += `${maleQuestionnaire?.isComplete ? 'Completed' : maleQuestionnaire ? 'In Progress' : 'Not Started'}${s}`;
+        csv += `${maleQuestionnaire?.progress?.percentComplete || 0}%${s}`;
+        const maleAnswerCount = maleQuestionnaire?.answers ? Object.keys(maleQuestionnaire.answers).length : 0;
+        csv += `${maleAnswerCount}`;
+        
+        // Add individual questionnaire answers for male
+        for (const q of maleQuestionTexts) {
+          let answerValue = '';
           if (maleQuestionnaire?.answers) {
-            const qaList = Object.entries(maleQuestionnaire.answers).map(([_, answer]: [string, any]) => {
-              const q = (answer.questionText || '').replace(/,/g, ' ').replace(/;/g, ' ').replace(/\n/g, ' ');
-              const a = (Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer || 'N/A').toString().replace(/,/g, ' ').replace(/;/g, ' ').replace(/\n/g, ' ');
-              return `${q}: ${a}`;
-            });
-            maleQA = qaList.join(' | ');
+            const foundAnswer = Object.entries(maleQuestionnaire.answers).find(([_, ans]: [string, any]) => ans.questionText === q);
+            if (foundAnswer) {
+              const [_, answer] = foundAnswer as [string, any];
+              answerValue = Array.isArray(answer.answer) ? answer.answer.join('; ') : (answer.answer || '');
+            }
           }
-          csv += `${maleQA}${s}`;
-          csv += `${s}${s}${s}${s}\n`; // Empty fertility fields for male
-          
-          // Female row
-          const femaleTotalSteps = femaleSteps.reduce((sum, s) => sum + (s.stepCount || 0), 0);
-          const femaleAvgSteps = femaleSteps.length > 0 ? Math.round(femaleTotalSteps / femaleSteps.length) : 0;
-          const femaleExerciseMins = femaleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
-          const femaleLatestWeight = femaleWeight.length > 0 ? femaleWeight[0].weight : '';
-          
-          csv += `${couple.coupleId}_F${s}`;
-          csv += `${couple.coupleId}${s}`;
-          csv += `Female${s}`;
-          csv += `${couple.female.name}${s}`;
-          csv += `${couple.female.email || ''}${s}`;
-          csv += `${couple.female.phone || ''}${s}`;
-          csv += `${couple.female.age || ''}${s}`;
-          csv += `${couple.female.dateOfBirth || ''}${s}`;
-          csv += `${couple.female.weight || ''}${s}`;
-          csv += `${couple.female.height || ''}${s}`;
-          csv += `${couple.female.bmi || ''}${s}`;
-          csv += `${couple.female.status}${s}`;
-          csv += `${couple.female.address?.addressLine1 || ''}${s}`;
-          csv += `${couple.female.address?.addressLine2 || ''}${s}`;
-          csv += `${couple.female.address?.city || ''}${s}`;
-          csv += `${couple.female.address?.state || ''}${s}`;
-          csv += `${couple.female.address?.pincode || ''}${s}`;
-          csv += `${couple.enrollmentDate}${s}`;
-          csv += `${couple.status}${s}`;
-          csv += `${femaleTotalSteps}${s}`;
-          csv += `${femaleAvgSteps}${s}`;
-          csv += `${femaleExerciseMins}${s}`;
-          csv += `${femaleFood.length}${s}`;
-          csv += `${femaleWeight.length}${s}`;
-          csv += `${femaleLatestWeight}${s}`;
-          csv += `${femaleQuestionnaire?.isComplete ? 'Completed' : femaleQuestionnaire ? 'In Progress' : 'Not Started'}${s}`;
-          csv += `${femaleQuestionnaire?.progress?.percentComplete || 0}%${s}`;
-          const femaleAnswerCount = femaleQuestionnaire?.answers ? Object.keys(femaleQuestionnaire.answers).length : 0;
-          csv += `${femaleAnswerCount}${s}`;
-          let femaleQA = '';
-          if (femaleQuestionnaire?.answers) {
-            const qaList = Object.entries(femaleQuestionnaire.answers).map(([_, answer]: [string, any]) => {
-              const q = (answer.questionText || '').replace(/,/g, ' ').replace(/;/g, ' ').replace(/\n/g, ' ');
-              const a = (Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer || 'N/A').toString().replace(/,/g, ' ').replace(/;/g, ' ').replace(/\n/g, ' ');
-              return `${q}: ${a}`;
-            });
-            femaleQA = qaList.join(' | ');
-          }
-          csv += `${femaleQA}${s}`;
-          csv += `${couple.female.dateOfOvarianInduction || ''}${s}`;
-          csv += `${couple.female.noOfIUICycle || ''}${s}`;
-          csv += `${couple.female.durationOfInfertility || ''}${s}`;
-          csv += `${couple.female.typeOfInfertility || ''}${s}`;
-          csv += `${couple.female.lastMenstrualPeriod || ''}\n`;
-          
-          csv += `\n`; // Empty row between couples
+          csv += `${s}${escapeCSV(answerValue)}`;
         }
+        csv += `\n`;
+      }
+      
+      // Add spacing between tables
+      csv += `\n\n\n`;
+      
+      // ===== FEMALE TABLE =====
+      csv += `FIT FOR BABY - FEMALE USERS DATA\n`;
+      csv += `Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
+      csv += `Total Female Users: ${couples.length}\n\n`;
+      
+      // Female header row
+      csv += `Couple ID${s}Name${s}Email${s}Phone${s}Age${s}DOB${s}Weight (kg)${s}Height (cm)${s}BMI${s}Status${s}`;
+      csv += `Address Line 1${s}Address Line 2${s}City${s}State${s}Pincode${s}`;
+      csv += `Enrollment Date${s}Couple Status${s}`;
+      csv += `Total Steps (30d)${s}Avg Steps/Day${s}Total Exercise Mins (30d)${s}Total Food Logs (7d)${s}Weight Logs Count${s}Latest Weight${s}`;
+      csv += `Ovarian Induction Date${s}IUI Cycles${s}Infertility Duration${s}Infertility Type${s}Last Menstrual Period${s}`;
+      csv += `Questionnaire Status${s}Questionnaire Progress${s}Questions Answered`;
+      // Add individual questionnaire question columns for female
+      for (const q of femaleQuestionTexts) {
+        csv += `${s}${escapeCSV(q)}`;
+      }
+      csv += `\n`;
+      
+      // Female data rows
+      for (const data of allCouplesData) {
+        const { couple, femaleSteps, femaleWeight, femaleExercise, femaleFood, femaleQuestionnaire } = data;
         
-        if (isWeb) {
-          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `all_couples_complete_export_${formatDateStr(today)}.csv`;
-          link.click();
-          URL.revokeObjectURL(url);
-          showToast('Complete data exported successfully!', 'success');
-        } else {
-          const fileName = `all_couples_complete_export_${formatDateStr(today)}.csv`;
-          const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-          await FileSystem.writeAsStringAsync(fileUri, csv);
-          await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export All Couples' });
-          showToast('Complete data ready to share!', 'success');
+        const femaleTotalSteps = femaleSteps.reduce((sum, step) => sum + (step.stepCount || 0), 0);
+        const femaleAvgSteps = femaleSteps.length > 0 ? Math.round(femaleTotalSteps / femaleSteps.length) : 0;
+        const femaleExerciseMins = femaleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
+        const femaleLatestWeight = femaleWeight.length > 0 ? femaleWeight[0].weight : '';
+        
+        csv += `${escapeCSV(couple.coupleId)}${s}`;
+        csv += `${escapeCSV(couple.female.name)}${s}`;
+        csv += `${escapeCSV(couple.female.email || '')}${s}`;
+        csv += `${escapeCSV(couple.female.phone || '')}${s}`;
+        csv += `${escapeCSV(couple.female.age || '')}${s}`;
+        csv += `${escapeCSV(couple.female.dateOfBirth || '')}${s}`;
+        csv += `${escapeCSV(couple.female.weight || '')}${s}`;
+        csv += `${escapeCSV(couple.female.height || '')}${s}`;
+        csv += `${escapeCSV(couple.female.bmi || '')}${s}`;
+        csv += `${escapeCSV(couple.female.status)}${s}`;
+        csv += `${escapeCSV(couple.female.address?.addressLine1 || '')}${s}`;
+        csv += `${escapeCSV(couple.female.address?.addressLine2 || '')}${s}`;
+        csv += `${escapeCSV(couple.female.address?.city || '')}${s}`;
+        csv += `${escapeCSV(couple.female.address?.state || '')}${s}`;
+        csv += `${escapeCSV(couple.female.address?.pincode || '')}${s}`;
+        csv += `${escapeCSV(couple.enrollmentDate)}${s}`;
+        csv += `${escapeCSV(couple.status)}${s}`;
+        csv += `${femaleTotalSteps}${s}`;
+        csv += `${femaleAvgSteps}${s}`;
+        csv += `${femaleExerciseMins}${s}`;
+        csv += `${femaleFood.length}${s}`;
+        csv += `${femaleWeight.length}${s}`;
+        csv += `${escapeCSV(femaleLatestWeight)}${s}`;
+        csv += `${escapeCSV(couple.female.dateOfOvarianInduction || '')}${s}`;
+        csv += `${escapeCSV(couple.female.noOfIUICycle || '')}${s}`;
+        csv += `${escapeCSV(couple.female.durationOfInfertility || '')}${s}`;
+        csv += `${escapeCSV(couple.female.typeOfInfertility || '')}${s}`;
+        csv += `${escapeCSV(couple.female.lastMenstrualPeriod || '')}${s}`;
+        csv += `${femaleQuestionnaire?.isComplete ? 'Completed' : femaleQuestionnaire ? 'In Progress' : 'Not Started'}${s}`;
+        csv += `${femaleQuestionnaire?.progress?.percentComplete || 0}%${s}`;
+        const femaleAnswerCount = femaleQuestionnaire?.answers ? Object.keys(femaleQuestionnaire.answers).length : 0;
+        csv += `${femaleAnswerCount}`;
+        
+        // Add individual questionnaire answers for female
+        for (const q of femaleQuestionTexts) {
+          let answerValue = '';
+          if (femaleQuestionnaire?.answers) {
+            const foundAnswer = Object.entries(femaleQuestionnaire.answers).find(([_, ans]: [string, any]) => ans.questionText === q);
+            if (foundAnswer) {
+              const [_, answer] = foundAnswer as [string, any];
+              answerValue = Array.isArray(answer.answer) ? answer.answer.join('; ') : (answer.answer || '');
+            }
+          }
+          csv += `${s}${escapeCSV(answerValue)}`;
         }
+        csv += `\n`;
+      }
+        
+      if (isWeb) {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `all_couples_complete_export_${formatDateStr(today)}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showToast('Complete data exported successfully!', 'success');
+      } else {
+        const fileName = `all_couples_complete_export_${formatDateStr(today)}.csv`;
+        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, csv);
+        await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export All Couples' });
+        showToast('Complete data ready to share!', 'success');
+      }
       
       setShowExportAllModal(false);
     } catch (error) {

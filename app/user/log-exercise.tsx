@@ -1,4 +1,5 @@
 import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { coupleExerciseService, coupleService, globalSettingsService } from '@/services/firestore.service';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -122,6 +123,7 @@ export default function LogExerciseScreen() {
   const isMobile = screenWidth < 768;
   const { refreshDailyData } = useUserData();
   const { language, t } = useLanguage();
+  const { colors, isDarkMode } = useTheme();
 
   const [step, setStep] = useState<'type' | 'details' | 'summary'>('type');
   const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null);
@@ -287,14 +289,14 @@ export default function LogExerciseScreen() {
   };
 
   const renderHeader = () => (
-    <View style={styles.header}>
-      <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-        <Ionicons name="arrow-back" size={24} color="#0f172a" />
+    <View style={[styles.header, { backgroundColor: colors.cardBackground }]}>
+      <TouchableOpacity onPress={handleBack} style={[styles.backButton, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>{t('log.exercise.title')}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{t('log.exercise.title')}</Text>
         {selectedExercise && (
-          <Text style={styles.headerSubtitle}>{language === 'ta' ? selectedExercise.nameTamil : selectedExercise.name}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>{language === 'ta' ? selectedExercise.nameTamil : selectedExercise.name}</Text>
         )}
       </View>
     </View>
@@ -302,15 +304,15 @@ export default function LogExerciseScreen() {
 
   const renderExerciseSelection = () => (
     <View style={styles.content}>
-      <Text style={styles.stepTitle}>{t('log.exercise.chooseType')}</Text>
-      <Text style={styles.stepDescription}>
+      <Text style={[styles.stepTitle, { color: colors.text }]}>{t('log.exercise.chooseType')}</Text>
+      <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
         {t('log.exercise.whatActivity')}
       </Text>
       <View style={styles.exerciseGrid}>
         {exerciseTypes.map((exercise) => (
           <TouchableOpacity
             key={exercise.id}
-            style={styles.exerciseCard}
+            style={[styles.exerciseCard, { backgroundColor: colors.cardBackground }]}
             onPress={() => handleSelectExercise(exercise)}
             activeOpacity={0.85}
           >
@@ -320,9 +322,9 @@ export default function LogExerciseScreen() {
             >
               <Image source={exercise.image} style={styles.exerciseImage} resizeMode="cover" />
             </LinearGradient>
-            <Text style={styles.exerciseLabel}>{language === 'ta' ? exercise.nameTamil : exercise.name}</Text>
+            <Text style={[styles.exerciseLabel, { color: colors.text }]}>{language === 'ta' ? exercise.nameTamil : exercise.name}</Text>
             {language !== 'ta' && (
-              <Text style={styles.exerciseLabelTamil}>{exercise.nameTamil}</Text>
+              <Text style={[styles.exerciseLabelTamil, { color: colors.textSecondary }]}>{exercise.nameTamil}</Text>
             )}
             {exercise.isCouple && (
               <View style={[styles.targetBadge, { backgroundColor: '#fef3c7' }]}>
@@ -342,7 +344,7 @@ export default function LogExerciseScreen() {
 
     return (
       <View style={styles.content}>
-        <View style={styles.selectedHeader}>
+        <View style={[styles.selectedHeader, { backgroundColor: colors.cardBackground }]}>
           <LinearGradient
             colors={selectedExercise.colors}
             style={styles.selectedIcon}
@@ -350,69 +352,102 @@ export default function LogExerciseScreen() {
             <Image source={selectedExercise.image} style={styles.selectedExerciseImage} resizeMode="cover" />
           </LinearGradient>
           <View>
-            <Text style={styles.selectedName}>{language === 'ta' ? selectedExercise.nameTamil : selectedExercise.name}</Text>
+            <Text style={[styles.selectedName, { color: colors.text }]}>{language === 'ta' ? selectedExercise.nameTamil : selectedExercise.name}</Text>
             {language !== 'ta' && (
-              <Text style={styles.selectedNameTamil}>{selectedExercise.nameTamil}</Text>
+              <Text style={[styles.selectedNameTamil, { color: colors.textSecondary }]}>{selectedExercise.nameTamil}</Text>
             )}
           </View>
         </View>
 
         {/* Duration */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>{t('log.exercise.duration')}</Text>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.exercise.duration')}</Text>
           <View style={styles.durationContainer}>
             <TouchableOpacity
-              style={styles.durationButton}
+              style={[styles.durationButton, { backgroundColor: isDarkMode ? colors.cardBackground : '#eff6ff' }]}
               onPress={() => setDuration(Math.max(5, parseInt(duration) - 5).toString())}
             >
-              <Ionicons name="remove" size={24} color="#006dab" />
+              <Ionicons name="remove" size={24} color={colors.primary} />
             </TouchableOpacity>
             <TextInput
-              style={styles.durationInput}
+              style={[styles.durationInput, { color: colors.text }]}
               value={duration}
               onChangeText={setDuration}
               keyboardType="numeric"
               selectTextOnFocus
             />
             <TouchableOpacity
-              style={styles.durationButton}
+              style={[styles.durationButton, { backgroundColor: isDarkMode ? colors.cardBackground : '#eff6ff' }]}
               onPress={() => setDuration((parseInt(duration) + 5).toString())}
             >
-              <Ionicons name="add" size={24} color="#006dab" />
+              <Ionicons name="add" size={24} color={colors.primary} />
             </TouchableOpacity>
           </View>
-          <View style={styles.quickDurations}>
-            {[10, 15, 30, 45, 60].map((mins) => (
-              <TouchableOpacity
-                key={mins}
-                style={[
-                  styles.quickDurationButton,
-                  duration === mins.toString() && styles.quickDurationButtonActive,
-                ]}
-                onPress={() => setDuration(mins.toString())}
-              >
-                <Text
+          {isMobile ? (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickDurationsScroll}
+            >
+              {[10, 15, 20, 25, 30, 45, 60].map((mins) => (
+                <TouchableOpacity
+                  key={mins}
                   style={[
-                    styles.quickDurationText,
-                    duration === mins.toString() && styles.quickDurationTextActive,
+                    styles.quickDurationButton,
+                    { backgroundColor: isDarkMode ? colors.cardBackground : '#f1f5f9' },
+                    duration === mins.toString() && styles.quickDurationButtonActive,
                   ]}
+                  onPress={() => setDuration(mins.toString())}
                 >
-                  {mins} {t('log.exercise.min')}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <Text
+                    style={[
+                      styles.quickDurationText,
+                      { color: colors.textSecondary },
+                      duration === mins.toString() && styles.quickDurationTextActive,
+                    ]}
+                  >
+                    {mins} {t('log.exercise.min')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.quickDurations}>
+              {[10, 15, 20, 25, 30, 45, 60].map((mins) => (
+                <TouchableOpacity
+                  key={mins}
+                  style={[
+                    styles.quickDurationButton,
+                    { backgroundColor: isDarkMode ? colors.cardBackground : '#f1f5f9' },
+                    duration === mins.toString() && styles.quickDurationButtonActive,
+                  ]}
+                  onPress={() => setDuration(mins.toString())}
+                >
+                  <Text
+                    style={[
+                      styles.quickDurationText,
+                      { color: colors.textSecondary },
+                      duration === mins.toString() && styles.quickDurationTextActive,
+                    ]}
+                  >
+                    {mins} {t('log.exercise.min')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Intensity */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>{t('log.exercise.intensityLevel')}</Text>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.exercise.intensityLevel')}</Text>
           <View style={styles.intensityOptions}>
             {intensityLevels.map((level) => (
               <TouchableOpacity
                 key={level.id}
                 style={[
                   styles.intensityOption,
+                  { backgroundColor: isDarkMode ? colors.cardBackground : '#f1f5f9' },
                   intensity === level.id && styles.intensityOptionActive,
                 ]}
                 onPress={() => setIntensity(level.id as 'light' | 'moderate' | 'vigorous')}
@@ -420,6 +455,7 @@ export default function LogExerciseScreen() {
                 <Text
                   style={[
                     styles.intensityText,
+                    { color: colors.textSecondary },
                     intensity === level.id && styles.intensityTextActive,
                   ]}
                 >
@@ -433,30 +469,31 @@ export default function LogExerciseScreen() {
         {/* Steps - Mandatory for Couple Walking only */}
         {selectedExercise.requiresSteps && (
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>{t('log.exercise.stepCount')} <Text style={styles.requiredStar}>*</Text></Text>
-            <View style={styles.stepsInputContainer}>
-              <MaterialCommunityIcons name="shoe-print" size={20} color="#64748b" />
+            <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.exercise.stepCount')} <Text style={styles.requiredStar}>*</Text></Text>
+            <View style={[styles.stepsInputContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+              <MaterialCommunityIcons name="shoe-print" size={20} color={colors.textSecondary} />
               <TextInput
-                style={styles.stepsInput}
+                style={[styles.stepsInput, { color: colors.text }]}
                 value={steps}
                 onChangeText={setSteps}
                 placeholder={t('log.exercise.enterStepCount')}
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={colors.textMuted}
                 keyboardType="numeric"
               />
             </View>
-            <Text style={styles.inputHint}>{t('log.exercise.requiredForCoupleWalking')}</Text>
+            <Text style={[styles.inputHint, { color: colors.textSecondary }]}>{t('log.exercise.requiredForCoupleWalking')}</Text>
           </View>
         )}
 
         {/* Partner Participation (for couple exercises) */}
         {selectedExercise.isCouple && (
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>{t('log.exercise.partnerParticipated')}</Text>
+            <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.exercise.partnerParticipated')}</Text>
             <View style={styles.partnerOptions}>
               <TouchableOpacity
                 style={[
                   styles.partnerOption,
+                  { backgroundColor: isDarkMode ? colors.cardBackground : '#f1f5f9' },
                   partnerParticipated && styles.partnerOptionActive,
                 ]}
                 onPress={() => setPartnerParticipated(true)}
@@ -464,12 +501,13 @@ export default function LogExerciseScreen() {
                 <Ionicons
                   name="people"
                   size={24}
-                  color={partnerParticipated ? '#0f172a' : '#94a3b8'}
+                  color={partnerParticipated ? colors.text : colors.textMuted}
                 />
                 <Text
                   style={[
                     styles.partnerOptionText,
-                    partnerParticipated && styles.partnerOptionTextActive,
+                    { color: colors.textSecondary },
+                    partnerParticipated && [styles.partnerOptionTextActive, { color: colors.text }],
                   ]}
                 >
                   {t('log.exercise.yesTogether')}
@@ -478,6 +516,7 @@ export default function LogExerciseScreen() {
               <TouchableOpacity
                 style={[
                   styles.partnerOption,
+                  { backgroundColor: isDarkMode ? colors.cardBackground : '#f1f5f9' },
                   !partnerParticipated && styles.partnerOptionActive,
                 ]}
                 onPress={() => setPartnerParticipated(false)}
@@ -485,12 +524,13 @@ export default function LogExerciseScreen() {
                 <Ionicons
                   name="person"
                   size={24}
-                  color={!partnerParticipated ? '#0f172a' : '#94a3b8'}
+                  color={!partnerParticipated ? colors.text : colors.textMuted}
                 />
                 <Text
                   style={[
                     styles.partnerOptionText,
-                    !partnerParticipated && styles.partnerOptionTextActive,
+                    { color: colors.textSecondary },
+                    !partnerParticipated && [styles.partnerOptionTextActive, { color: colors.text }],
                   ]}
                 >
                   {t('log.exercise.solo')}
@@ -502,11 +542,11 @@ export default function LogExerciseScreen() {
 
         {/* Perceived Exertion */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>{t('log.exercise.howHardWork')}</Text>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.exercise.howHardWork')}</Text>
           <View style={styles.exertionContainer}>
             <View style={styles.exertionLabels}>
-              <Text style={styles.exertionLabelText}>{t('log.exercise.easy')}</Text>
-              <Text style={styles.exertionLabelText}>{t('log.exercise.hard')}</Text>
+              <Text style={[styles.exertionLabelText, { color: colors.textSecondary }]}>{t('log.exercise.easy')}</Text>
+              <Text style={[styles.exertionLabelText, { color: colors.textSecondary }]}>{t('log.exercise.hard')}</Text>
             </View>
             <View style={styles.exertionButtons}>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
@@ -514,6 +554,7 @@ export default function LogExerciseScreen() {
                   key={num}
                   style={[
                     styles.exertionButton,
+                    { backgroundColor: isDarkMode ? colors.cardBackground : '#f1f5f9' },
                     perceivedExertion === num && styles.exertionButtonActive,
                   ]}
                   onPress={() => setPerceivedExertion(num)}
@@ -521,6 +562,7 @@ export default function LogExerciseScreen() {
                   <Text
                     style={[
                       styles.exertionButtonText,
+                      { color: colors.textSecondary },
                       perceivedExertion === num && styles.exertionButtonTextActive,
                     ]}
                   >
@@ -534,13 +576,13 @@ export default function LogExerciseScreen() {
 
         {/* Notes */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>{t('log.exercise.notesOptional')}</Text>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.exercise.notesOptional')}</Text>
           <TextInput
-            style={styles.notesInput}
+            style={[styles.notesInput, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
             value={notes}
             onChangeText={setNotes}
             placeholder={t('log.exercise.notesPlaceholder')}
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.textMuted}
             multiline
             numberOfLines={3}
           />
@@ -570,8 +612,8 @@ export default function LogExerciseScreen() {
 
     return (
       <View style={styles.content}>
-        <Text style={styles.stepTitle}>{t('log.exercise.summary')}</Text>
-        <Text style={styles.stepDescription}>
+        <Text style={[styles.stepTitle, { color: colors.text }]}>{t('log.exercise.summary')}</Text>
+        <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
           {new Date().toLocaleDateString(language === 'ta' ? 'ta-IN' : 'en-US', { 
             weekday: 'long', 
             month: 'long', 
@@ -579,7 +621,7 @@ export default function LogExerciseScreen() {
           })}
         </Text>
 
-        <View style={styles.summaryCard}>
+        <View style={[styles.summaryCard, { backgroundColor: colors.cardBackground }]}>
           <LinearGradient
             colors={selectedExercise.colors}
             style={styles.summaryHeader}
@@ -591,34 +633,34 @@ export default function LogExerciseScreen() {
             </View>
           </LinearGradient>
 
-          <View style={styles.summaryStats}>
+          <View style={[styles.summaryStats, { borderBottomColor: colors.border }]}>
             <View style={styles.summaryStat}>
               <MaterialCommunityIcons name="fire" size={24} color="#ef4444" />
-              <Text style={styles.summaryStatValue}>{calories}</Text>
-              <Text style={styles.summaryStatLabel}>{t('log.exercise.calories')}</Text>
+              <Text style={[styles.summaryStatValue, { color: colors.text }]}>{calories}</Text>
+              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>{t('log.exercise.calories')}</Text>
             </View>
             {steps && (
               <View style={styles.summaryStat}>
                 <MaterialCommunityIcons name="shoe-print" size={24} color="#22c55e" />
-                <Text style={styles.summaryStatValue}>{steps}</Text>
-                <Text style={styles.summaryStatLabel}>{t('log.exercise.steps')}</Text>
+                <Text style={[styles.summaryStatValue, { color: colors.text }]}>{steps}</Text>
+                <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>{t('log.exercise.steps')}</Text>
               </View>
             )}
             <View style={styles.summaryStat}>
               <MaterialCommunityIcons name="speedometer" size={24} color="#f59e0b" />
-              <Text style={styles.summaryStatValue}>{perceivedExertion}/10</Text>
-              <Text style={styles.summaryStatLabel}>{t('log.exercise.effort')}</Text>
+              <Text style={[styles.summaryStatValue, { color: colors.text }]}>{perceivedExertion}/10</Text>
+              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>{t('log.exercise.effort')}</Text>
             </View>
           </View>
 
           {selectedExercise.isCouple && (
-            <View style={styles.partnerStatus}>
+            <View style={[styles.partnerStatus, { borderBottomColor: colors.border }]}>
               <Ionicons
                 name={partnerParticipated ? 'people' : 'person'}
                 size={20}
-                color={partnerParticipated ? '#22c55e' : '#64748b'}
+                color={partnerParticipated ? '#22c55e' : colors.textSecondary}
               />
-              <Text style={styles.partnerStatusText}>
+              <Text style={[styles.partnerStatusText, { color: colors.textSecondary }]}>
                 {partnerParticipated ? t('log.exercise.exercisedWithPartner') : t('log.exercise.exercisedSolo')}
               </Text>
             </View>
@@ -626,15 +668,15 @@ export default function LogExerciseScreen() {
 
           {notes && (
             <View style={styles.notesPreview}>
-              <Text style={styles.notesPreviewLabel}>{t('log.exercise.notes')}</Text>
-              <Text style={styles.notesPreviewText}>{notes}</Text>
+              <Text style={[styles.notesPreviewLabel, { color: colors.textSecondary }]}>{t('log.exercise.notes')}</Text>
+              <Text style={[styles.notesPreviewText, { color: colors.text }]}>{notes}</Text>
             </View>
           )}
         </View>
 
         <View style={styles.summaryActions}>
           <TouchableOpacity
-            style={styles.editButton}
+            style={[styles.editButton, { backgroundColor: colors.cardBackground }]}
             onPress={() => setStep('details')}
           >
             <Ionicons name="pencil" size={20} color="#006dab" />
@@ -667,18 +709,19 @@ export default function LogExerciseScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {toast.visible && (
         <Animated.View
           style={[
             styles.toast,
+            { backgroundColor: colors.cardBackground },
             toast.type === 'error' ? styles.toastError : styles.toastSuccess,
             { transform: [{ translateY: toastAnim }] },
           ]}
         >
           <View style={styles.toastContent}>
             <Text style={styles.toastIcon}>{toast.type === 'error' ? '✗' : '✓'}</Text>
-            <Text style={styles.toastText}>{toast.message}</Text>
+            <Text style={[styles.toastText, { color: colors.text }]}>{toast.message}</Text>
           </View>
         </Animated.View>
       )}
@@ -849,7 +892,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     minWidth: 80,
   },
-  quickDurations: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
+  quickDurations: { flexDirection: 'row', justifyContent: 'center', gap: 10, flexWrap: 'wrap' },
+  quickDurationsScroll: { gap: 10, paddingHorizontal: 4 },
   quickDurationButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,

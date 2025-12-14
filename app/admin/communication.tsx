@@ -6,19 +6,20 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const isWeb = Platform.OS === 'web';
 
@@ -252,6 +253,7 @@ const mockCallRequests: CallRequest[] = [
 export default function AdminCommunicationScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isMobile = screenWidth < 768;
   const isDesktop = screenWidth >= 1024;
   const toastAnim = useRef(new Animated.Value(-100)).current;
@@ -955,6 +957,13 @@ export default function AdminCommunicationScreen() {
         {/* Chat Header */}
         <View style={styles.chatHeader}>
           <View style={styles.chatHeaderLeft}>
+            {/* Back Button */}
+            <TouchableOpacity 
+              style={styles.chatBackButton}
+              onPress={() => setSelectedChat(null)}
+            >
+              <Ionicons name="arrow-back" size={20} color={COLORS.textPrimary} />
+            </TouchableOpacity>
             <View style={styles.chatAvatar}>
               <Text style={styles.chatAvatarText}>
                 {selectedChat.coupleId.split('_')[1] || '?'}
@@ -2341,7 +2350,7 @@ export default function AdminCommunicationScreen() {
             </ScrollView>
 
             {/* Input */}
-            <View style={styles.chatInputContainer}>
+            <View style={[styles.chatInputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
               <TouchableOpacity style={styles.attachButton}>
                 <Ionicons name="attach" size={22} color={COLORS.textSecondary} />
               </TouchableOpacity>
@@ -2763,6 +2772,14 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
+  },
+  chatBackButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chatHeaderLeft: {
     flexDirection: 'row',

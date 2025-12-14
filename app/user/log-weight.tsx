@@ -1,4 +1,5 @@
 import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -40,6 +41,7 @@ export default function LogWeightScreen() {
   const isMobile = screenWidth < 768;
   const { refreshWeightHistory, refreshUserInfo } = useUserData();
   const { language, t } = useLanguage();
+  const { colors, isDarkMode } = useTheme();
 
   const [step, setStep] = useState<'log' | 'history'>('log');
   const [weight, setWeight] = useState('');
@@ -267,18 +269,18 @@ export default function LogWeightScreen() {
   };
 
   const renderHeader = () => (
-    <View style={styles.header}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <Ionicons name="arrow-back" size={24} color="#0f172a" />
+    <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+      <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
       <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle}>{t('log.weight.measurements')}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{t('log.weight.measurements')}</Text>
       </View>
     </View>
   );
 
   const renderTabs = () => (
-    <View style={styles.tabs}>
+    <View style={[styles.tabs, { backgroundColor: colors.cardBackground }]}>
       <TouchableOpacity
         style={[styles.tab, step === 'log' && styles.tabActive]}
         onPress={() => setStep('log')}
@@ -286,9 +288,9 @@ export default function LogWeightScreen() {
         <MaterialCommunityIcons
           name="scale-bathroom"
           size={20}
-          color={step === 'log' ? '#006dab' : '#64748b'}
+          color={step === 'log' ? '#006dab' : colors.textSecondary}
         />
-        <Text style={[styles.tabText, step === 'log' && styles.tabTextActive]}>
+        <Text style={[styles.tabText, { color: colors.textSecondary }, step === 'log' && styles.tabTextActive]}>
           {t('log.weight.logWeight')}
         </Text>
       </TouchableOpacity>
@@ -299,9 +301,9 @@ export default function LogWeightScreen() {
         <MaterialCommunityIcons
           name="chart-line"
           size={20}
-          color={step === 'history' ? '#006dab' : '#64748b'}
+          color={step === 'history' ? '#006dab' : colors.textSecondary}
         />
-        <Text style={[styles.tabText, step === 'history' && styles.tabTextActive]}>
+        <Text style={[styles.tabText, { color: colors.textSecondary }, step === 'history' && styles.tabTextActive]}>
           {t('log.weight.history')}
         </Text>
       </TouchableOpacity>
@@ -320,8 +322,8 @@ export default function LogWeightScreen() {
       <View style={styles.content}>
         {/* Date */}
         <View style={styles.dateContainer}>
-          <Ionicons name="calendar-outline" size={20} color="#64748b" />
-          <Text style={styles.dateText}>
+          <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+          <Text style={[styles.dateText, { color: colors.text }]}>
             {new Date().toLocaleDateString(language === 'ta' ? 'ta-IN' : 'en-US', {
               weekday: 'long',
               month: 'long',
@@ -332,40 +334,40 @@ export default function LogWeightScreen() {
         </View>
 
         {/* Weight Input */}
-        <View style={styles.mainInputCard}>
-          <View style={styles.unitToggle}>
+        <View style={[styles.mainInputCard, { backgroundColor: colors.cardBackground }]}>
+          <View style={[styles.unitToggle, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
             <TouchableOpacity
               style={[styles.unitButton, unit === 'kg' && styles.unitButtonActive]}
               onPress={() => setUnit('kg')}
             >
-              <Text style={[styles.unitText, unit === 'kg' && styles.unitTextActive]}>{t('log.weight.kg')}</Text>
+              <Text style={[styles.unitText, { color: colors.textSecondary }, unit === 'kg' && styles.unitTextActive]}>{t('log.weight.kg')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.unitButton, unit === 'lbs' && styles.unitButtonActive]}
               onPress={() => setUnit('lbs')}
             >
-              <Text style={[styles.unitText, unit === 'lbs' && styles.unitTextActive]}>{t('log.weight.lbs')}</Text>
+              <Text style={[styles.unitText, { color: colors.textSecondary }, unit === 'lbs' && styles.unitTextActive]}>{t('log.weight.lbs')}</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.weightInputContainer}>
             <MaterialCommunityIcons name="scale-bathroom" size={32} color="#006dab" />
             <TextInput
-              style={styles.weightInput}
+              style={[styles.weightInput, { color: colors.text }]}
               value={weight}
               onChangeText={setWeight}
               placeholder="0.0"
-              placeholderTextColor="#cbd5e1"
+              placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               selectTextOnFocus
             />
-            <Text style={styles.weightUnit}>{unit}</Text>
+            <Text style={[styles.weightUnit, { color: colors.textSecondary }]}>{unit}</Text>
           </View>
 
           {weight && parseFloat(weight) > 0 && (
-            <View style={styles.bmiContainer}>
+            <View style={[styles.bmiContainer, { borderTopColor: colors.border }]}>
               <View style={styles.bmiRow}>
-                <Text style={styles.bmiLabel}>{t('log.weight.bmi')}</Text>
+                <Text style={[styles.bmiLabel, { color: colors.textSecondary }]}>{t('log.weight.bmi')}</Text>
                 <Text style={[styles.bmiValue, { color: bmiCategory.color }]}>{bmi}</Text>
                 <View style={[styles.categoryBadge, { backgroundColor: bmiCategory.color + '20' }]}>
                   <Text style={[styles.categoryText, { color: bmiCategory.color }]}>
@@ -379,15 +381,15 @@ export default function LogWeightScreen() {
 
         {/* Height Input */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>{t('log.weight.height')}</Text>
-          <View style={styles.inputRow}>
-            <MaterialCommunityIcons name="human-male-height" size={24} color="#64748b" />
+          <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.weight.height')}</Text>
+          <View style={[styles.inputRow, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+            <MaterialCommunityIcons name="human-male-height" size={24} color={colors.textSecondary} />
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, { color: colors.text }]}
               value={height}
               onChangeText={setHeight}
               placeholder={t('log.weight.enterHeight')}
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
           </View>
@@ -395,25 +397,25 @@ export default function LogWeightScreen() {
 
         {/* Waist Measurement */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>{t('log.weight.waist')}</Text>
-          <Text style={styles.inputHelper}>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.weight.waist')}</Text>
+          <Text style={[styles.inputHelper, { color: colors.textSecondary }]}>
             {t('log.weight.waistHelper')}
           </Text>
-          <View style={styles.inputRow}>
-            <MaterialCommunityIcons name="tape-measure" size={24} color="#64748b" />
+          <View style={[styles.inputRow, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+            <MaterialCommunityIcons name="tape-measure" size={24} color={colors.textSecondary} />
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, { color: colors.text }]}
               value={waist}
               onChangeText={setWaist}
               placeholder={t('log.weight.enterWaist')}
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
           </View>
           {waist && whtr && (
-            <View style={styles.whtrContainer}>
+            <View style={[styles.whtrContainer, { backgroundColor: isDarkMode ? '#1e3a5f' : '#eff6ff' }]}>
               <View style={styles.whtrRow}>
-                <Text style={styles.whtrLabel}>{t('log.weight.whtr')}</Text>
+                <Text style={[styles.whtrLabel, { color: colors.textSecondary }]}>{t('log.weight.whtr')}</Text>
                 <Text style={[styles.whtrValue, { color: whtrCategory.color }]}>{whtr}</Text>
                 <View style={[styles.categoryBadge, { backgroundColor: whtrCategory.color + '20' }]}>
                   <Text style={[styles.categoryText, { color: whtrCategory.color }]}>
@@ -421,7 +423,7 @@ export default function LogWeightScreen() {
                   </Text>
                 </View>
               </View>
-              <Text style={styles.whtrInfo}>
+              <Text style={[styles.whtrInfo, { color: colors.textSecondary }]}>
                 {t('log.weight.whtrInfo')}
               </Text>
             </View>
@@ -430,13 +432,13 @@ export default function LogWeightScreen() {
 
         {/* Notes */}
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>{t('log.weight.notes')}</Text>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.weight.notes')}</Text>
           <TextInput
-            style={styles.notesInput}
+            style={[styles.notesInput, { backgroundColor: colors.cardBackground, borderColor: colors.border, color: colors.text }]}
             value={notes}
             onChangeText={setNotes}
             placeholder={t('log.weight.notesPlaceholderWeight')}
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.textMuted}
             multiline
             numberOfLines={3}
           />
@@ -475,7 +477,7 @@ export default function LogWeightScreen() {
       return (
         <View style={[styles.content, { alignItems: 'center', justifyContent: 'center', minHeight: 300 }]}>
           <ActivityIndicator size="large" color="#006dab" />
-          <Text style={{ marginTop: 16, color: '#64748b' }}>{t('log.weight.loadingHistory')}</Text>
+          <Text style={{ marginTop: 16, color: colors.textSecondary }}>{t('log.weight.loadingHistory')}</Text>
         </View>
       );
     }
@@ -483,11 +485,11 @@ export default function LogWeightScreen() {
     if (weightHistory.length === 0) {
       return (
         <View style={[styles.content, { alignItems: 'center', justifyContent: 'center', minHeight: 300 }]}>
-          <MaterialCommunityIcons name="scale-bathroom" size={64} color="#cbd5e1" />
-          <Text style={{ marginTop: 16, fontSize: 18, fontWeight: '600', color: '#64748b' }}>
+          <MaterialCommunityIcons name="scale-bathroom" size={64} color={colors.textMuted} />
+          <Text style={{ marginTop: 16, fontSize: 18, fontWeight: '600', color: colors.textSecondary }}>
             {t('log.weight.noEntriesYet')}
           </Text>
-          <Text style={{ marginTop: 8, color: '#94a3b8', textAlign: 'center' }}>
+          <Text style={{ marginTop: 8, color: colors.textMuted, textAlign: 'center' }}>
             {t('log.weight.startLogging')}
           </Text>
           <TouchableOpacity
@@ -535,23 +537,23 @@ export default function LogWeightScreen() {
         </View>
 
         {/* History List */}
-        <Text style={styles.historyTitle}>{t('log.weight.recentEntries')} ({weightHistory.length})</Text>
+        <Text style={[styles.historyTitle, { color: colors.text }]}>{t('log.weight.recentEntries')} ({weightHistory.length})</Text>
         {weightHistory.map((entry, index) => {
           const prevEntry = weightHistory[index + 1];
           const change = prevEntry ? entry.weight - prevEntry.weight : 0;
           const isLatest = index === 0;
           
           return (
-            <View key={entry.id} style={[styles.historyItem, isLatest && styles.historyItemLatest]}>
-              <View style={styles.historyDate}>
-                <Text style={styles.historyDay}>
+            <View key={entry.id} style={[styles.historyItem, { backgroundColor: colors.cardBackground }, isLatest && styles.historyItemLatest]}>
+              <View style={[styles.historyDate, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
+                <Text style={[styles.historyDay, { color: colors.text }]}>
                   {new Date(entry.date).getDate()}
                 </Text>
-                <Text style={styles.historyMonth}>
+                <Text style={[styles.historyMonth, { color: colors.textSecondary }]}>
                   {t(`months.${['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'][new Date(entry.date).getMonth()]}`)}
                 </Text>
                 {entry.loggedAt && (
-                  <Text style={styles.historyTime}>
+                  <Text style={[styles.historyTime, { color: colors.textMuted }]}>
                     {formatTimestamp(entry.loggedAt)}
                   </Text>
                 )}
@@ -563,12 +565,12 @@ export default function LogWeightScreen() {
               </View>
               <View style={styles.historyDetails}>
                 <View style={styles.historyMain}>
-                  <MaterialCommunityIcons name="scale-bathroom" size={20} color="#64748b" />
-                  <Text style={styles.historyWeight}>{entry.weight} {t('log.weight.kg')}</Text>
+                  <MaterialCommunityIcons name="scale-bathroom" size={20} color={colors.textSecondary} />
+                  <Text style={[styles.historyWeight, { color: colors.text }]}>{entry.weight} {t('log.weight.kg')}</Text>
                   {change !== 0 && (
                     <View style={[
                       styles.changeBadge,
-                      { backgroundColor: change < 0 ? '#dcfce7' : '#fef2f2' }
+                      { backgroundColor: change < 0 ? (isDarkMode ? '#064e3b' : '#dcfce7') : (isDarkMode ? '#7f1d1d' : '#fef2f2') }
                     ]}>
                       <Ionicons
                         name={change < 0 ? 'arrow-down' : 'arrow-up'}
@@ -586,18 +588,18 @@ export default function LogWeightScreen() {
                 </View>
                 {entry.bmi && (
                   <View style={styles.historyWaist}>
-                    <Text style={styles.historyWaistText}>{t('log.weight.bmi')}: {entry.bmi}</Text>
+                    <Text style={[styles.historyWaistText, { color: colors.textSecondary }]}>{t('log.weight.bmi')}: {entry.bmi}</Text>
                   </View>
                 )}
                 {entry.waist && (
                   <View style={styles.historyWaist}>
-                    <MaterialCommunityIcons name="tape-measure" size={16} color="#94a3b8" />
-                    <Text style={styles.historyWaistText}>{t('log.weight.waistCm')}: {entry.waist} {t('log.weight.cm')}</Text>
-                    {entry.whtr && <Text style={styles.historyWaistText}> • WHtR: {entry.whtr}</Text>}
+                    <MaterialCommunityIcons name="tape-measure" size={16} color={colors.textMuted} />
+                    <Text style={[styles.historyWaistText, { color: colors.textSecondary }]}>{t('log.weight.waistCm')}: {entry.waist} {t('log.weight.cm')}</Text>
+                    {entry.whtr && <Text style={[styles.historyWaistText, { color: colors.textSecondary }]}> • WHtR: {entry.whtr}</Text>}
                   </View>
                 )}
                 {entry.notes && (
-                  <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, fontStyle: 'italic' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>
                     {entry.notes}
                   </Text>
                 )}
@@ -631,12 +633,12 @@ export default function LogWeightScreen() {
       onRequestClose={() => setShowDeleteModal(false)}
     >
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, isMobile && styles.modalContentMobile]}>
+        <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }, isMobile && styles.modalContentMobile]}>
           <View style={styles.modalIconContainer}>
             <Ionicons name="warning" size={48} color="#ef4444" />
           </View>
-          <Text style={styles.modalTitle}>{t('log.weight.deleteEntryQuestion')}</Text>
-          <Text style={styles.modalMessage}>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>{t('log.weight.deleteEntryQuestion')}</Text>
+          <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
             {t('log.weight.deleteConfirm')}
           </Text>
           <View style={styles.modalButtons}>
@@ -660,19 +662,19 @@ export default function LogWeightScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {renderDeleteModal()}
       {toast.visible && (
         <Animated.View
           style={[
             styles.toast,
             toast.type === 'error' ? styles.toastError : styles.toastSuccess,
-            { transform: [{ translateY: toastAnim }] },
+            { transform: [{ translateY: toastAnim }], backgroundColor: colors.cardBackground },
           ]}
         >
           <View style={styles.toastContent}>
-            <Text style={styles.toastIcon}>{toast.type === 'error' ? '✗' : '✓'}</Text>
-            <Text style={styles.toastText}>{toast.message}</Text>
+            <Text style={[styles.toastIcon, { color: colors.text }]}>{toast.type === 'error' ? '✗' : '✓'}</Text>
+            <Text style={[styles.toastText, { color: colors.text }]}>{toast.message}</Text>
           </View>
         </Animated.View>
       )}
