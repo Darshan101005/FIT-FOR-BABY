@@ -140,6 +140,44 @@ export default function HelpCenterScreen() {
 		});
 	};
 
+	// Filter categories and articles based on search query
+	const getFilteredCategories = () => {
+		if (!searchQuery.trim()) {
+			return helpCategories;
+		}
+
+		const query = searchQuery.toLowerCase().trim();
+
+		return helpCategories
+			.map((category) => {
+				// Check if category title or description matches
+				const categoryMatches =
+					category.title.toLowerCase().includes(query) ||
+					category.description.toLowerCase().includes(query);
+
+				// Filter articles that match the query
+				const matchingArticles = category.articles.filter(
+					(article) =>
+						article.q.toLowerCase().includes(query) ||
+						article.a.toLowerCase().includes(query)
+				);
+
+				// If category matches or has matching articles, include it
+				if (categoryMatches || matchingArticles.length > 0) {
+					return {
+						...category,
+						// If category title matches, show all articles; otherwise only matching ones
+						articles: categoryMatches ? category.articles : matchingArticles,
+					};
+				}
+
+				return null;
+			})
+			.filter((category): category is typeof helpCategories[0] => category !== null);
+	};
+
+	const filteredCategories = getFilteredCategories();
+
 	return (
 		<View style={[styles.container, { backgroundColor: colors.background }]}>
 			<View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: isDarkMode ? '#374151' : '#e5e7eb' }]}>
@@ -160,65 +198,75 @@ export default function HelpCenterScreen() {
 						<Ionicons name="search" size={20} color={isDarkMode ? '#9ca3af' : '#64748b'} />
 						<TextInput
 							style={[
-                                styles.searchInput,
-                                isWeb && ({ outlineStyle: 'none' } as any),
-                                { color: colors.text }
-                            ]}
+								styles.searchInput,
+								isWeb && ({ outlineStyle: 'none' } as any),
+								{ color: colors.text }
+							]}
 							placeholder="Search for help..."
-                            placeholderTextColor={isDarkMode ? '#9ca3af' : '#94a3b8'}
+							placeholderTextColor={isDarkMode ? '#9ca3af' : '#94a3b8'}
 							value={searchQuery}
 							onChangeText={setSearchQuery}
 						/>
-                    </View>
+					</View>
 				</View>
 
 				{/* Categories Grid */}
-                <View style={[styles.categoriesGrid, isMobile && styles.categoriesGridMobile, { backgroundColor: colors.background }]}>
-					{helpCategories.map((category, categoryIndex) => (
-						<View key={categoryIndex} style={[styles.categoryCard, isMobile && styles.categoryCardMobile, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
-							<View style={styles.categoryHeader}>
-								<View style={[styles.iconContainer, { backgroundColor: isDarkMode ? '#1e3a5f' : '#EFF6FF' }]}>
-									<Ionicons name={category.icon as any} size={28} color="#006dab" />
-								</View>
-								<View style={styles.categoryTitleContainer}>
-									<Text style={[styles.categoryTitle, { color: colors.text }]}>{category.title}</Text>
-									<Text style={[styles.categoryDescription, { color: colors.textSecondary }]}>{category.description}</Text>
-								</View>
-                            </View>
-							<View style={[styles.articlesList, { borderTopColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
-								{category.articles.map((article, articleIndex) => {
-									const key = `${categoryIndex}-${articleIndex}`;
-									const isExpanded = expandedItems[key];
-									return (
-										<TouchableOpacity
-											key={articleIndex}
-											style={[styles.articleItem, isExpanded && styles.articleItemExpanded, isExpanded && { backgroundColor: isDarkMode ? '#374151' : '#f8fafc' }]}
-											onPress={() => toggleItem(key)}
-											activeOpacity={0.7}
-										>
-											<View style={styles.questionRow}>
-												<View style={styles.questionLeft}>
-													<Ionicons name="document-text-outline" size={18} color={isDarkMode ? '#9ca3af' : '#64748b'} />
-													<Text style={styles.articleText}>{article.q}</Text>
-												</View>
-												<Ionicons 
-													name={isExpanded ? "chevron-up" : "chevron-down"} 
-													size={16} 
-													color={isDarkMode ? '#9ca3af' : '#94a3b8'} 
-												/>
-											</View>
-											
-											{isExpanded && (
-												<View style={styles.answerBox}>
-													<Text style={[styles.answerText, { color: colors.textSecondary }]}>{article.a}</Text>
-												</View>
-											)}
-										</TouchableOpacity>
-									);
-								})}
-							</View>
+				<View style={[styles.categoriesGrid, isMobile && styles.categoriesGridMobile, { backgroundColor: colors.background }]}>
+					{filteredCategories.length === 0 ? (
+						<View style={styles.noResultsContainer}>
+							<Ionicons name="search-outline" size={48} color={isDarkMode ? '#6b7280' : '#94a3b8'} />
+							<Text style={[styles.noResultsText, { color: colors.text }]}>No results found</Text>
+							<Text style={[styles.noResultsSubtext, { color: colors.textSecondary }]}>
+								Try searching with different keywords
+							</Text>
 						</View>
-					))}
+					) : (
+						filteredCategories.map((category, categoryIndex) => (
+							<View key={categoryIndex} style={[styles.categoryCard, isMobile && styles.categoryCardMobile, { backgroundColor: colors.cardBackground, borderColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
+								<View style={styles.categoryHeader}>
+									<View style={[styles.iconContainer, { backgroundColor: isDarkMode ? '#1e3a5f' : '#EFF6FF' }]}>
+										<Ionicons name={category.icon as any} size={28} color="#006dab" />
+									</View>
+									<View style={styles.categoryTitleContainer}>
+										<Text style={[styles.categoryTitle, { color: colors.text }]}>{category.title}</Text>
+										<Text style={[styles.categoryDescription, { color: colors.textSecondary }]}>{category.description}</Text>
+									</View>
+								</View>
+								<View style={[styles.articlesList, { borderTopColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
+									{category.articles.map((article, articleIndex) => {
+										const key = `${categoryIndex}-${articleIndex}`;
+										const isExpanded = expandedItems[key];
+										return (
+											<TouchableOpacity
+												key={articleIndex}
+												style={[styles.articleItem, isExpanded && styles.articleItemExpanded, isExpanded && { backgroundColor: isDarkMode ? '#374151' : '#f8fafc' }]}
+												onPress={() => toggleItem(key)}
+												activeOpacity={0.7}
+											>
+												<View style={styles.questionRow}>
+													<View style={styles.questionLeft}>
+														<Ionicons name="document-text-outline" size={18} color={isDarkMode ? '#9ca3af' : '#64748b'} />
+														<Text style={styles.articleText}>{article.q}</Text>
+													</View>
+													<Ionicons
+														name={isExpanded ? "chevron-up" : "chevron-down"}
+														size={16}
+														color={isDarkMode ? '#9ca3af' : '#94a3b8'}
+													/>
+												</View>
+
+												{isExpanded && (
+													<View style={styles.answerBox}>
+														<Text style={[styles.answerText, { color: colors.textSecondary }]}>{article.a}</Text>
+													</View>
+												)}
+											</TouchableOpacity>
+										);
+									})}
+								</View>
+							</View>
+						))
+					)}
 				</View>
 
 				<View style={[styles.contactSection, { backgroundColor: isDarkMode ? '#1f2937' : '#f8fafc' }]}>
@@ -384,7 +432,7 @@ const styles = StyleSheet.create({
 		gap: 12,
 	},
 	articleItem: {
-		flexDirection: 'column', 
+		flexDirection: 'column',
 		borderRadius: 8,
 		padding: 8,
 	},
@@ -462,5 +510,23 @@ const styles = StyleSheet.create({
 	footerText: {
 		color: '#94a3b8',
 		fontSize: 14,
+	},
+	noResultsContainer: {
+		width: '100%',
+		alignItems: 'center',
+		justifyContent: 'center',
+		paddingVertical: 60,
+		paddingHorizontal: 20,
+	},
+	noResultsText: {
+		fontSize: 20,
+		fontWeight: '600',
+		marginTop: 16,
+		textAlign: 'center',
+	},
+	noResultsSubtext: {
+		fontSize: 14,
+		marginTop: 8,
+		textAlign: 'center',
 	},
 });

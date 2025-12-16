@@ -1,4 +1,4 @@
-import { adminService, chatService, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService } from '@/services/firestore.service';
+import { adminService, chatService, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService } from '@/services/firestore.service';
 import { sendMissingLogsReminder } from '@/services/notification.service';
 import { Admin, Chat, Couple } from '@/types/firebase.types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -7,25 +7,25 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
 // Shimmer/Skeleton Component
-const SkeletonBox = ({ width, height, style, borderRadius = 8 }: { 
-  width: number | string; 
-  height: number; 
+const SkeletonBox = ({ width, height, style, borderRadius = 8 }: {
+  width: number | string;
+  height: number;
   style?: any;
   borderRadius?: number;
 }) => {
@@ -102,7 +102,6 @@ interface DashboardStats {
   stepsCompliance: number;
   dietCompliance: number;
   exerciseCompliance: number;
-  weightCompliance: number;
 }
 
 // Interface for couples with missing logs
@@ -174,7 +173,6 @@ export default function AdminHomeScreen() {
     stepsCompliance: 0,
     dietCompliance: 0,
     exerciseCompliance: 0,
-    weightCompliance: 0,
   });
   const [logsNotCompletedCouples, setLogsNotCompletedCouples] = useState<CoupleWithMissingLogs[]>([]);
 
@@ -211,7 +209,7 @@ export default function AdminHomeScreen() {
     try {
       setIsLoading(true);
       const today = formatDate(new Date());
-      
+
       // Fetch all couples
       const couples = await coupleService.getAll() as Couple[];
       const totalCouples = couples.length;
@@ -223,7 +221,6 @@ export default function AdminHomeScreen() {
       let stepsLogged = 0;
       let dietLogged = 0;
       let exerciseLogged = 0;
-      let weightLogged = 0;
       const totalChecks = activeCouples * 2; // Check both male and female for each active couple
 
       const couplesWithMissingLogs: CoupleWithMissingLogs[] = [];
@@ -231,7 +228,7 @@ export default function AdminHomeScreen() {
       // Check logs for each active couple
       for (const couple of couples.filter(c => c.status === 'active')) {
         let coupleMissingLogs: string[] = [];
-        
+
         // Check both male and female
         for (const gender of ['male', 'female'] as const) {
           try {
@@ -251,27 +248,12 @@ export default function AdminHomeScreen() {
               if (!coupleMissingLogs.includes('diet')) coupleMissingLogs.push('diet');
             }
 
-            // Check exercise
+            // Check exercise (includes couple walking, high knees, etc.)
             const exerciseLogs = await coupleExerciseService.getByDate(couple.coupleId, gender, today);
             if (exerciseLogs && exerciseLogs.length > 0) {
               exerciseLogged++;
             } else {
               if (!coupleMissingLogs.includes('exercise')) coupleMissingLogs.push('exercise');
-            }
-
-            // Check weight (weekly, so check if logged in last 7 days)
-            const weekAgo = new Date();
-            weekAgo.setDate(weekAgo.getDate() - 7);
-            const weightLogs = await coupleWeightLogService.getByDateRange(
-              couple.coupleId, 
-              gender, 
-              formatDate(weekAgo), 
-              today
-            );
-            if (weightLogs && weightLogs.length > 0) {
-              weightLogged++;
-            } else {
-              if (!coupleMissingLogs.includes('weight')) coupleMissingLogs.push('weight');
             }
           } catch (error) {
             console.error(`Error checking logs for ${couple.coupleId} ${gender}:`, error);
@@ -288,10 +270,10 @@ export default function AdminHomeScreen() {
           };
           // Create a combined reason showing all missing items
           const missingReasons = trackableLogs.map(log => reasonMap[log]).filter(Boolean);
-          const reason = missingReasons.length === 1 
-            ? `Missing ${missingReasons[0].toLowerCase()}` 
+          const reason = missingReasons.length === 1
+            ? `Missing ${missingReasons[0].toLowerCase()}`
             : `Missing ${missingReasons.length} logs`;
-          
+
           couplesWithMissingLogs.push({
             id: couple.coupleId,
             coupleId: couple.coupleId,
@@ -308,10 +290,9 @@ export default function AdminHomeScreen() {
       const stepsCompliance = totalChecks > 0 ? Math.round((stepsLogged / totalChecks) * 100) : 0;
       const dietCompliance = totalChecks > 0 ? Math.round((dietLogged / totalChecks) * 100) : 0;
       const exerciseCompliance = totalChecks > 0 ? Math.round((exerciseLogged / totalChecks) * 100) : 0;
-      const weightCompliance = totalChecks > 0 ? Math.round((weightLogged / totalChecks) * 100) : 0;
-      
-      // Overall compliance (average of all)
-      const todayCompliance = Math.round((stepsCompliance + dietCompliance + exerciseCompliance + weightCompliance) / 4);
+
+      // Overall compliance (average of 3 metrics: steps, diet, exercise)
+      const todayCompliance = Math.round((stepsCompliance + dietCompliance + exerciseCompliance) / 3);
 
       setDashboardStats({
         totalCouples,
@@ -323,7 +304,6 @@ export default function AdminHomeScreen() {
         stepsCompliance,
         dietCompliance,
         exerciseCompliance,
-        weightCompliance,
       });
 
       // Sort by most missing logs and take top 4
@@ -463,7 +443,7 @@ export default function AdminHomeScreen() {
         .filter(chat => chat.lastMessage && chat.lastMessage.trim() !== '')
         .slice(0, 10); // Show top 10 recent
       setRecentChats(recentWithMessages);
-      
+
       // Calculate total unread count
       const unread = chats.reduce((sum, chat) => sum + (chat.unreadByAdmin || 0), 0);
       setTotalUnreadCount(unread);
@@ -487,7 +467,7 @@ export default function AdminHomeScreen() {
       try {
         await chatService.markAsRead(chat.id, 'admin');
         // Update local state to remove unread count
-        setRecentChats(prev => 
+        setRecentChats(prev =>
           prev.map(c => c.id === chat.id ? { ...c, unreadByAdmin: 0 } : c)
         );
         setTotalUnreadCount(prev => Math.max(0, prev - chat.unreadByAdmin));
@@ -536,7 +516,7 @@ export default function AdminHomeScreen() {
     try {
       const coupleIds = logsNotCompletedCouples.map(c => c.coupleId);
       const result = await sendMissingLogsReminder(coupleIds, adminName);
-      
+
       if (result.success) {
         setReminderStatus('success');
         // Show appropriate message based on whether push was sent
@@ -584,7 +564,7 @@ export default function AdminHomeScreen() {
       </View>
       <View style={[styles.headerRight, isMobile && { width: '100%', justifyContent: 'flex-start' }]}>
         {isSuperAdmin && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.superAdminButton}
             onPress={() => router.push('/admin/manage-admins' as any)}
           >
@@ -730,7 +710,7 @@ export default function AdminHomeScreen() {
             <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Total Couples</Text>
             <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>{dashboardStats.totalUsers} Users</Text>
           </View>
-          
+
           <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
             <View style={[styles.statIconBg, { backgroundColor: COLORS.accent + '25' }, isMobile && styles.statIconBgMobile]}>
               <MaterialCommunityIcons name="flask" size={isMobile ? 20 : 24} color={COLORS.accentDark} />
@@ -739,7 +719,7 @@ export default function AdminHomeScreen() {
             <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Active Couples</Text>
             <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>{dashboardStats.inactiveCouples} Inactive</Text>
           </View>
-          
+
           <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
             <View style={[styles.statIconBg, { backgroundColor: COLORS.success + '15' }, isMobile && styles.statIconBgMobile]}>
               <Ionicons name="checkmark-circle" size={isMobile ? 20 : 24} color={COLORS.success} />
@@ -748,7 +728,7 @@ export default function AdminHomeScreen() {
             <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Today's Compliance</Text>
             <Text style={[styles.statSubLabel, isMobile && styles.statSubLabelMobile]}>Logs completed</Text>
           </View>
-          
+
           <View style={[styles.statCard, isMobile && styles.statCardMobile]}>
             <View style={[styles.statIconBg, { backgroundColor: COLORS.error + '15' }, isMobile && styles.statIconBgMobile]}>
               <Ionicons name="alert-circle" size={isMobile ? 20 : 24} color={COLORS.error} />
@@ -766,7 +746,7 @@ export default function AdminHomeScreen() {
   const renderComplianceSnapshot = () => {
     // Calculate the progress for each quadrant (0-100%)
     const progress = dashboardStats.todayCompliance;
-    
+
     // Get color based on percentage range
     // 0-25: Red, 25-50: Orange, 50-75: Yellow, 75-100: Green
     const getProgressColor = (percent: number) => {
@@ -776,10 +756,10 @@ export default function AdminHomeScreen() {
       if (percent < 75) return '#eab308'; // Yellow
       return COLORS.success; // Green
     };
-    
+
     const progressColor = getProgressColor(progress);
     const baseColor = COLORS.borderLight;
-    
+
     // Determine which borders should be colored based on percentage
     // Progress fills clockwise from top: top -> right -> bottom -> left
     const getProgressColors = () => {
@@ -828,73 +808,73 @@ export default function AdminHomeScreen() {
         };
       }
     };
-    
+
     const colors = getProgressColors();
-    
+
     return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Today's Compliance Snapshot</Text>
-        <TouchableOpacity onPress={() => router.push('/admin/monitoring' as any)}>
-          <Text style={styles.viewAllLink}>View All</Text>
-        </TouchableOpacity>
-      </View>
-      
-      {isLoading ? (
-        renderSkeletonComplianceCard()
-      ) : (
-        <View style={[styles.complianceCard, isMobile && styles.complianceCardMobile]}>
-          <View style={styles.complianceChart}>
-            {/* Donut Chart with full circle */}
-            <View style={styles.donutContainer}>
-              <View style={[styles.donutOuter, isMobile && styles.donutOuterMobile]}>
-                {/* Background circle (always full) */}
-                <View style={[
-                  styles.donutBackground,
-                  isMobile && styles.donutBackgroundMobile,
-                ]} />
-                {/* Progress overlay */}
-                <View style={[
-                  styles.donutProgress,
-                  isMobile && styles.donutProgressMobile,
-                  { 
-                    borderTopColor: colors.top,
-                    borderRightColor: colors.right,
-                    borderBottomColor: colors.bottom,
-                    borderLeftColor: colors.left,
-                    transform: [{ rotate: '-45deg' }],
-                  }
-                ]} />
-                <View style={[styles.donutInner, isMobile && styles.donutInnerMobile]}>
-                  <Text style={[styles.donutValue, isMobile && styles.donutValueMobile, { color: progressColor }]}>{dashboardStats.todayCompliance}%</Text>
-                  <Text style={styles.donutLabel}>Complete</Text>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Today's Compliance Snapshot</Text>
+          <TouchableOpacity onPress={() => router.push('/admin/monitoring' as any)}>
+            <Text style={styles.viewAllLink}>View All</Text>
+          </TouchableOpacity>
+        </View>
+
+        {isLoading ? (
+          renderSkeletonComplianceCard()
+        ) : (
+          <View style={[styles.complianceCard, isMobile && styles.complianceCardMobile]}>
+            <View style={styles.complianceChart}>
+              {/* Donut Chart with full circle */}
+              <View style={styles.donutContainer}>
+                <View style={[styles.donutOuter, isMobile && styles.donutOuterMobile]}>
+                  {/* Background circle (always full) */}
+                  <View style={[
+                    styles.donutBackground,
+                    isMobile && styles.donutBackgroundMobile,
+                  ]} />
+                  {/* Progress overlay */}
+                  <View style={[
+                    styles.donutProgress,
+                    isMobile && styles.donutProgressMobile,
+                    {
+                      borderTopColor: colors.top,
+                      borderRightColor: colors.right,
+                      borderBottomColor: colors.bottom,
+                      borderLeftColor: colors.left,
+                      transform: [{ rotate: '-45deg' }],
+                    }
+                  ]} />
+                  <View style={[styles.donutInner, isMobile && styles.donutInnerMobile]}>
+                    <Text style={[styles.donutValue, isMobile && styles.donutValueMobile, { color: progressColor }]}>{dashboardStats.todayCompliance}%</Text>
+                    <Text style={styles.donutLabel}>Complete</Text>
+                  </View>
                 </View>
               </View>
             </View>
+
+            <View style={styles.complianceBreakdown}>
+              <View style={styles.complianceItem}>
+                <View style={[styles.complianceIndicator, { backgroundColor: COLORS.success }]} />
+                <Text style={styles.complianceItemLabel}>Steps Logged</Text>
+                <Text style={styles.complianceItemValue}>{dashboardStats.stepsCompliance}%</Text>
+              </View>
+              <View style={styles.complianceItem}>
+                <View style={[styles.complianceIndicator, { backgroundColor: COLORS.info }]} />
+                <Text style={styles.complianceItemLabel}>Diet Logged</Text>
+                <Text style={styles.complianceItemValue}>{dashboardStats.dietCompliance}%</Text>
+              </View>
+              <View style={styles.complianceItem}>
+                <View style={[styles.complianceIndicator, { backgroundColor: COLORS.warning }]} />
+                <Text style={styles.complianceItemLabel}>Exercise Done</Text>
+                <Text style={styles.complianceItemValue}>{dashboardStats.exerciseCompliance}%</Text>
+              </View>
+              {/* Weight Updated removed per request */}
+            </View>
           </View>
-          
-          <View style={styles.complianceBreakdown}>
-            <View style={styles.complianceItem}>
-              <View style={[styles.complianceIndicator, { backgroundColor: COLORS.success }]} />
-              <Text style={styles.complianceItemLabel}>Steps Logged</Text>
-              <Text style={styles.complianceItemValue}>{dashboardStats.stepsCompliance}%</Text>
-            </View>
-            <View style={styles.complianceItem}>
-              <View style={[styles.complianceIndicator, { backgroundColor: COLORS.info }]} />
-              <Text style={styles.complianceItemLabel}>Diet Logged</Text>
-              <Text style={styles.complianceItemValue}>{dashboardStats.dietCompliance}%</Text>
-            </View>
-            <View style={styles.complianceItem}>
-              <View style={[styles.complianceIndicator, { backgroundColor: COLORS.warning }]} />
-              <Text style={styles.complianceItemLabel}>Exercise Done</Text>
-              <Text style={styles.complianceItemValue}>{dashboardStats.exerciseCompliance}%</Text>
-            </View>
-            {/* Weight Updated removed per request */}
-          </View>
-        </View>
-      )}
-    </View>
-  );
+        )}
+      </View>
+    );
   };
 
   // Logs Not Completed Section
@@ -913,7 +893,7 @@ export default function AdminHomeScreen() {
           <Text style={styles.viewAllLink}>View All</Text>
         </TouchableOpacity>
       </View>
-      
+
       {isLoading ? (
         <View style={styles.alertsContainer}>
           {[0, 1, 2, 3].map((i) => renderSkeletonAlertCard(i))}
@@ -934,61 +914,61 @@ export default function AdminHomeScreen() {
                   'diet': { icon: 'restaurant', color: COLORS.info, label: 'Food' },
                   'exercise': { icon: 'fitness', color: COLORS.success, label: 'Exercise' },
                 };
-                
+
                 return (
-                <TouchableOpacity
-                  key={couple.id}
-                  style={[
-                    styles.alertCard,
-                    isMobile && styles.alertCardMobile,
-                    index === logsNotCompletedCouples.length - 1 && styles.alertCardLast,
-                  ]}
-                  onPress={() => router.push(`/admin/users?couple=${couple.id}` as any)}
-                >
-                  <View style={[styles.alertLeft, isMobile && styles.alertLeftMobile]}>
-                    <View style={styles.coupleAvatars}>
-                      <View style={[styles.avatarSmall, { backgroundColor: COLORS.primary }]}>
-                        <Ionicons name="male" size={isMobile ? 12 : 14} color="#fff" />
+                  <TouchableOpacity
+                    key={couple.id}
+                    style={[
+                      styles.alertCard,
+                      isMobile && styles.alertCardMobile,
+                      index === logsNotCompletedCouples.length - 1 && styles.alertCardLast,
+                    ]}
+                    onPress={() => router.push(`/admin/users?couple=${couple.id}` as any)}
+                  >
+                    <View style={[styles.alertLeft, isMobile && styles.alertLeftMobile]}>
+                      <View style={styles.coupleAvatars}>
+                        <View style={[styles.avatarSmall, { backgroundColor: COLORS.primary }]}>
+                          <Ionicons name="male" size={isMobile ? 12 : 14} color="#fff" />
+                        </View>
+                        <View style={[styles.avatarSmall, { backgroundColor: COLORS.accent, marginLeft: -8 }]}>
+                          <Ionicons name="female" size={isMobile ? 12 : 14} color="#fff" />
+                        </View>
                       </View>
-                      <View style={[styles.avatarSmall, { backgroundColor: COLORS.accent, marginLeft: -8 }]}>
-                        <Ionicons name="female" size={isMobile ? 12 : 14} color="#fff" />
+                      <View style={[styles.alertInfo, { flex: 1, minWidth: 0 }]}>
+                        <Text style={styles.alertCoupleId}>{couple.coupleId}</Text>
+                        <Text style={styles.alertNames} numberOfLines={1}>
+                          {couple.maleName} & {couple.femaleName}
+                        </Text>
                       </View>
                     </View>
-                    <View style={[styles.alertInfo, { flex: 1, minWidth: 0 }]}>
-                      <Text style={styles.alertCoupleId}>{couple.coupleId}</Text>
-                      <Text style={styles.alertNames} numberOfLines={1}>
-                        {couple.maleName} & {couple.femaleName}
-                      </Text>
+                    <View style={[styles.alertRight, isMobile && styles.alertRightMobile]}>
+                      {/* Show individual missing log badges */}
+                      <View style={styles.missingLogsBadges}>
+                        {(couple.missingLogs || []).map((logType) => {
+                          const config = logTypeConfig[logType];
+                          if (!config) return null;
+                          return (
+                            <View
+                              key={logType}
+                              style={[styles.missingLogBadge, { backgroundColor: config.color + '18', borderColor: config.color + '40' }]}
+                            >
+                              <Ionicons name={config.icon as any} size={isMobile ? 10 : 12} color={config.color} />
+                              {!isMobile && <Text style={[styles.missingLogText, { color: config.color }]}>{config.label}</Text>}
+                            </View>
+                          );
+                        })}
+                      </View>
+                      <Text style={styles.alertTime}>{couple.lastLog}</Text>
                     </View>
-                  </View>
-                  <View style={[styles.alertRight, isMobile && styles.alertRightMobile]}>
-                    {/* Show individual missing log badges */}
-                    <View style={styles.missingLogsBadges}>
-                      {(couple.missingLogs || []).map((logType) => {
-                        const config = logTypeConfig[logType];
-                        if (!config) return null;
-                        return (
-                          <View 
-                            key={logType} 
-                            style={[styles.missingLogBadge, { backgroundColor: config.color + '18', borderColor: config.color + '40' }]}
-                          >
-                            <Ionicons name={config.icon as any} size={isMobile ? 10 : 12} color={config.color} />
-                            {!isMobile && <Text style={[styles.missingLogText, { color: config.color }]}>{config.label}</Text>}
-                          </View>
-                        );
-                      })}
-                    </View>
-                    <Text style={styles.alertTime}>{couple.lastLog}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={isMobile ? 16 : 18} color={COLORS.textMuted} />
-                </TouchableOpacity>
-              );
+                    <Ionicons name="chevron-forward" size={isMobile ? 16 : 18} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+                );
               })
             )}
           </View>
-          
+
           {logsNotCompletedCouples.length > 0 && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.sendReminderButton, isSendingReminder && styles.sendReminderButtonDisabled]}
               onPress={handleSendReminder}
               disabled={isSendingReminder}
@@ -1000,10 +980,10 @@ export default function AdminHomeScreen() {
                 <Ionicons name="notifications" size={18} color="#fff" />
               )}
               <Text style={styles.sendReminderText}>
-                {isSendingReminder 
-                  ? 'Sending...' 
-                  : isMobile 
-                    ? 'Send Reminder' 
+                {isSendingReminder
+                  ? 'Sending...'
+                  : isMobile
+                    ? 'Send Reminder'
                     : 'Send Reminder to All Pending'}
               </Text>
               {!isSendingReminder && (
@@ -1164,7 +1144,7 @@ export default function AdminHomeScreen() {
           {renderHeader()}
           {isLoading ? renderSkeletonQuickActions() : renderQuickActions()}
           {renderStatsOverview()}
-          
+
           <View style={[styles.twoColumnSection, isMobile && styles.twoColumnSectionMobile]}>
             <View style={[styles.columnLeft, isMobile && styles.columnFullWidth]}>
               {renderComplianceSnapshot()}
@@ -1214,14 +1194,14 @@ export default function AdminHomeScreen() {
             {/* Title */}
             <Text style={styles.reminderModalTitle}>
               {reminderStatus === 'sending' ? 'Sending Reminder...' :
-               reminderStatus === 'success' ? 'Reminder Sent! 🔔' :
-               reminderStatus === 'error' ? 'Oops!' :
-               'Send Reminder'}
+                reminderStatus === 'success' ? 'Reminder Sent! 🔔' :
+                  reminderStatus === 'error' ? 'Oops!' :
+                    'Send Reminder'}
             </Text>
 
             {/* Message */}
             <Text style={styles.reminderModalMessage}>
-              {reminderStatus === 'sending' 
+              {reminderStatus === 'sending'
                 ? 'Please wait while we send reminders to all pending couples...'
                 : reminderMessage}
             </Text>

@@ -12,16 +12,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Linking,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -63,7 +63,7 @@ export default function MessagesScreen() {
   const { colors, isDarkMode } = useTheme();
   const { language, t } = useLanguage();
   const insets = useSafeAreaInsets();
-  
+
   // Initial welcome message when user starts a new chat
   const getWelcomeMessage = (): Message => ({
     id: '1',
@@ -71,20 +71,18 @@ export default function MessagesScreen() {
     sender: 'support',
     timestamp: new Date(),
   });
-  
+
   // Get FAQs with translations
   const getFAQs = (): FAQItem[] => [
     { id: '1', question: t('faq.1.question'), answer: t('faq.1.answer') },
     { id: '2', question: t('faq.2.question'), answer: t('faq.2.answer') },
     { id: '3', question: t('faq.3.question'), answer: t('faq.3.answer') },
     { id: '4', question: t('faq.4.question'), answer: t('faq.4.answer') },
-    { id: '5', question: t('faq.5.question'), answer: t('faq.5.answer') },
-    { id: '6', question: t('faq.6.question'), answer: t('faq.6.answer') },
   ];
 
   // Get cached data from context
-  const { 
-    broadcasts: cachedBroadcasts, 
+  const {
+    broadcasts: cachedBroadcasts,
     chatUnreadCount: cachedChatUnreadCount,
     isInitialized
   } = useUserData();
@@ -98,7 +96,7 @@ export default function MessagesScreen() {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [isLoadingBroadcasts, setIsLoadingBroadcasts] = useState(!isInitialized);
   const [unreadBroadcastCount, setUnreadBroadcastCount] = useState(0);
-  
+
   // Chat state for nursing department
   const [nursingChat, setNursingChat] = useState<Chat | null>(null);
   const [chatUnreadCount, setChatUnreadCount] = useState(cachedChatUnreadCount);
@@ -111,17 +109,17 @@ export default function MessagesScreen() {
       const broadcastsOnly = cachedBroadcasts.filter(b => b.type !== 'reminder');
       setBroadcasts(broadcastsOnly);
       setIsLoadingBroadcasts(false);
-      
+
       // Calculate unread count
       (async () => {
         const lastReadStr = await AsyncStorage.getItem(BROADCASTS_READ_KEY);
         const lastReadTime = lastReadStr ? parseInt(lastReadStr) : 0;
-        
+
         const unreadCount = broadcastsOnly.filter(b => {
           const createdAt = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt as any);
           return createdAt.getTime() > lastReadTime;
         }).length;
-        
+
         setUnreadBroadcastCount(unreadCount);
       })();
     }
@@ -137,15 +135,15 @@ export default function MessagesScreen() {
   // Subscribe to nursing chat for real-time updates
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
-    
+
     const loadChatData = async () => {
       try {
         const storedCoupleId = await AsyncStorage.getItem('coupleId');
         const storedGender = await AsyncStorage.getItem('userGender');
-        
+
         if (storedCoupleId && storedGender) {
           const odAaByuserId = `${storedCoupleId}_${storedGender === 'male' ? 'M' : 'F'}`;
-          
+
           // Subscribe to chat updates for real-time unread count
           unsubscribe = chatService.subscribe(odAaByuserId, (chat) => {
             setNursingChat(chat);
@@ -162,7 +160,7 @@ export default function MessagesScreen() {
     };
 
     loadChatData();
-    
+
     return () => {
       if (unsubscribe) unsubscribe();
     };
@@ -177,7 +175,7 @@ export default function MessagesScreen() {
     if (cachedBroadcasts && cachedBroadcasts.length > 0) {
       return;
     }
-    
+
     const fetchBroadcasts = async () => {
       setIsLoadingBroadcasts(true);
       try {
@@ -190,13 +188,13 @@ export default function MessagesScreen() {
         // Check last read timestamp to determine unread count
         const lastReadStr = await AsyncStorage.getItem(BROADCASTS_READ_KEY);
         const lastReadTime = lastReadStr ? parseInt(lastReadStr) : 0;
-        
+
         // Count broadcasts created after last read time
         const unreadCount = broadcastsOnly.filter(b => {
           const createdAt = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt as any);
           return createdAt.getTime() > lastReadTime;
         }).length;
-        
+
         setUnreadBroadcastCount(unreadCount);
       } catch (error) {
         console.error('Error fetching broadcasts:', error);
@@ -239,7 +237,7 @@ export default function MessagesScreen() {
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-    
+
     if (days === 0) {
       return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     } else if (days === 1) {
@@ -259,7 +257,7 @@ export default function MessagesScreen() {
     const days = Math.floor(diff / (24 * 60 * 60 * 1000));
     const hours = Math.floor(diff / (60 * 60 * 1000));
     const minutes = Math.floor(diff / (60 * 1000));
-    
+
     if (minutes < 60) {
       return `${minutes}m ago`;
     } else if (hours < 24) {
@@ -279,7 +277,7 @@ export default function MessagesScreen() {
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-    
+
     if (days === 0) {
       return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     } else if (days === 1) {
@@ -331,8 +329,8 @@ export default function MessagesScreen() {
 
   const renderHeader = () => (
     <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
-      <TouchableOpacity 
-        onPress={() => (view === 'chat' || view === 'faq') ? setView('threads') : router.back()} 
+      <TouchableOpacity
+        onPress={() => (view === 'chat' || view === 'faq') ? setView('threads') : router.back()}
         style={[styles.backButton, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}
       >
         <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -352,14 +350,14 @@ export default function MessagesScreen() {
           <>
             <View style={styles.chatHeaderInfo}>
               {selectedThread?.type === 'counsellor' ? (
-                <Image 
-                  source={require('../../assets/images/nurse.png')} 
+                <Image
+                  source={require('../../assets/images/nurse.png')}
                   style={styles.headerNurseImage}
                   contentFit="cover"
                 />
               ) : selectedThread?.type === 'support' ? (
-                <Image 
-                  source={require('../../assets/images/customer-service.png')} 
+                <Image
+                  source={require('../../assets/images/customer-service.png')}
                   style={styles.headerNurseImage}
                   contentFit="cover"
                 />
@@ -377,7 +375,7 @@ export default function MessagesScreen() {
         )}
       </View>
       {view === 'threads' && (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.chatBotButton}
           onPress={() => router.push('/user/chat')}
         >
@@ -390,15 +388,15 @@ export default function MessagesScreen() {
   const renderThreadsList = () => (
     <View style={styles.content}>
       {/* Contact Support - Request Callback */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.contactSupportCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
         onPress={() => router.push('/user/contact-support')}
         activeOpacity={0.85}
       >
         <View style={styles.contactSupportContent}>
           <View style={[styles.contactSupportIconWrap, { backgroundColor: isDarkMode ? '#1e3a5f' : '#eff6ff' }]}>
-            <Image 
-              source={require('../../assets/images/customer-service.png')} 
+            <Image
+              source={require('../../assets/images/customer-service.png')}
               style={styles.supporterImage}
             />
           </View>
@@ -414,7 +412,7 @@ export default function MessagesScreen() {
 
       {/* Conversations */}
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('messages.conversations')}</Text>
-      
+
       {/* Nursing Department Chat - only show if there are messages */}
       {isLoadingChat ? (
         <View style={[styles.threadCard, { backgroundColor: colors.cardBackground }]}>
@@ -431,8 +429,8 @@ export default function MessagesScreen() {
           activeOpacity={0.85}
         >
           <View style={[styles.threadAvatar, { backgroundColor: isDarkMode ? '#374151' : '#f1f5f9' }]}>
-            <Image 
-              source={require('../../assets/images/nurse.png')} 
+            <Image
+              source={require('../../assets/images/nurse.png')}
               style={styles.nurseAvatarImage}
               contentFit="cover"
             />
@@ -449,7 +447,7 @@ export default function MessagesScreen() {
                 {nursingChat?.lastMessageAt ? formatChatTime(nursingChat.lastMessageAt) : ''}
               </Text>
             </View>
-            <Text 
+            <Text
               style={[
                 styles.threadPreview,
                 { color: colors.textSecondary },
@@ -489,7 +487,7 @@ export default function MessagesScreen() {
             </View>
           )}
         </View>
-        
+
         {isLoadingBroadcasts ? (
           <View style={styles.broadcastLoadingContainer}>
             <SkeletonLoader width="100%" height={80} style={{ marginBottom: 12, borderRadius: 14 }} />
@@ -505,22 +503,22 @@ export default function MessagesScreen() {
           broadcasts.map((broadcast) => (
             <View key={broadcast.id} style={[styles.broadcastCard, { backgroundColor: colors.cardBackground }]}>
               <View style={styles.broadcastIconContainer}>
-                <LinearGradient 
+                <LinearGradient
                   colors={
                     broadcast.priority === 'urgent' ? ['#ef4444', '#dc2626'] :
-                    broadcast.priority === 'important' ? ['#f59e0b', '#d97706'] :
-                    ['#006dab', '#005a8f']
-                  } 
+                      broadcast.priority === 'important' ? ['#f59e0b', '#d97706'] :
+                        ['#006dab', '#005a8f']
+                  }
                   style={styles.broadcastIcon}
                 >
-                  <Ionicons 
+                  <Ionicons
                     name={
                       broadcast.priority === 'urgent' ? 'warning' :
-                      broadcast.priority === 'important' ? 'alert-circle' :
-                      'megaphone'
-                    } 
-                    size={18} 
-                    color="#fff" 
+                        broadcast.priority === 'important' ? 'alert-circle' :
+                          'megaphone'
+                    }
+                    size={18}
+                    color="#fff"
                   />
                 </LinearGradient>
               </View>
@@ -555,7 +553,7 @@ export default function MessagesScreen() {
 
       {/* Technical Support Options */}
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('messages.technicalSupport')}</Text>
-      
+
       <View style={styles.helpOptions}>
         <TouchableOpacity style={[styles.helpOption, { backgroundColor: colors.cardBackground }]} onPress={handleCallSupport}>
           <View style={[styles.helpIcon, { backgroundColor: '#dcfce7' }]}>
@@ -564,7 +562,7 @@ export default function MessagesScreen() {
           <Text style={[styles.helpLabel, { color: colors.text }]}>{t('messages.contactUs')}</Text>
           <Text style={[styles.helpDetail, { color: colors.textSecondary }]}>9449632431</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={[styles.helpOption, { backgroundColor: colors.cardBackground }]} onPress={handleEmailSupport}>
           <View style={[styles.helpIcon, { backgroundColor: isDarkMode ? '#1e3a5f' : '#dbeafe' }]}>
             <Ionicons name="mail" size={24} color="#3b82f6" />
@@ -597,7 +595,7 @@ export default function MessagesScreen() {
     <View style={styles.content}>
       <Text style={[styles.faqPageTitle, { color: colors.text }]}>{t('messages.faqTitle')}</Text>
       <Text style={[styles.faqPageSubtitle, { color: colors.textSecondary }]}>{t('messages.faqSubtitle')}</Text>
-      
+
       {getFAQs().map((faq) => (
         <TouchableOpacity
           key={faq.id}
@@ -607,10 +605,10 @@ export default function MessagesScreen() {
         >
           <View style={styles.faqQuestion}>
             <Text style={[styles.faqQuestionText, { color: colors.text }]}>{faq.question}</Text>
-            <Ionicons 
-              name={expandedFAQ === faq.id ? 'chevron-up' : 'chevron-down'} 
-              size={20} 
-              color={colors.textSecondary} 
+            <Ionicons
+              name={expandedFAQ === faq.id ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={colors.textSecondary}
             />
           </View>
           {expandedFAQ === faq.id && (
@@ -620,10 +618,10 @@ export default function MessagesScreen() {
           )}
         </TouchableOpacity>
       ))}
-      
+
       <View style={styles.faqFooter}>
         <Text style={[styles.faqFooterText, { color: colors.textSecondary }]}>{t('messages.stillHaveQuestions')}</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.faqContactButton}
           onPress={() => setView('threads')}
         >
@@ -635,7 +633,7 @@ export default function MessagesScreen() {
   );
 
   const renderChat = () => (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.chatContainer}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
@@ -658,10 +656,10 @@ export default function MessagesScreen() {
 
         {messages.map((message) => {
           const isUser = message.sender === 'user';
-          
+
           return (
-            <View 
-              key={message.id} 
+            <View
+              key={message.id}
               style={[
                 styles.messageRow,
                 isUser && styles.messageRowUser,
@@ -672,13 +670,13 @@ export default function MessagesScreen() {
                   <Text style={styles.messageAvatarEmoji}>👨‍💻</Text>
                 </View>
               )}
-              <View 
+              <View
                 style={[
                   styles.messageBubble,
                   isUser ? styles.messageBubbleUser : [styles.messageBubbleSupport, { backgroundColor: colors.cardBackground }],
                 ]}
               >
-                <Text 
+                <Text
                   style={[
                     styles.messageText,
                     isUser ? styles.messageTextUser : { color: colors.text },
@@ -687,7 +685,7 @@ export default function MessagesScreen() {
                   {message.text}
                 </Text>
                 <View style={styles.messageFooter}>
-                  <Text 
+                  <Text
                     style={[
                       styles.messageTime,
                       isUser ? styles.messageTimeUser : { color: colors.textMuted },
@@ -696,10 +694,10 @@ export default function MessagesScreen() {
                     {formatTime(message.timestamp)}
                   </Text>
                   {isUser && message.status && (
-                    <Ionicons 
-                      name={message.status === 'read' ? 'checkmark-done' : 'checkmark'} 
-                      size={14} 
-                      color={message.status === 'read' ? '#22c55e' : 'rgba(255,255,255,0.6)'} 
+                    <Ionicons
+                      name={message.status === 'read' ? 'checkmark-done' : 'checkmark'}
+                      size={14}
+                      color={message.status === 'read' ? '#22c55e' : 'rgba(255,255,255,0.6)'}
                     />
                   )}
                 </View>
@@ -740,7 +738,7 @@ export default function MessagesScreen() {
             maxLength={500}
           />
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
             styles.sendButton,
             !newMessage.trim() && styles.sendButtonDisabled,
@@ -752,10 +750,10 @@ export default function MessagesScreen() {
             colors={newMessage.trim() ? ['#006dab', '#005a8f'] : ['#e2e8f0', '#e2e8f0']}
             style={styles.sendButtonGradient}
           >
-            <Ionicons 
-              name="send" 
-              size={20} 
-              color={newMessage.trim() ? '#fff' : '#94a3b8'} 
+            <Ionicons
+              name="send"
+              size={20}
+              color={newMessage.trim() ? '#fff' : '#94a3b8'}
             />
           </LinearGradient>
         </TouchableOpacity>
@@ -766,7 +764,7 @@ export default function MessagesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {renderHeader()}
-      
+
       {view === 'threads' && (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -778,7 +776,7 @@ export default function MessagesScreen() {
           {renderThreadsList()}
         </ScrollView>
       )}
-      
+
       {view === 'faq' && (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -790,9 +788,9 @@ export default function MessagesScreen() {
           {renderFAQ()}
         </ScrollView>
       )}
-      
+
       {view === 'chat' && renderChat()}
-      
+
       {/* Bottom Navigation - hide in chat view on mobile for more space */}
       {view !== 'chat' && <BottomNavBar />}
     </View>
@@ -858,8 +856,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  scrollContent: { 
-    flexGrow: 1, 
+  scrollContent: {
+    flexGrow: 1,
     paddingBottom: isWeb ? 60 : 150,
     minHeight: '100%',
   },
@@ -1244,7 +1242,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   // Start Chat Card (when no conversations)
   startChatCard: {
     flexDirection: 'row',
@@ -1284,7 +1282,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748b',
   },
-  
+
   // Broadcasts Section
   broadcastsSection: {
     marginTop: 24,

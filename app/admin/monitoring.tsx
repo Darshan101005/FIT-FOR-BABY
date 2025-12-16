@@ -5,19 +5,19 @@ import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
-import { CoupleStepEntry, coupleExerciseService, coupleService, coupleStepsService, coupleWeightLogService } from '../../services/firestore.service';
+import { CoupleStepEntry, coupleExerciseService, coupleService, coupleStepsService } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
 
@@ -58,7 +58,7 @@ interface DailyLog {
   steps: { male: LogStatus; female: LogStatus; maleCount: number; femaleCount: number };
   exercise: { male: LogStatus; female: LogStatus; maleDuration?: number; maleCalories?: number; femaleDuration?: number; femaleCalories?: number };
   diet: { male: LogStatus; female: LogStatus };
-  weight: { male: LogStatus; female: LogStatus };
+  highKnees: { male: LogStatus; female: LogStatus; maleDuration: number; femaleDuration: number };
   coupleWalking: LogStatus;
 }
 
@@ -73,12 +73,14 @@ interface CoupleDetails {
   enrollmentDate: string;
   maleStatus: string;
   femaleStatus: string;
-  maleWeight?: number;
-  femaleWeight?: number;
-  maleLastWeightDate?: string;
-  femaleLastWeightDate?: string;
   maleStepEntries?: CoupleStepEntry[];
   femaleStepEntries?: CoupleStepEntry[];
+  maleExerciseDuration?: number;
+  maleExerciseCalories?: number;
+  femaleExerciseDuration?: number;
+  femaleExerciseCalories?: number;
+  maleHighKneesDuration?: number;
+  femaleHighKneesDuration?: number;
 }
 
 interface DetailedLogEntry {
@@ -97,7 +99,7 @@ const metrics = [
   { id: 'steps', label: 'Steps', icon: 'walk', iconFamily: 'MaterialCommunityIcons' },
   { id: 'exercise', label: 'Exercise', icon: 'fitness', iconFamily: 'Ionicons' },
   { id: 'diet', label: 'Diet', icon: 'nutrition', iconFamily: 'Ionicons' },
-  { id: 'weight', label: 'Weight', icon: 'scale-bathroom', iconFamily: 'MaterialCommunityIcons' },
+  { id: 'highKnees', label: 'High Knees', icon: 'run-fast', iconFamily: 'MaterialCommunityIcons' },
   { id: 'coupleWalking', label: 'Couple Walk', icon: 'people', iconFamily: 'Ionicons' },
 ];
 
@@ -136,22 +138,22 @@ export default function AdminMonitoringScreen() {
   useEffect(() => {
     const unsubscribe = coupleService.subscribe((couplesData) => {
       setCouples(couplesData);
-      
+
       // Create CoupleDetails from CoupleData
       const details: Record<string, CoupleDetails> = {};
       const dailyLogs: DailyLog[] = [];
-      
+
       couplesData.forEach(couple => {
         const coupleId = couple.id || '';
-        
+
         // Build couple details
         details[coupleId] = {
           coupleId,
-          maleName: couple.male?.firstName && couple.male?.lastName 
-            ? `${couple.male.firstName} ${couple.male.lastName}` 
+          maleName: couple.male?.firstName && couple.male?.lastName
+            ? `${couple.male.firstName} ${couple.male.lastName}`
             : couple.male?.displayName || 'Male Partner',
-          femaleName: couple.female?.firstName && couple.female?.lastName 
-            ? `${couple.female.firstName} ${couple.female.lastName}` 
+          femaleName: couple.female?.firstName && couple.female?.lastName
+            ? `${couple.female.firstName} ${couple.female.lastName}`
             : couple.female?.displayName || 'Female Partner',
           maleEmail: couple.male?.email || '',
           femaleEmail: couple.female?.email || '',
@@ -161,10 +163,9 @@ export default function AdminMonitoringScreen() {
           maleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
           femaleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
         };
-        
-        // Create daily log entry - for now mark weight as pending/complete based on last log
-        // This is a simplified version - in production you'd check actual daily logs
-          dailyLogs.push({
+
+        // Create daily log entry
+        dailyLogs.push({
           coupleId,
           maleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
           femaleStatus: couple.status === 'active' ? 'Active' : 'Inactive',
@@ -172,90 +173,106 @@ export default function AdminMonitoringScreen() {
           steps: { male: 'pending', female: 'pending', maleCount: 0, femaleCount: 0 },
           exercise: { male: 'pending', female: 'pending' },
           diet: { male: 'pending', female: 'pending' },
-          weight: { male: 'pending', female: 'pending' },
+          highKnees: { male: 'pending', female: 'pending', maleDuration: 0, femaleDuration: 0 },
           coupleWalking: 'pending',
-          // feedback removed
         });
       });
-      
+
       setCoupleDetails(details);
       setLogs(dailyLogs);
       setIsLoading(false);
-      
-      // Load weight and step data for each couple
+
+      // Load step, exercise, and high knees data for each couple
       couplesData.forEach(async couple => {
         const coupleId = couple.id || '';
         try {
-          // Load weight data
-          const [maleWeight, femaleWeight] = await Promise.all([
-            coupleWeightLogService.getLatest(coupleId, 'male'),
-            coupleWeightLogService.getLatest(coupleId, 'female')
-          ]);
-          
           // Load step data for the selected date
           const [maleSteps, femaleSteps] = await Promise.all([
             coupleStepsService.getByDate(coupleId, 'male', selectedDate),
             coupleStepsService.getByDate(coupleId, 'female', selectedDate)
           ]);
-          
+
           // Load exercise data for the selected date
           const [maleExercise, femaleExercise] = await Promise.all([
             coupleExerciseService.getTotalsForDate(coupleId, 'male', selectedDate),
             coupleExerciseService.getTotalsForDate(coupleId, 'female', selectedDate)
           ]);
-          
+
+          // Load high knees exercise data for the selected date
+          const [maleExerciseLogs, femaleExerciseLogs] = await Promise.all([
+            coupleExerciseService.getByDate(coupleId, 'male', selectedDate),
+            coupleExerciseService.getByDate(coupleId, 'female', selectedDate)
+          ]);
+
+          // Filter high knees exercises and sum duration
+          const maleHighKnees = maleExerciseLogs.filter(log => log.exerciseType === 'high-knees');
+          const femaleHighKnees = femaleExerciseLogs.filter(log => log.exerciseType === 'high-knees');
+          const maleHighKneesDuration = maleHighKnees.reduce((sum, log) => sum + log.duration, 0);
+          const femaleHighKneesDuration = femaleHighKnees.reduce((sum, log) => sum + log.duration, 0);
+
           const maleStepCount = maleSteps.reduce((sum, entry) => sum + entry.stepCount, 0);
           const femaleStepCount = femaleSteps.reduce((sum, entry) => sum + entry.stepCount, 0);
-          
+
           // Goal defaults
           const stepGoal = 7000;
           const exerciseGoal = 60; // 60 minutes default
-          
+          const highKneesGoal = 30; // 30 minutes default
+
           // Determine step status
           const getMaleStepStatus = (): LogStatus => {
             if (maleStepCount >= stepGoal) return 'complete';
             if (maleStepCount > 0) return 'partial';
             return 'pending';
           };
-          
+
           const getFemaleStepStatus = (): LogStatus => {
             if (femaleStepCount >= stepGoal) return 'complete';
             if (femaleStepCount > 0) return 'partial';
             return 'pending';
           };
-          
+
           // Determine exercise status
           const getMaleExerciseStatus = (): LogStatus => {
             if (maleExercise.duration >= exerciseGoal) return 'complete';
             if (maleExercise.duration > 0) return 'partial';
             return 'pending';
           };
-          
+
           const getFemaleExerciseStatus = (): LogStatus => {
             if (femaleExercise.duration >= exerciseGoal) return 'complete';
             if (femaleExercise.duration > 0) return 'partial';
             return 'pending';
           };
-          
+
+          // Determine high knees status
+          const getMaleHighKneesStatus = (): LogStatus => {
+            if (maleHighKneesDuration >= highKneesGoal) return 'complete';
+            if (maleHighKneesDuration > 0) return 'partial';
+            return 'pending';
+          };
+
+          const getFemaleHighKneesStatus = (): LogStatus => {
+            if (femaleHighKneesDuration >= highKneesGoal) return 'complete';
+            if (femaleHighKneesDuration > 0) return 'partial';
+            return 'pending';
+          };
+
           setCoupleDetails(prev => ({
             ...prev,
             [coupleId]: {
               ...prev[coupleId],
-              maleWeight: maleWeight?.weight,
-              maleLastWeightDate: maleWeight?.date,
-              femaleWeight: femaleWeight?.weight,
-              femaleLastWeightDate: femaleWeight?.date,
               maleStepEntries: maleSteps,
               femaleStepEntries: femaleSteps,
               maleExerciseDuration: maleExercise.duration,
               maleExerciseCalories: maleExercise.calories,
               femaleExerciseDuration: femaleExercise.duration,
               femaleExerciseCalories: femaleExercise.calories,
+              maleHighKneesDuration,
+              femaleHighKneesDuration,
             }
           }));
-          
-          // Update log status based on weight, step, and exercise data
-          const today = new Date().toISOString().split('T')[0];
+
+          // Update log status based on step, exercise, and high knees data
           setLogs(prevLogs => prevLogs.map(log => {
             if (log.coupleId === coupleId) {
               return {
@@ -274,9 +291,11 @@ export default function AdminMonitoringScreen() {
                   femaleDuration: femaleExercise.duration,
                   femaleCalories: femaleExercise.calories,
                 },
-                weight: {
-                  male: maleWeight?.date === selectedDate ? 'complete' : (maleWeight ? 'partial' : 'pending'),
-                  female: femaleWeight?.date === selectedDate ? 'complete' : (femaleWeight ? 'partial' : 'pending'),
+                highKnees: {
+                  male: getMaleHighKneesStatus(),
+                  female: getFemaleHighKneesStatus(),
+                  maleDuration: maleHighKneesDuration,
+                  femaleDuration: femaleHighKneesDuration,
                 }
               };
             }
@@ -299,15 +318,14 @@ export default function AdminMonitoringScreen() {
       const date = new Date(baseDate);
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
-      
-        pastLogs.push({
+
+      pastLogs.push({
         date: dateStr,
         steps: { male: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus, female: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus },
         exercise: { male: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus, female: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus },
         diet: { male: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus, female: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus },
-        weight: { male: ['complete', 'partial', 'missed', 'pending'][Math.floor(Math.random() * 4)] as LogStatus, female: ['complete', 'partial', 'missed', 'pending'][Math.floor(Math.random() * 4)] as LogStatus },
+        highKnees: { male: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus, female: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus, maleDuration: Math.floor(Math.random() * 40), femaleDuration: Math.floor(Math.random() * 40) },
         coupleWalking: ['complete', 'partial', 'missed'][Math.floor(Math.random() * 3)] as LogStatus,
-        // feedback removed
       });
     }
     return pastLogs;
@@ -321,22 +339,22 @@ export default function AdminMonitoringScreen() {
   // Filter logs based on search and filters
   const filteredLogs = logs.filter(log => {
     const matchesSearch = log.coupleId.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     if (selectedStatus === 'all') return matchesSearch;
-    
+
     // Check if any metric has the selected status (check all metrics)
-    const hasStatus = 
+    const hasStatus =
       log.steps.male === selectedStatus ||
       log.steps.female === selectedStatus ||
       log.exercise.male === selectedStatus ||
       log.exercise.female === selectedStatus ||
       log.diet.male === selectedStatus ||
       log.diet.female === selectedStatus ||
-      log.weight.male === selectedStatus ||
-      log.weight.female === selectedStatus ||
+      log.highKnees.male === selectedStatus ||
+      log.highKnees.female === selectedStatus ||
       log.coupleWalking === selectedStatus ||
       false;
-    
+
     return matchesSearch && hasStatus;
   });
 
@@ -350,8 +368,8 @@ export default function AdminMonitoringScreen() {
         log.exercise.female === status ||
         log.diet.male === status ||
         log.diet.female === status ||
-        log.weight.male === status ||
-        log.weight.female === status ||
+        log.highKnees.male === status ||
+        log.highKnees.female === status ||
         log.coupleWalking === status ||
         false
       );
@@ -380,7 +398,7 @@ export default function AdminMonitoringScreen() {
     let missed = 0;
 
     logs.forEach(log => {
-      ['steps', 'exercise', 'diet', 'weight'].forEach(metric => {
+      ['steps', 'exercise', 'diet', 'highKnees'].forEach(metric => {
         const val = log[metric as keyof DailyLog] as { male: LogStatus; female: LogStatus };
         if (val.male === 'complete') complete++;
         else if (val.male === 'partial') partial++;
@@ -400,14 +418,14 @@ export default function AdminMonitoringScreen() {
   const getDateDisplayLabel = (dateStr: string) => {
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    
+
     if (dateStr === today) return 'Today';
     if (dateStr === yesterday) return 'Yesterday';
-    
-    return new Date(dateStr).toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric' 
+
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
     });
   };
 
@@ -423,7 +441,7 @@ export default function AdminMonitoringScreen() {
   const getExportDateRange = () => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    
+
     switch (exportDateRange) {
       case 'today':
         return { start: todayStr, end: todayStr };
@@ -451,7 +469,7 @@ export default function AdminMonitoringScreen() {
     const dates: string[] = [];
     const start = new Date(startDate);
     const end = new Date(endDate);
-    
+
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       dates.push(d.toISOString().split('T')[0]);
     }
@@ -465,22 +483,23 @@ export default function AdminMonitoringScreen() {
     const dates = getDatesBetween(dateRange.start, dateRange.end);
     const stepGoal = 7000;
     const exerciseGoal = 60;
-    
+    const highKneesGoal = 30; // 30 minutes goal
+
     // Get all couple IDs from the current logs
     const coupleIds = logs.map(log => log.coupleId);
-    
+
     // Fetch data for each couple for each date in the range
     for (const coupleId of coupleIds) {
       const details = coupleDetails[coupleId];
-      
+
       // Get actual names with proper fallback
-      const maleName = details?.maleName && details.maleName !== 'Male Partner' 
-        ? details.maleName 
+      const maleName = details?.maleName && details.maleName !== 'Male Partner'
+        ? details.maleName
         : (details?.maleEmail?.split('@')[0] || coupleId + '_M');
-      const femaleName = details?.femaleName && details.femaleName !== 'Female Partner' 
-        ? details.femaleName 
+      const femaleName = details?.femaleName && details.femaleName !== 'Female Partner'
+        ? details.femaleName
         : (details?.femaleEmail?.split('@')[0] || coupleId + '_F');
-      
+
       for (const date of dates) {
         try {
           // Fetch step data for this date
@@ -488,41 +507,65 @@ export default function AdminMonitoringScreen() {
             coupleStepsService.getByDate(coupleId, 'male', date),
             coupleStepsService.getByDate(coupleId, 'female', date)
           ]);
-          
+
           // Fetch exercise data for this date
           const [maleExercise, femaleExercise] = await Promise.all([
             coupleExerciseService.getTotalsForDate(coupleId, 'male', date),
             coupleExerciseService.getTotalsForDate(coupleId, 'female', date)
           ]);
-          
+
+          // Fetch high knees exercise data for this date
+          const [maleExerciseLogs, femaleExerciseLogs] = await Promise.all([
+            coupleExerciseService.getByDate(coupleId, 'male', date),
+            coupleExerciseService.getByDate(coupleId, 'female', date)
+          ]);
+
+          // Filter high knees exercises and sum duration
+          const maleHighKnees = maleExerciseLogs.filter(log => log.exerciseType === 'high-knees');
+          const femaleHighKnees = femaleExerciseLogs.filter(log => log.exerciseType === 'high-knees');
+          const maleHighKneesDuration = maleHighKnees.reduce((sum, log) => sum + log.duration, 0);
+          const femaleHighKneesDuration = femaleHighKnees.reduce((sum, log) => sum + log.duration, 0);
+
           const maleStepCount = maleSteps.reduce((sum: number, entry: CoupleStepEntry) => sum + entry.stepCount, 0);
           const femaleStepCount = femaleSteps.reduce((sum: number, entry: CoupleStepEntry) => sum + entry.stepCount, 0);
-          
+
           // Determine statuses
           const getMaleStepStatus = (): LogStatus => {
             if (maleStepCount >= stepGoal) return 'complete';
             if (maleStepCount > 0) return 'partial';
             return 'pending';
           };
-          
+
           const getFemaleStepStatus = (): LogStatus => {
             if (femaleStepCount >= stepGoal) return 'complete';
             if (femaleStepCount > 0) return 'partial';
             return 'pending';
           };
-          
+
           const getMaleExerciseStatus = (): LogStatus => {
             if (maleExercise.duration >= exerciseGoal) return 'complete';
             if (maleExercise.duration > 0) return 'partial';
             return 'pending';
           };
-          
+
           const getFemaleExerciseStatus = (): LogStatus => {
             if (femaleExercise.duration >= exerciseGoal) return 'complete';
             if (femaleExercise.duration > 0) return 'partial';
             return 'pending';
           };
-          
+
+          const getMaleHighKneesStatus = (): LogStatus => {
+            if (maleHighKneesDuration >= highKneesGoal) return 'complete';
+            if (maleHighKneesDuration > 0) return 'partial';
+            return 'pending';
+          };
+
+          const getFemaleHighKneesStatus = (): LogStatus => {
+            if (femaleHighKneesDuration >= highKneesGoal) return 'complete';
+            if (femaleHighKneesDuration > 0) return 'partial';
+            return 'pending';
+          };
+
           exportData.push({
             coupleId: coupleId,
             maleName: maleName,
@@ -545,10 +588,10 @@ export default function AdminMonitoringScreen() {
             femaleExerciseStatus: getFemaleExerciseStatus(),
             maleDietStatus: 'pending',
             femaleDietStatus: 'pending',
-            maleWeight: details?.maleWeight || 'N/A',
-            femaleWeight: details?.femaleWeight || 'N/A',
-            maleWeightStatus: 'pending',
-            femaleWeightStatus: 'pending',
+            maleHighKneesMinutes: maleHighKneesDuration,
+            femaleHighKneesMinutes: femaleHighKneesDuration,
+            maleHighKneesStatus: getMaleHighKneesStatus(),
+            femaleHighKneesStatus: getFemaleHighKneesStatus(),
             coupleWalkingStatus: 'pending',
           });
         } catch (error) {
@@ -556,7 +599,7 @@ export default function AdminMonitoringScreen() {
         }
       }
     }
-    
+
     // Sort by date then coupleId
     exportData.sort((a, b) => {
       if (a.reportDate !== b.reportDate) {
@@ -564,7 +607,7 @@ export default function AdminMonitoringScreen() {
       }
       return a.coupleId.localeCompare(b.coupleId);
     });
-    
+
     return { data: exportData, dateRange };
   };
 
@@ -573,7 +616,7 @@ export default function AdminMonitoringScreen() {
     setIsExporting(true);
     try {
       const { data, dateRange } = await generateExportData();
-      
+
       // CSV Headers - Clean and organized
       const headers = [
         'Report Date',
@@ -592,10 +635,10 @@ export default function AdminMonitoringScreen() {
         'Female Exercise Status',
         'Male Diet Status',
         'Female Diet Status',
-        'Male Weight (kg)',
-        'Male Weight Status',
-        'Female Weight (kg)',
-        'Female Weight Status',
+        'Male High Knees (mins)',
+        'Male High Knees Status',
+        'Female High Knees (mins)',
+        'Female High Knees Status',
         'Couple Walk Status',
         'Male Email',
         'Female Email',
@@ -603,7 +646,7 @@ export default function AdminMonitoringScreen() {
         'Female Phone',
         'Enrollment Date'
       ];
-      
+
       // Generate CSV content
       let csvContent = headers.join(',') + '\n';
       data.forEach(row => {
@@ -624,10 +667,10 @@ export default function AdminMonitoringScreen() {
           row.femaleExerciseStatus,
           row.maleDietStatus,
           row.femaleDietStatus,
-          row.maleWeight,
-          row.maleWeightStatus,
-          row.femaleWeight,
-          row.femaleWeightStatus,
+          row.maleHighKneesMinutes,
+          row.maleHighKneesStatus,
+          row.femaleHighKneesMinutes,
+          row.femaleHighKneesStatus,
           row.coupleWalkingStatus,
           row.maleEmail,
           row.femaleEmail,
@@ -637,7 +680,7 @@ export default function AdminMonitoringScreen() {
         ];
         csvContent += rowData.join(',') + '\n';
       });
-      
+
       if (isWeb) {
         // Web download
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -656,7 +699,7 @@ export default function AdminMonitoringScreen() {
         await FileSystem.writeAsStringAsync(fileUri, csvContent, { encoding: FileSystem.EncodingType.UTF8 });
         await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export Report' });
       }
-      
+
       setShowExportModal(false);
       Alert.alert('Success', 'CSV report exported successfully!');
     } catch (error) {
@@ -672,7 +715,7 @@ export default function AdminMonitoringScreen() {
     setIsExporting(true);
     try {
       const { data, dateRange } = await generateExportData();
-      
+
       // Generate HTML content for PDF with professional design
       const htmlContent = `
 <!DOCTYPE html>
@@ -913,7 +956,7 @@ export default function AdminMonitoringScreen() {
       </div>
     </div>
 
-    <div class="section-title">📊 Detailed Activity Report (${data.length} Couples)</div>
+    <div class="section-title">📊 Detailed Activity Report (${data.length} entries)</div>
     <table class="data-table">
       <thead>
         <tr>
@@ -927,8 +970,8 @@ export default function AdminMonitoringScreen() {
           <th>F Exercise</th>
           <th>M Diet</th>
           <th>F Diet</th>
-          <th>M Weight</th>
-          <th>F Weight</th>
+          <th>M High Knees</th>
+          <th>F High Knees</th>
           <th>Couple Walk</th>
         </tr>
       </thead>
@@ -964,12 +1007,12 @@ export default function AdminMonitoringScreen() {
           <td><span class="status-badge status-${row.maleDietStatus}">${row.maleDietStatus}</span></td>
           <td><span class="status-badge status-${row.femaleDietStatus}">${row.femaleDietStatus}</span></td>
           <td class="metric-cell">
-            <div class="metric-value">${row.maleWeight !== 'N/A' ? row.maleWeight + ' kg' : '-'}</div>
-            <span class="status-badge status-${row.maleWeightStatus}">${row.maleWeightStatus}</span>
+            <div class="metric-value">${row.maleHighKneesMinutes > 0 ? row.maleHighKneesMinutes + 'm' : '-'}</div>
+            <span class="status-badge status-${row.maleHighKneesStatus}">${row.maleHighKneesStatus}</span>
           </td>
           <td class="metric-cell">
-            <div class="metric-value">${row.femaleWeight !== 'N/A' ? row.femaleWeight + ' kg' : '-'}</div>
-            <span class="status-badge status-${row.femaleWeightStatus}">${row.femaleWeightStatus}</span>
+            <div class="metric-value">${row.femaleHighKneesMinutes > 0 ? row.femaleHighKneesMinutes + 'm' : '-'}</div>
+            <span class="status-badge status-${row.femaleHighKneesStatus}">${row.femaleHighKneesStatus}</span>
           </td>
           <td><span class="status-badge status-${row.coupleWalkingStatus}">${row.coupleWalkingStatus}</span></td>
         </tr>
@@ -1006,7 +1049,7 @@ export default function AdminMonitoringScreen() {
         await FileSystem.writeAsStringAsync(fileUri, htmlContent, { encoding: FileSystem.EncodingType.UTF8 });
         await Sharing.shareAsync(fileUri, { mimeType: 'text/html', dialogTitle: 'Export Report' });
       }
-      
+
       setShowExportModal(false);
     } catch (error) {
       console.error('Export error:', error);
@@ -1021,7 +1064,7 @@ export default function AdminMonitoringScreen() {
     setIsExporting(true);
     try {
       const { data, dateRange } = await generateExportData();
-      
+
       // Generate Excel-compatible XML (SpreadsheetML) with better structure
       const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
@@ -1319,7 +1362,7 @@ export default function AdminMonitoringScreen() {
         await FileSystem.writeAsStringAsync(fileUri, xmlContent, { encoding: FileSystem.EncodingType.UTF8 });
         await Sharing.shareAsync(fileUri, { mimeType: 'application/vnd.ms-excel', dialogTitle: 'Export Report' });
       }
-      
+
       setShowExportModal(false);
       Alert.alert('Success', 'Excel report exported successfully!');
     } catch (error) {
@@ -1359,7 +1402,7 @@ export default function AdminMonitoringScreen() {
             <Text style={styles.dateInput}>{getDateDisplayLabel(selectedDate)}</Text>
             <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
           </TouchableOpacity>
-          
+
           {/* Quick Date Options */}
           <View style={styles.quickDateOptions}>
             <TouchableOpacity
@@ -1418,21 +1461,21 @@ export default function AdminMonitoringScreen() {
   );
 
   // Calendar picker helper functions
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 
-                  'July', 'August', 'September', 'October', 'November', 'December'];
-  
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
   const getDaysInMonth = (year: number, month: number) => {
     return new Date(year, month + 1, 0).getDate();
   };
-  
+
   const getFirstDayOfMonth = (year: number, month: number) => {
     return new Date(year, month, 1).getDay();
   };
 
   // Temp state for calendar navigation
-  const [tempCalendarDate, setTempCalendarDate] = useState({ 
-    year: new Date().getFullYear(), 
-    month: new Date().getMonth() 
+  const [tempCalendarDate, setTempCalendarDate] = useState({
+    year: new Date().getFullYear(),
+    month: new Date().getMonth()
   });
 
   // Date picker modal / component with calendar
@@ -1443,7 +1486,7 @@ export default function AdminMonitoringScreen() {
     const firstDay = getFirstDayOfMonth(tempCalendarDate.year, tempCalendarDate.month);
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    
+
     // Generate calendar grid
     const calendarDays: (number | null)[] = [];
     for (let i = 0; i < firstDay; i++) {
@@ -1452,7 +1495,7 @@ export default function AdminMonitoringScreen() {
     for (let day = 1; day <= daysInMonth; day++) {
       calendarDays.push(day);
     }
-    
+
     const handleDateSelect = (day: number) => {
       const dateStr = `${tempCalendarDate.year}-${String(tempCalendarDate.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const selectedDateObj = new Date(dateStr);
@@ -1461,7 +1504,7 @@ export default function AdminMonitoringScreen() {
         setShowDatePicker(false);
       }
     };
-    
+
     const goToPreviousMonth = () => {
       if (tempCalendarDate.month === 0) {
         setTempCalendarDate({ year: tempCalendarDate.year - 1, month: 11 });
@@ -1469,7 +1512,7 @@ export default function AdminMonitoringScreen() {
         setTempCalendarDate({ ...tempCalendarDate, month: tempCalendarDate.month - 1 });
       }
     };
-    
+
     const goToNextMonth = () => {
       const nextMonth = tempCalendarDate.month === 11 ? 0 : tempCalendarDate.month + 1;
       const nextYear = tempCalendarDate.month === 11 ? tempCalendarDate.year + 1 : tempCalendarDate.year;
@@ -1495,7 +1538,7 @@ export default function AdminMonitoringScreen() {
                   <Ionicons name="close" size={24} color={COLORS.textSecondary} />
                 </TouchableOpacity>
               </View>
-              
+
               {/* Month/Year Navigation */}
               <View style={styles.calendarNavigation}>
                 <TouchableOpacity onPress={goToPreviousMonth} style={styles.calendarNavButton}>
@@ -1509,26 +1552,26 @@ export default function AdminMonitoringScreen() {
                   <Ionicons name="chevron-forward" size={24} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
-              
+
               {/* Day headers */}
               <View style={styles.calendarDayHeaders}>
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
                   <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
                 ))}
               </View>
-              
+
               {/* Calendar Grid */}
               <View style={styles.calendarGrid}>
                 {calendarDays.map((day, index) => {
                   if (day === null) {
                     return <View key={`empty-${index}`} style={styles.calendarDayCell} />;
                   }
-                  
+
                   const dateStr = `${tempCalendarDate.year}-${String(tempCalendarDate.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                   const isToday = dateStr === todayStr;
                   const isSelected = dateStr === selectedDate;
                   const isFuture = new Date(dateStr) > today;
-                  
+
                   return (
                     <TouchableOpacity
                       key={day}
@@ -1554,7 +1597,7 @@ export default function AdminMonitoringScreen() {
                   );
                 })}
               </View>
-              
+
               {/* Type in date option */}
               <View style={styles.manualDateInput}>
                 <Text style={styles.manualDateLabel}>Or type date:</Text>
@@ -1606,7 +1649,7 @@ export default function AdminMonitoringScreen() {
   // Summary Stats Cards
   const renderSummaryStats = () => (
     <View style={[styles.statsContainer, isMobile && styles.statsContainerMobile]}>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.statCard, { borderLeftColor: COLORS.success }, selectedStatus === 'complete' && styles.statCardActive]}
         onPress={() => setSelectedStatus(selectedStatus === 'complete' ? 'all' : 'complete')}
         activeOpacity={0.7}
@@ -1624,7 +1667,7 @@ export default function AdminMonitoringScreen() {
           </View>
         )}
       </TouchableOpacity>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.statCard, { borderLeftColor: COLORS.warning }, selectedStatus === 'partial' && styles.statCardActive]}
         onPress={() => setSelectedStatus(selectedStatus === 'partial' ? 'all' : 'partial')}
         activeOpacity={0.7}
@@ -1642,7 +1685,7 @@ export default function AdminMonitoringScreen() {
           </View>
         )}
       </TouchableOpacity>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.statCard, { borderLeftColor: COLORS.error }, selectedStatus === 'missed' && styles.statCardActive]}
         onPress={() => setSelectedStatus(selectedStatus === 'missed' ? 'all' : 'missed')}
         activeOpacity={0.7}
@@ -1660,7 +1703,7 @@ export default function AdminMonitoringScreen() {
           </View>
         )}
       </TouchableOpacity>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.statCard, { borderLeftColor: COLORS.info }, selectedStatus === 'all' && styles.statCardActive]}
         onPress={() => setSelectedStatus('all')}
         activeOpacity={0.7}
@@ -1762,7 +1805,7 @@ export default function AdminMonitoringScreen() {
           {renderDualStatus(log.steps)}
           {renderDualStatus(log.exercise)}
           {renderDualStatus(log.diet)}
-          {renderDualStatus(log.weight)}
+          {renderDualStatus(log.highKnees)}
           {renderSingleStatus(log.coupleWalking)}
         </View>
       </TouchableOpacity>
@@ -1842,7 +1885,7 @@ export default function AdminMonitoringScreen() {
       const firstDay = getFirstDayOfMonth(tempExportDate.year, tempExportDate.month);
       const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
-      
+
       const calendarDays: (number | null)[] = [];
       for (let i = 0; i < firstDay; i++) {
         calendarDays.push(null);
@@ -1882,23 +1925,23 @@ export default function AdminMonitoringScreen() {
               <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.calendarDayHeaders}>
             {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
               <Text key={idx} style={styles.exportCalendarDayHeader}>{day}</Text>
             ))}
           </View>
-          
+
           <View style={styles.calendarGrid}>
             {calendarDays.map((day, index) => {
               if (day === null) {
                 return <View key={`empty-${index}`} style={styles.exportCalendarDayCell} />;
               }
-              
+
               const dateStr = `${tempExportDate.year}-${String(tempExportDate.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const isSelected = dateStr === currentDate;
               const isFuture = new Date(dateStr) > today;
-              
+
               return (
                 <TouchableOpacity
                   key={day}
@@ -2021,7 +2064,7 @@ export default function AdminMonitoringScreen() {
                       </TouchableOpacity>
                     </View>
                   </View>
-                  
+
                   {showExportDatePicker && (
                     <View style={styles.exportDatePickerContainer}>
                       <Text style={styles.exportDatePickerLabel}>
@@ -2047,7 +2090,7 @@ export default function AdminMonitoringScreen() {
                   <Text style={styles.exportFormatTitle}>PDF Report</Text>
                   <Text style={styles.exportFormatDesc}>Detailed report with charts</Text>
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
                   style={styles.exportFormatOption}
                   onPress={exportToCSV}
@@ -2059,7 +2102,7 @@ export default function AdminMonitoringScreen() {
                   <Text style={styles.exportFormatTitle}>CSV File</Text>
                   <Text style={styles.exportFormatDesc}>Data in spreadsheet format</Text>
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
                   style={styles.exportFormatOption}
                   onPress={exportToExcel}
@@ -2098,34 +2141,34 @@ export default function AdminMonitoringScreen() {
   // Couple Detail Modal
   const renderCoupleDetailModal = () => {
     if (!selectedCouple) return null;
-    
+
     const details = coupleDetails[selectedCouple.coupleId];
-    
+
     // Close modal handler
     const handleCloseModal = () => {
       setShowDetailModal(false);
       setShowStepHistory(false);
       setShowPastLogs(false);
     };
-    
+
     // Format step count for display
     const formatStepCount = (count: number, status: LogStatus): string => {
       if (status === 'pending' || count === 0) return 'Not logged';
       return count.toLocaleString() + ' steps';
     };
-    
+
     // Format exercise duration
     const formatExercise = (duration: number | undefined, calories: number | undefined, status: LogStatus): string => {
       if (!duration || duration === 0) return status === 'pending' ? 'Not logged' : 'Not logged';
       return `${duration} min (${calories || 0} cal)`;
     };
-    
+
     // Generate logs based on actual data
     const logsToShow: DetailedLogEntry[] = [
       { metric: 'Steps', icon: 'walk', iconFamily: 'MaterialCommunityIcons' as const, maleValue: formatStepCount(selectedCouple.steps.maleCount, selectedCouple.steps.male), femaleValue: formatStepCount(selectedCouple.steps.femaleCount, selectedCouple.steps.female), maleStatus: selectedCouple.steps.male, femaleStatus: selectedCouple.steps.female, unit: 'steps' },
       { metric: 'Exercise', icon: 'fitness', iconFamily: 'Ionicons' as const, maleValue: formatExercise(selectedCouple.exercise.maleDuration, selectedCouple.exercise.maleCalories, selectedCouple.exercise.male), femaleValue: formatExercise(selectedCouple.exercise.femaleDuration, selectedCouple.exercise.femaleCalories, selectedCouple.exercise.female), maleStatus: selectedCouple.exercise.male, femaleStatus: selectedCouple.exercise.female, unit: '' },
       { metric: 'Diet Log', icon: 'nutrition', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.diet.male === 'complete' ? '3 meals' : selectedCouple.diet.male === 'partial' ? '1 meal' : 'Not logged', femaleValue: selectedCouple.diet.female === 'complete' ? '3 meals' : selectedCouple.diet.female === 'partial' ? '1 meal' : 'Not logged', maleStatus: selectedCouple.diet.male, femaleStatus: selectedCouple.diet.female, unit: '' },
-      { metric: 'Weight', icon: 'scale-bathroom', iconFamily: 'MaterialCommunityIcons' as const, maleValue: details?.maleWeight ? `${details.maleWeight} kg` : (selectedCouple.weight.male === 'pending' ? 'Pending' : 'Not logged'), femaleValue: details?.femaleWeight ? `${details.femaleWeight} kg` : (selectedCouple.weight.female === 'pending' ? 'Pending' : 'Not logged'), maleStatus: selectedCouple.weight.male, femaleStatus: selectedCouple.weight.female, unit: '' },
+      { metric: 'High Knees', icon: 'run-fast', iconFamily: 'MaterialCommunityIcons' as const, maleValue: selectedCouple.highKnees.maleDuration > 0 ? `${selectedCouple.highKnees.maleDuration} min` : 'Not logged', femaleValue: selectedCouple.highKnees.femaleDuration > 0 ? `${selectedCouple.highKnees.femaleDuration} min` : 'Not logged', maleStatus: selectedCouple.highKnees.male, femaleStatus: selectedCouple.highKnees.female, unit: 'min' },
       { metric: 'Couple Walking', icon: 'people', iconFamily: 'Ionicons' as const, maleValue: selectedCouple.coupleWalking === 'complete' ? '30 min' : selectedCouple.coupleWalking === 'partial' ? '15 min' : 'Not done', femaleValue: selectedCouple.coupleWalking === 'complete' ? '30 min' : selectedCouple.coupleWalking === 'partial' ? '15 min' : 'Not done', maleStatus: selectedCouple.coupleWalking, femaleStatus: selectedCouple.coupleWalking, unit: '' },
       // Feedback metric removed from monitoring
     ];
@@ -2185,9 +2228,9 @@ export default function AdminMonitoringScreen() {
                         <Text style={styles.infoCardTitle}>{details.maleName}</Text>
                         <Text style={styles.infoCardSubtitle}>{details.maleEmail}</Text>
                         <Text style={styles.infoCardSubtitle}>{details.malePhone}</Text>
-                        {details.maleWeight && (
-                          <Text style={styles.infoCardSubtitle}>Last weight: {details.maleWeight} kg ({details.maleLastWeightDate})</Text>
-                        )}
+                        {details.maleHighKneesDuration ? (
+                          <Text style={styles.infoCardSubtitle}>Today's High Knees: {details.maleHighKneesDuration} min</Text>
+                        ) : null}
                         <View style={[styles.infoStatusBadge, { backgroundColor: selectedCouple.maleStatus === 'Active' ? COLORS.success + '20' : COLORS.error + '20' }]}>
                           <Text style={[styles.infoStatusText, { color: selectedCouple.maleStatus === 'Active' ? COLORS.success : COLORS.error }]}>
                             {selectedCouple.maleStatus}
@@ -2203,9 +2246,9 @@ export default function AdminMonitoringScreen() {
                         <Text style={styles.infoCardTitle}>{details.femaleName}</Text>
                         <Text style={styles.infoCardSubtitle}>{details.femaleEmail}</Text>
                         <Text style={styles.infoCardSubtitle}>{details.femalePhone}</Text>
-                        {details.femaleWeight && (
-                          <Text style={styles.infoCardSubtitle}>Last weight: {details.femaleWeight} kg ({details.femaleLastWeightDate})</Text>
-                        )}
+                        {details.femaleHighKneesDuration ? (
+                          <Text style={styles.infoCardSubtitle}>Today's High Knees: {details.femaleHighKneesDuration} min</Text>
+                        ) : null}
                         <View style={[styles.infoStatusBadge, { backgroundColor: selectedCouple.femaleStatus === 'Active' ? COLORS.success + '20' : COLORS.error + '20' }]}>
                           <Text style={[styles.infoStatusText, { color: selectedCouple.femaleStatus === 'Active' ? COLORS.success : COLORS.error }]}>
                             {selectedCouple.femaleStatus}
@@ -2214,9 +2257,9 @@ export default function AdminMonitoringScreen() {
                       </View>
                     </View>
                   </View>
-                  
+
                   {/* View Couple Dashboard Button */}
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.viewCoupleDashboardButton}
                     onPress={() => {
                       handleCloseModal();
@@ -2226,7 +2269,7 @@ export default function AdminMonitoringScreen() {
                     <Ionicons name="analytics-outline" size={18} color="#fff" />
                     <Text style={styles.viewCoupleDashboardText}>View Couple Dashboard</Text>
                   </TouchableOpacity>
-                  
+
                   <View style={styles.enrollmentInfo}>
                     <Ionicons name="calendar" size={16} color={COLORS.textMuted} />
                     <Text style={styles.enrollmentText}>Enrolled: {details.enrollmentDate}</Text>
@@ -2256,7 +2299,7 @@ export default function AdminMonitoringScreen() {
               {!showPastLogs ? (
                 <View style={styles.logDetailsSection}>
                   <Text style={styles.sectionLabel}>Daily Log - {selectedDate}</Text>
-                  
+
                   {/* Log Table Header */}
                   <View style={styles.logTableHeader}>
                     <Text style={[styles.logTableHeaderText, { flex: 2 }]}>Metric</Text>
@@ -2293,11 +2336,11 @@ export default function AdminMonitoringScreen() {
                       </View>
                     </View>
                   ))}
-                  
+
                   {/* Step History Expandable Section */}
                   {((details?.maleStepEntries?.length ?? 0) > 0 || (details?.femaleStepEntries?.length ?? 0) > 0) && (
                     <View style={styles.stepHistorySection}>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.stepHistoryToggle}
                         onPress={() => setShowStepHistory(!showStepHistory)}
                       >
@@ -2305,13 +2348,13 @@ export default function AdminMonitoringScreen() {
                           <MaterialCommunityIcons name="walk" size={20} color={COLORS.primary} />
                           <Text style={styles.stepHistoryTitle}>Step Log History</Text>
                         </View>
-                        <Ionicons 
-                          name={showStepHistory ? 'chevron-up' : 'chevron-down'} 
-                          size={20} 
-                          color={COLORS.textSecondary} 
+                        <Ionicons
+                          name={showStepHistory ? 'chevron-up' : 'chevron-down'}
+                          size={20}
+                          color={COLORS.textSecondary}
                         />
                       </TouchableOpacity>
-                      
+
                       {showStepHistory && (
                         <View style={styles.stepHistoryContent}>
                           {/* Male Step Entries */}
@@ -2333,11 +2376,11 @@ export default function AdminMonitoringScreen() {
                                   </View>
                                   <View style={styles.stepEntryTime}>
                                     <Text style={styles.stepEntryTimeText}>
-                                      {entry.loggedAt?.toDate ? 
-                                        new Date(entry.loggedAt.toDate()).toLocaleTimeString('en-US', { 
-                                          hour: '2-digit', 
-                                          minute: '2-digit' 
-                                        }) : 
+                                      {entry.loggedAt?.toDate ?
+                                        new Date(entry.loggedAt.toDate()).toLocaleTimeString('en-US', {
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        }) :
                                         '--:--'
                                       }
                                     </Text>
@@ -2349,7 +2392,7 @@ export default function AdminMonitoringScreen() {
                               ))}
                             </View>
                           )}
-                          
+
                           {/* Female Step Entries */}
                           {details?.femaleStepEntries && details.femaleStepEntries.length > 0 && (
                             <View style={styles.stepEntryGroup}>
@@ -2369,11 +2412,11 @@ export default function AdminMonitoringScreen() {
                                   </View>
                                   <View style={styles.stepEntryTime}>
                                     <Text style={styles.stepEntryTimeText}>
-                                      {entry.loggedAt?.toDate ? 
-                                        new Date(entry.loggedAt.toDate()).toLocaleTimeString('en-US', { 
-                                          hour: '2-digit', 
-                                          minute: '2-digit' 
-                                        }) : 
+                                      {entry.loggedAt?.toDate ?
+                                        new Date(entry.loggedAt.toDate()).toLocaleTimeString('en-US', {
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        }) :
                                         '--:--'
                                       }
                                     </Text>
@@ -2385,12 +2428,12 @@ export default function AdminMonitoringScreen() {
                               ))}
                             </View>
                           )}
-                          
+
                           {/* Empty State */}
-                          {(!details?.maleStepEntries || details.maleStepEntries.length === 0) && 
-                           (!details?.femaleStepEntries || details.femaleStepEntries.length === 0) && (
-                            <Text style={styles.noStepEntries}>No step entries logged today</Text>
-                          )}
+                          {(!details?.maleStepEntries || details.maleStepEntries.length === 0) &&
+                            (!details?.femaleStepEntries || details.femaleStepEntries.length === 0) && (
+                              <Text style={styles.noStepEntries}>No step entries logged today</Text>
+                            )}
                         </View>
                       )}
                     </View>
@@ -2399,7 +2442,7 @@ export default function AdminMonitoringScreen() {
               ) : (
                 <View style={styles.pastLogsSection}>
                   <Text style={styles.sectionLabel}>Past 14 Days Log History</Text>
-                  
+
                   {/* Past Logs Header */}
                   <View style={styles.pastLogsHeader}>
                     <Text style={[styles.pastLogsHeaderText, { width: 90 }]}>Date</Text>
@@ -2437,8 +2480,8 @@ export default function AdminMonitoringScreen() {
                       </View>
                       <View style={[styles.pastLogCell, { flex: 1 }]}>
                         <View style={styles.pastLogIcons}>
-                          <Ionicons name={getStatusIcon(log.weight.male).icon as any} size={14} color={getStatusIcon(log.weight.male).color} />
-                          <Ionicons name={getStatusIcon(log.weight.female).icon as any} size={14} color={getStatusIcon(log.weight.female).color} />
+                          <Ionicons name={getStatusIcon(log.highKnees.male).icon as any} size={14} color={getStatusIcon(log.highKnees.male).color} />
+                          <Ionicons name={getStatusIcon(log.highKnees.female).icon as any} size={14} color={getStatusIcon(log.highKnees.female).color} />
                         </View>
                       </View>
                     </View>
@@ -2494,8 +2537,8 @@ export default function AdminMonitoringScreen() {
 
   return (
     <View style={styles.container}>
-          {renderHeader()}
-          {renderDatePicker()}
+      {renderHeader()}
+      {renderDatePicker()}
 
       {isLoading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -2547,7 +2590,7 @@ export default function AdminMonitoringScreen() {
 
       {/* Couple Detail Modal */}
       {renderCoupleDetailModal()}
-      
+
       {/* Export Modal */}
       {renderExportModal()}
     </View>

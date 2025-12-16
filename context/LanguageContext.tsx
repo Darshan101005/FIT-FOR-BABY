@@ -43,7 +43,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.close': 'Close',
     'common.today': 'Today',
     'common.yesterday': 'Yesterday',
-    
+
     // Weekday abbreviations
     'common.sun': 'S',
     'common.mon': 'M',
@@ -52,7 +52,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.thu': 'T',
     'common.fri': 'F',
     'common.sat': 'S',
-    
+
     // Navigation / Bottom Bar
     'nav.home': 'Home',
     'nav.progress': 'Progress',
@@ -61,7 +61,7 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.appointments': 'Appointments',
     'nav.schedule': 'Schedule',
     'nav.messages': 'Messages',
-    
+
     // Home Screen
     'home.welcome': 'Welcome',
     'home.goodMorning': 'Good Morning',
@@ -123,7 +123,7 @@ const translations: Record<Language, Record<string, string>> = {
     'home.viewAllVisits': 'View all',
     'home.visits': 'visits',
     'home.nursingDeptVisit': 'Nursing Department Visit',
-    
+
     // Day Names Short
     'days.mon': 'Mon',
     'days.tue': 'Tue',
@@ -132,7 +132,7 @@ const translations: Record<Language, Record<string, string>> = {
     'days.fri': 'Fri',
     'days.sat': 'Sat',
     'days.sun': 'Sun',
-    
+
     // Day Names Full
     'daysFull.sunday': 'Sunday',
     'daysFull.monday': 'Monday',
@@ -141,7 +141,7 @@ const translations: Record<Language, Record<string, string>> = {
     'daysFull.thursday': 'Thursday',
     'daysFull.friday': 'Friday',
     'daysFull.saturday': 'Saturday',
-    
+
     // Month Names Short
     'months.jan': 'JAN',
     'months.feb': 'FEB',
@@ -155,7 +155,7 @@ const translations: Record<Language, Record<string, string>> = {
     'months.oct': 'OCT',
     'months.nov': 'NOV',
     'months.dec': 'DEC',
-    
+
     // Profile Screen
     'profile.title': 'Profile',
     'profile.editProfile': 'Edit Profile',
@@ -219,7 +219,7 @@ const translations: Record<Language, Record<string, string>> = {
     'profile.galleryPermissionMsg': 'Please allow access to your photo library to upload a profile picture.',
     'profile.cameraPermissionMsg': 'Please allow camera access to take a profile picture.',
     'profile.notProvided': 'Not provided',
-    
+
     // Progress Screen
     'progress.title': 'Progress',
     'progress.weekly': 'Weekly',
@@ -255,7 +255,7 @@ const translations: Record<Language, Record<string, string>> = {
     'progress.threeMonth': '3-Month',
     'progress.allTime': 'All Time',
     'progress.minutes': 'Minutes',
-    
+
     // Achievement Titles
     'achievement.7DayStreak.title': '7-Day Streak',
     'achievement.7DayStreak.desc': 'Logged activity daily',
@@ -275,7 +275,7 @@ const translations: Record<Language, Record<string, string>> = {
     'achievement.firstExercise.title': 'First Exercise',
     'achievement.firstExercise.desc': 'Logged first workout',
     'achievement.firstExercise.req': 'Log your first exercise',
-    
+
     // Diet Plan
     'diet.title': 'Diet Plan',
     'diet.breakfast': 'Breakfast',
@@ -295,7 +295,7 @@ const translations: Record<Language, Record<string, string>> = {
     'diet.tip1': 'Drink plenty of water between meals',
     'diet.tip2': 'Eat slowly and chew your food thoroughly',
     'diet.tip3': 'Avoid heavy meals close to bedtime',
-    
+
     // Logging
     'log.steps.title': 'Log Steps',
     'log.steps.manual': 'Manual Entry',
@@ -313,7 +313,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log.food.searchFood': 'Search food...',
     'log.food.recentFoods': 'Recent Foods',
     'log.food.addFood': 'Add Food',
-    
+
     // Appointments
     'appointments.title': 'Appointments',
     'appointments.upcoming': 'Upcoming',
@@ -326,7 +326,7 @@ const translations: Record<Language, Record<string, string>> = {
     'appointments.nurse': 'Nurse Visit',
     'appointments.counsellor': 'Counsellor',
     'appointments.noAppointments': 'No appointments scheduled',
-    
+
     // Full month names
     'appointments.monthFull.jan': 'January',
     'appointments.monthFull.feb': 'February',
@@ -340,20 +340,20 @@ const translations: Record<Language, Record<string, string>> = {
     'appointments.monthFull.oct': 'October',
     'appointments.monthFull.nov': 'November',
     'appointments.monthFull.dec': 'December',
-    
+
     // Appointment status
     'appointments.statusConfirmed': 'Confirmed',
     'appointments.statusScheduled': 'Scheduled',
     'appointments.doctorPlaceholder': 'Dr. Name',
     'appointments.purposePlaceholder': 'e.g., Regular checkup',
-    
+
     // Chat / Messages
     'chat.title': 'Messages',
     'chat.support': 'Support Chat',
     'chat.typeMessage': 'Type a message...',
     'chat.send': 'Send',
     'chat.noMessages': 'No messages yet',
-    
+
     // Feedback
     'feedback.title': 'Send Feedback',
     'feedback.subtitle': "We'd love to hear from you! Your feedback helps us improve.",
@@ -380,7 +380,7 @@ const translations: Record<Language, Record<string, string>> = {
     'feedback.okay': 'Okay',
     'feedback.good': 'Good',
     'feedback.excellent': 'Excellent',
-    
+
     // Device Management
     'device.title': 'Device Management',
     'device.subtitle': 'Manage your active sessions and devices',
@@ -414,7 +414,7 @@ const translations: Record<Language, Record<string, string>> = {
     'device.info1': 'All your active sessions are shown here',
     'device.info2': 'You can remotely logout from other devices',
     'device.info3': 'Secure your account by logging out unused devices',
-    
+
     // About
     'about.title': 'About',
     'about.version': 'Version',
@@ -444,7 +444,7 @@ const translations: Record<Language, Record<string, string>> = {
     'about.devPlatform': 'Development platform',
     'about.backendDb': 'Backend & Database',
     'about.imageStorage': 'Image storage',
-    
+
     // Contact Support
     'support.title': 'Contact Support',
     'support.subtitle': 'Request a callback or video meeting',
@@ -476,13 +476,13 @@ const translations: Record<Language, Record<string, string>> = {
     'support.pendingWarning': 'You already have a pending request. Please wait for it to be processed.',
     'support.confirmCancel': 'Are you sure you want to cancel this request?',
     'support.confirmDelete': 'Are you sure you want to delete this request?',
-    
+
     // Errors
     'error.network': 'Network error. Please check your connection.',
     'error.unknown': 'Something went wrong. Please try again.',
     'error.invalidInput': 'Please enter valid information.',
     'error.sessionExpired': 'Session expired. Please login again.',
-    
+
     // Additional Home
     'home.trackHealthJourney': 'Track your health journey',
     'home.noWeightData': 'No weight data yet',
@@ -501,7 +501,7 @@ const translations: Record<Language, Record<string, string>> = {
     'home.listenToMusic': 'Listen to your favorite music for a mood lift.',
     'home.tryCycling': 'Try cycling or another fun activity today.',
     'home.limitProcessedFoods': 'Limit processed foods and opt for whole grains.',
-    
+
     // Log Steps Additional
     'log.steps.stepCounter': 'Step Counter Image',
     'log.steps.stepCounterDesc': 'Upload a photo of your step counter (optional)',
@@ -517,7 +517,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log.steps.enterValidSteps': 'Please enter a valid step count',
     'log.steps.successMessage': 'Steps logged successfully!',
     'log.steps.entryDeleted': 'Entry deleted',
-    
+
     // Log Exercise Additional
     'log.exercise.selectType': 'Select exercise type',
     'log.exercise.walking': 'Walking',
@@ -572,7 +572,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log.exercise.savedSuccess': 'Exercise saved successfully!',
     'log.exercise.saveFailed': 'Failed to save exercise. Please try again.',
     'log.exercise.min': 'min',
-    
+
     // Log Weight Additional
     'log.weight.currentWeight': 'Current Weight',
     'log.weight.kg': 'kg',
@@ -630,7 +630,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log.weight.delete': 'Delete',
     'log.weight.kgLost': 'kg lost',
     'log.weight.kgGained': 'kg gained',
-    
+
     // Log Food Additional
     'log.food.mealType': 'Meal Type',
     'log.food.breakfast': 'Breakfast',
@@ -674,7 +674,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log.food.selectCategory': 'Select Category',
     'log.food.customServingDetails': 'Custom Serving Details',
     'log.food.grams': 'grams',
-    
+
     // Messages/Chat Additional
     'messages.title': 'Messages',
     'messages.noConversations': 'No conversations yet',
@@ -706,7 +706,7 @@ const translations: Record<Language, Record<string, string>> = {
     'messages.chatWithSupport': 'Chat with Support',
     'messages.welcomeMessage': 'Hello! Welcome to Fit for Baby support. How can we help you today?',
     'messages.chatWithSupportCouncellors': 'Chat with support & counsellors',
-    
+
     // Appointments Additional
     'appointments.doctorVisit': 'Doctor Visit',
     'appointments.nurseVisit': 'Nurse Visit',
@@ -756,7 +756,7 @@ const translations: Record<Language, Record<string, string>> = {
     'appointments.appointmentRemoved': 'Appointment removed',
     'appointments.failedToRemove': 'Failed to remove appointment',
     'appointments.cancelledVisits': 'Cancelled Visits',
-    
+
     // Help Center
     'help.title': 'Help Center',
     'help.searchPlaceholder': 'Search for help...',
@@ -773,21 +773,17 @@ const translations: Record<Language, Record<string, string>> = {
     'help.reachOut': 'Our support team is here to help you',
     'help.noResults': 'No results found',
     'help.messageUs': 'Message Us',
-    
+
     // FAQs
-    'faq.1.question': 'How do I sync with my partner?',
-    'faq.1.answer': 'Go to Profile → Partner Settings → Tap "Connect Partner" → Share the generated code with your partner. They enter the code on their device to connect.',
-    'faq.2.question': 'How do I log my daily food intake?',
-    'faq.2.answer': 'Go to the Home screen and tap "Log Food". You can search for foods, scan barcodes, or add custom meals. All entries are saved to your daily log.',
-    'faq.3.question': 'How do I set weight goals?',
-    'faq.3.answer': 'Navigate to Profile → Goals → Weight Goal. Enter your target weight and timeline. The app will calculate a safe and healthy plan for you.',
-    'faq.4.question': 'How do I book an appointment with a counsellor?',
-    'faq.4.answer': 'Go to Appointments from the home screen, select an available slot, choose your preferred counsellor, and confirm your booking.',
-    'faq.5.question': 'How do I track my walking progress?',
-    'faq.5.answer': 'Your steps are automatically tracked if you allow health permissions. View your progress in the Progress section on the home screen.',
-    'faq.6.question': 'Can I export my health data?',
-    'faq.6.answer': 'Yes! Go to Profile → Settings → Export Data. You can download your data as a PDF or share it directly with your healthcare provider.',
-    
+    'faq.1.question': 'How do I log my daily food intake?',
+    'faq.1.answer': 'From the Home screen, tap "Log Food" in the quick actions. Select your meal time (Early Morning, Breakfast, Lunch, etc.), search for foods, select serving sizes, and tap "Log Meal" to save.',
+    'faq.2.question': 'How do I set my health goals?',
+    'faq.2.answer': 'Health goals (Steps, Couple Walking, High Knees) are set by your administrator. You can view your weekly goals in the Progress tab to track how you\'re doing against these targets.',
+    'faq.3.question': 'How do I track my walking progress?',
+    'faq.3.answer': 'From the Home screen, tap "Log Steps" to manually enter your step count. You can optionally upload a photo of your step counter. View your weekly progress in the Progress tab.',
+    'faq.4.question': 'How do I log exercise?',
+    'faq.4.answer': 'From the Home screen, tap "Log Exercise". Choose your exercise type (Couple Walking, High Knees, Yoga, etc.), enter duration and intensity, then save. Partner exercises track if you worked out together.',
+
     // Personal Info
     'personal.title': 'Personal Information',
     'personal.name': 'Name',
@@ -851,7 +847,7 @@ const translations: Record<Language, Record<string, string>> = {
     'personal.statesFound': 'states found',
     'personal.partner': 'Partner',
     'personal.noContactInfo': 'No contact information available',
-    
+
     // Account Settings
     'account.switchProfile': 'Switch Profile',
     'account.partnerSettings': 'Partner Settings',
@@ -863,7 +859,7 @@ const translations: Record<Language, Record<string, string>> = {
     'account.exportData': 'Export My Data',
     'account.personalInfo': 'Personal Information',
     'account.title': 'Account',
-    
+
     // Partner Settings Screen
     'partner.title': 'Partner Settings',
     'partner.you': 'You',
@@ -873,7 +869,7 @@ const translations: Record<Language, Record<string, string>> = {
     'partner.daysTogether': 'Days Together',
     'partner.coupleWalks': 'Couple Walks',
     'partner.goalsAchieved': 'Goals Achieved',
-    
+
     // Progress Additional
     'progress.noDataYet': 'No data yet',
     'progress.startLogging': 'Start logging to see your progress',
@@ -892,7 +888,7 @@ const translations: Record<Language, Record<string, string>> = {
     'progress.coupleJourney': 'Couple Journey',
     'progress.walksTogether': 'Walks Together',
     'progress.weeksTogether': 'weeks together',
-    
+
     // Questionnaire
     'questionnaire.title': 'Health Questionnaire',
     'questionnaire.progress': 'Progress',
@@ -906,7 +902,7 @@ const translations: Record<Language, Record<string, string>> = {
     'questionnaire.submit': 'Submit',
     'questionnaire.required': 'This question is required',
   },
-  
+
   ta: {
     // Common - தமிழ்
     'common.loading': 'ஏற்றுகிறது...',
@@ -931,7 +927,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.close': 'மூடு',
     'common.today': 'இன்று',
     'common.yesterday': 'நேற்று',
-    
+
     // Weekday abbreviations (Tamil single letters)
     'common.sun': 'ஞா',
     'common.mon': 'தி',
@@ -940,7 +936,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.thu': 'வி',
     'common.fri': 'வெ',
     'common.sat': 'ச',
-    
+
     // Navigation / Bottom Bar
     'nav.home': 'முகப்பு',
     'nav.progress': 'முன்னேற்றம்',
@@ -949,7 +945,7 @@ const translations: Record<Language, Record<string, string>> = {
     'nav.appointments': 'சந்திப்புகள்',
     'nav.schedule': 'அட்டவணை',
     'nav.messages': 'செய்திகள்',
-    
+
     // Home Screen
     'home.welcome': 'வரவேற்கிறோம்',
     'home.goodMorning': 'காலை வணக்கம்',
@@ -1011,7 +1007,7 @@ const translations: Record<Language, Record<string, string>> = {
     'home.viewAllVisits': 'அனைத்தையும் காண்',
     'home.visits': 'சந்திப்புகள்',
     'home.nursingDeptVisit': 'செவிலியர் துறை சந்திப்பு',
-    
+
     // Day Names Short
     'days.mon': 'திங்கள்',
     'days.tue': 'செவ்வாய்',
@@ -1020,7 +1016,7 @@ const translations: Record<Language, Record<string, string>> = {
     'days.fri': 'வெள்ளி',
     'days.sat': 'சனி',
     'days.sun': 'ஞாயிறு',
-    
+
     // Day Names Full (Tamil)
     'daysFull.sunday': 'ஞாயிற்றுக்கிழமை',
     'daysFull.monday': 'திங்கட்கிழமை',
@@ -1029,7 +1025,7 @@ const translations: Record<Language, Record<string, string>> = {
     'daysFull.thursday': 'வியாழக்கிழமை',
     'daysFull.friday': 'வெள்ளிக்கிழமை',
     'daysFull.saturday': 'சனிக்கிழமை',
-    
+
     // Month Names Short
     'months.jan': 'ஜன',
     'months.feb': 'பிப்',
@@ -1043,7 +1039,7 @@ const translations: Record<Language, Record<string, string>> = {
     'months.oct': 'அக்',
     'months.nov': 'நவ',
     'months.dec': 'டிச',
-    
+
     // Profile Screen
     'profile.title': 'சுயவிவரம்',
     'profile.editProfile': 'சுயவிவரம் திருத்து',
@@ -1107,7 +1103,7 @@ const translations: Record<Language, Record<string, string>> = {
     'profile.galleryPermissionMsg': 'சுயவிவர படத்தை பதிவேற்ற உங்கள் புகைப்பட நூலகத்திற்கான அணுகலை அனுமதிக்கவும்.',
     'profile.cameraPermissionMsg': 'சுயவிவர படம் எடுக்க கேமரா அணுகலை அனுமதிக்கவும்.',
     'profile.notProvided': 'வழங்கப்படவில்லை',
-    
+
     // Progress Screen
     'progress.title': 'முன்னேற்றம்',
     'progress.weekly': 'வாரந்தோறும்',
@@ -1143,7 +1139,7 @@ const translations: Record<Language, Record<string, string>> = {
     'progress.threeMonth': '3-மாத',
     'progress.allTime': 'எல்லா நேரமும்',
     'progress.minutes': 'நிமிடங்கள்',
-    
+
     // Achievement Titles
     'achievement.7DayStreak.title': '7 நாள் தொடர்',
     'achievement.7DayStreak.desc': 'தினசரி செயல்பாடு பதிவு',
@@ -1163,7 +1159,7 @@ const translations: Record<Language, Record<string, string>> = {
     'achievement.firstExercise.title': 'முதல் உடற்பயிற்சி',
     'achievement.firstExercise.desc': 'முதல் பயிற்சி பதிவு',
     'achievement.firstExercise.req': 'உங்கள் முதல் உடற்பயிற்சியை பதிவு செய்யுங்கள்',
-    
+
     // Diet Plan
     'diet.title': 'உணவு திட்டம்',
     'diet.breakfast': 'காலை உணவு',
@@ -1183,7 +1179,7 @@ const translations: Record<Language, Record<string, string>> = {
     'diet.tip1': 'உணவு இடைவேளைகளில் நிறைய தண்ணீர் குடிக்கவும்',
     'diet.tip2': 'மெதுவாக சாப்பிடுங்கள் மற்றும் உணவை நன்றாக மென்று சாப்பிடுங்கள்',
     'diet.tip3': 'படுக்கைக்கு அருகில் கனமான உணவை தவிர்க்கவும்',
-    
+
     // Logging
     'log.steps.title': 'அடிகள் பதிவு',
     'log.steps.manual': 'கைமுறை பதிவு',
@@ -1201,7 +1197,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log.food.searchFood': 'உணவு தேடு...',
     'log.food.recentFoods': 'சமீபத்திய உணவுகள்',
     'log.food.addFood': 'உணவு சேர்',
-    
+
     // Appointments
     'appointments.title': 'சந்திப்புகள்',
     'appointments.upcoming': 'வரவிருக்கும்',
@@ -1214,7 +1210,7 @@ const translations: Record<Language, Record<string, string>> = {
     'appointments.nurse': 'செவிலியர் சந்திப்பு',
     'appointments.counsellor': 'ஆலோசகர்',
     'appointments.noAppointments': 'சந்திப்புகள் இல்லை',
-    
+
     // Full month names (Tamil)
     'appointments.monthFull.jan': 'ஜனவரி',
     'appointments.monthFull.feb': 'பிப்ரவரி',
@@ -1228,20 +1224,20 @@ const translations: Record<Language, Record<string, string>> = {
     'appointments.monthFull.oct': 'அக்டோபர்',
     'appointments.monthFull.nov': 'நவம்பர்',
     'appointments.monthFull.dec': 'டிசம்பர்',
-    
+
     // Appointment status (Tamil)
     'appointments.statusConfirmed': 'உறுதிசெய்யப்பட்டது',
     'appointments.statusScheduled': 'திட்டமிடப்பட்டது',
     'appointments.doctorPlaceholder': 'டாக்டர் பெயர்',
     'appointments.purposePlaceholder': 'எ.கா., வழக்கமான சோதனை',
-    
+
     // Chat / Messages
     'chat.title': 'செய்திகள்',
     'chat.support': 'ஆதரவு அரட்டை',
     'chat.typeMessage': 'செய்தி தட்டச்சு செய்யவும்...',
     'chat.send': 'அனுப்பு',
     'chat.noMessages': 'செய்திகள் இல்லை',
-    
+
     // Feedback
     'feedback.title': 'கருத்து அனுப்பு',
     'feedback.subtitle': 'உங்களிடமிருந்து கேட்க விரும்புகிறோம்! உங்கள் கருத்து எங்களை மேம்படுத்த உதவுகிறது.',
@@ -1268,7 +1264,7 @@ const translations: Record<Language, Record<string, string>> = {
     'feedback.okay': 'சரி',
     'feedback.good': 'நல்லது',
     'feedback.excellent': 'சிறந்தது',
-    
+
     // Device Management
     'device.title': 'சாதன மேலாண்மை',
     'device.subtitle': 'உங்கள் செயலில் உள்ள அமர்வுகளை நிர்வகிக்கவும்',
@@ -1302,7 +1298,7 @@ const translations: Record<Language, Record<string, string>> = {
     'device.info1': 'உங்கள் அனைத்து செயலில் உள்ள அமர்வுகளும் இங்கே காட்டப்படுகின்றன',
     'device.info2': 'மற்ற சாதனங்களிலிருந்து தொலைநிலையில் வெளியேறலாம்',
     'device.info3': 'பயன்படுத்தாத சாதனங்களை வெளியேற்றி உங்கள் கணக்கைப் பாதுகாக்கவும்',
-    
+
     // About
     'about.title': 'பற்றி',
     'about.version': 'பதிப்பு',
@@ -1332,7 +1328,7 @@ const translations: Record<Language, Record<string, string>> = {
     'about.devPlatform': 'மேம்பாட்டு தளம்',
     'about.backendDb': 'பின்னணி & தரவுத்தளம்',
     'about.imageStorage': 'பட சேமிப்பு',
-    
+
     // Contact Support
     'support.title': 'ஆதரவை தொடர்பு',
     'support.subtitle': 'திரும்ப அழைப்பு அல்லது வீடியோ சந்திப்பு கோரு',
@@ -1364,13 +1360,13 @@ const translations: Record<Language, Record<string, string>> = {
     'support.pendingWarning': 'உங்களிடம் ஏற்கனவே நிலுவையில் உள்ள கோரிக்கை உள்ளது. செயலாக்கப்படும் வரை காத்திருக்கவும்.',
     'support.confirmCancel': 'இந்த கோரிக்கையை ரத்து செய்ய விரும்புகிறீர்களா?',
     'support.confirmDelete': 'இந்த கோரிக்கையை நீக்க விரும்புகிறீர்களா?',
-    
+
     // Errors
     'error.network': 'நெட்வொர்க் பிழை. உங்கள் இணைப்பைச் சரிபார்க்கவும்.',
     'error.unknown': 'ஏதோ தவறு நடந்தது. மீண்டும் முயற்சிக்கவும்.',
     'error.invalidInput': 'சரியான தகவலை உள்ளிடவும்.',
     'error.sessionExpired': 'அமர்வு காலாவதியானது. மீண்டும் உள்நுழையவும்.',
-    
+
     // Additional Home
     'home.trackHealthJourney': 'உங்கள் ஆரோக்கிய பயணத்தை கண்காணிக்கவும்',
     'home.noWeightData': 'எடை தரவு இல்லை',
@@ -1389,7 +1385,7 @@ const translations: Record<Language, Record<string, string>> = {
     'home.listenToMusic': 'உங்கள் விருப்பமான இசையை கேட்டு மனநிலையை உயர்த்துங்கள்.',
     'home.tryCycling': 'இன்று சைக்கிள் ஓட்டுதல் அல்லது வேறு ஒரு பொழுதுபோக்கு முயற்சிக்கவும்.',
     'home.limitProcessedFoods': 'செயற்கை உணவுகளை குறைத்து முழு தானியங்களை தேர்வு செய்யவும்.',
-    
+
     // Log Steps Additional
     'log.steps.stepCounter': 'அடிகள் எண்ணி படம்',
     'log.steps.stepCounterDesc': 'உங்கள் அடிகள் எண்ணியின் புகைப்படத்தை பதிவேற்றவும் (விருப்பம்)',
@@ -1405,7 +1401,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log.steps.enterValidSteps': 'சரியான அடிகள் எண்ணிக்கையை உள்ளிடவும்',
     'log.steps.successMessage': 'அடிகள் வெற்றிகரமாக பதிவு செய்யப்பட்டன!',
     'log.steps.entryDeleted': 'பதிவு நீக்கப்பட்டது',
-    
+
     // Log Exercise Additional
     'log.exercise.selectType': 'உடற்பயிற்சி வகையை தேர்வு செய்யவும்',
     'log.exercise.walking': 'நடைப்பயிற்சி',
@@ -1460,7 +1456,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log.exercise.savedSuccess': 'உடற்பயிற்சி வெற்றிகரமாக சேமிக்கப்பட்டது!',
     'log.exercise.saveFailed': 'உடற்பயிற்சி சேமிக்க தவறியது. மீண்டும் முயற்சிக்கவும்.',
     'log.exercise.min': 'நிமி',
-    
+
     // Log Weight Additional
     'log.weight.currentWeight': 'தற்போதைய எடை',
     'log.weight.kg': 'கி.கி',
@@ -1518,7 +1514,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log.weight.delete': 'நீக்கு',
     'log.weight.kgLost': 'கிலோ குறைந்தது',
     'log.weight.kgGained': 'கிலோ அதிகரித்தது',
-    
+
     // Log Food Additional
     'log.food.mealType': 'உணவு வகை',
     'log.food.breakfast': 'காலை உணவு',
@@ -1562,7 +1558,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log.food.selectCategory': 'வகையை தேர்வு செய்யவும்',
     'log.food.customServingDetails': 'தனிப்பயன் பரிமாறல் விவரங்கள்',
     'log.food.grams': 'கிராம்',
-    
+
     // Messages/Chat Additional
     'messages.title': 'செய்திகள்',
     'messages.noConversations': 'உரையாடல்கள் இல்லை',
@@ -1594,7 +1590,7 @@ const translations: Record<Language, Record<string, string>> = {
     'messages.chatWithSupport': 'ஆதரவுடன் அரட்டை',
     'messages.welcomeMessage': 'வணக்கம்! Fit for Baby ஆதரவுக்கு வரவேற்கிறோம். இன்று உங்களுக்கு எப்படி உதவ முடியும்?',
     'messages.chatWithSupportCouncellors': 'ஆதரவு & ஆலோசகர்களுடன் அரட்டை',
-    
+
     // Appointments Additional
     'appointments.doctorVisit': 'மருத்துவர் சந்திப்பு',
     'appointments.nurseVisit': 'செவிலியர் சந்திப்பு',
@@ -1644,7 +1640,7 @@ const translations: Record<Language, Record<string, string>> = {
     'appointments.appointmentRemoved': 'சந்திப்பு நீக்கப்பட்டது',
     'appointments.failedToRemove': 'சந்திப்பை நீக்க முடியவில்லை',
     'appointments.cancelledVisits': 'ரத்து செய்யப்பட்ட சந்திப்புகள்',
-    
+
     // Help Center
     'help.title': 'உதவி மையம்',
     'help.searchPlaceholder': 'உதவி தேடு...',
@@ -1661,21 +1657,17 @@ const translations: Record<Language, Record<string, string>> = {
     'help.reachOut': 'எங்கள் ஆதரவு குழு உங்களுக்கு உதவ தயாராக உள்ளது',
     'help.noResults': 'முடிவுகள் இல்லை',
     'help.messageUs': 'எங்களுக்கு செய்தி அனுப்புங்கள்',
-    
+
     // FAQs
-    'faq.1.question': 'எனது துணையுடன் எப்படி இணைப்பது?',
-    'faq.1.answer': 'சுயவிவரம் → துணை அமைப்புகள் → "துணையை இணை" என்பதைத் தட்டவும் → உருவாக்கப்பட்ட குறியீட்டை உங்கள் துணையுடன் பகிரவும். அவர்கள் தங்கள் சாதனத்தில் குறியீட்டை உள்ளிட்டு இணைக்கலாம்.',
-    'faq.2.question': 'எனது தினசரி உணவை எப்படி பதிவு செய்வது?',
-    'faq.2.answer': 'முகப்பு திரைக்குச் சென்று "உணவு பதிவு" என்பதைத் தட்டவும். உணவுகளைத் தேடலாம், பார்கோடுகளை ஸ்கேன் செய்யலாம் அல்லது தனிப்பயன் உணவுகளைச் சேர்க்கலாம். அனைத்து பதிவுகளும் உங்கள் தினசரி பதிவில் சேமிக்கப்படும்.',
-    'faq.3.question': 'எடை இலக்குகளை எப்படி அமைப்பது?',
-    'faq.3.answer': 'சுயவிவரம் → இலக்குகள் → எடை இலக்கு என்பதற்குச் செல்லவும். உங்கள் இலக்கு எடையையும் காலவரையறையையும் உள்ளிடவும். ஆப்ப் உங்களுக்கு பாதுகாப்பான மற்றும் ஆரோக்கியமான திட்டத்தைக் கணக்கிடும்.',
-    'faq.4.question': 'ஆலோசகருடன் சந்திப்பை எப்படி பதிவு செய்வது?',
-    'faq.4.answer': 'முகப்பு திரையிலிருந்து சந்திப்புகளுக்குச் செல்லவும், கிடைக்கும் நேரத்தைத் தேர்ந்தெடுக்கவும், உங்கள் விருப்பமான ஆலோசகரைத் தேர்வு செய்யவும், பதிவை உறுதிப்படுத்தவும்.',
-    'faq.5.question': 'எனது நடை முன்னேற்றத்தை எப்படி கண்காணிப்பது?',
-    'faq.5.answer': 'ஆரோக்கிய அனுமதிகளை அனுமதித்தால் உங்கள் அடிகள் தானாகவே கண்காணிக்கப்படும். முகப்பு திரையில் உள்ள முன்னேற்றம் பகுதியில் உங்கள் முன்னேற்றத்தைப் பாருங்கள்.',
-    'faq.6.question': 'எனது ஆரோக்கிய தரவை ஏற்றுமதி செய்ய முடியுமா?',
-    'faq.6.answer': 'ஆம்! சுயவிவரம் → அமைப்புகள் → தரவை ஏற்றுமதி செய் என்பதற்குச் செல்லவும். உங்கள் தரவை PDF ஆக பதிவிறக்கலாம் அல்லது உங்கள் சுகாதார வழங்குநருடன் நேரடியாகப் பகிரலாம்.',
-    
+    'faq.1.question': 'எனது தினசரி உணவை எப்படி பதிவு செய்வது?',
+    'faq.1.answer': 'முகப்பு திரையில் "உணவு பதிவு" என்பதைத் தட்டவும். உணவு நேரத்தைத் தேர்ந்தெடுங்கள் (அதிகாலை, காலை உணவு, மதிய உணவு போன்றவை), உணவுகளைத் தேடுங்கள், பரிமாண அளவைத் தேர்ந்தெடுங்கள், "உணவைப் பதிவு செய்" என்பதைத் தட்டவும்.',
+    'faq.2.question': 'எனது ஆரோக்கிய இலக்குகளை எப்படி அமைப்பது?',
+    'faq.2.answer': 'ஆரோக்கிய இலக்குகள் (அடிகள், தம்பதி நடை, உயர் முழங்கால்) உங்கள் நிர்வாகியால் அமைக்கப்படுகின்றன. முன்னேற்றம் தாவலில் உங்கள் வாராந்திர இலக்குகளைப் பார்க்கலாம்.',
+    'faq.3.question': 'எனது நடை முன்னேற்றத்தை எப்படி கண்காணிப்பது?',
+    'faq.3.answer': 'முகப்பு திரையில் "அடிகள் பதிவு" என்பதைத் தட்டி உங்கள் அடி எண்ணிக்கையை கைமுறையாக உள்ளிடவும். விருப்பமாக உங்கள் படிமானியின் புகைப்படத்தைப் பதிவேற்றலாம். முன்னேற்றம் தாவலில் உங்கள் வாராந்திர முன்னேற்றத்தைப் பாருங்கள்.',
+    'faq.4.question': 'உடற்பயிற்சியை எப்படி பதிவு செய்வது?',
+    'faq.4.answer': 'முகப்பு திரையில் "உடற்பயிற்சி பதிவு" என்பதைத் தட்டவும். உடற்பயிற்சி வகையைத் தேர்ந்தெடுங்கள் (தம்பதி நடை, உயர் முழங்கால், யோகா போன்றவை), கால அளவு மற்றும் தீவிரத்தை உள்ளிட்டு சேமிக்கவும்.',
+
     // Personal Info
     'personal.title': 'தனிப்பட்ட தகவல்',
     'personal.name': 'பெயர்',
@@ -1739,7 +1731,7 @@ const translations: Record<Language, Record<string, string>> = {
     'personal.statesFound': 'மாநிலங்கள் கண்டறியப்பட்டன',
     'personal.partner': 'துணை',
     'personal.noContactInfo': 'தொடர்பு தகவல் இல்லை',
-    
+
     // Account Settings
     'account.switchProfile': 'சுயவிவரம் மாற்று',
     'account.partnerSettings': 'துணை அமைப்புகள்',
@@ -1751,7 +1743,7 @@ const translations: Record<Language, Record<string, string>> = {
     'account.exportData': 'என் தரவை ஏற்றுமதி செய்',
     'account.personalInfo': 'தனிப்பட்ட தகவல்',
     'account.title': 'கணக்கு',
-    
+
     // Partner Settings Screen
     'partner.title': 'துணை அமைப்புகள்',
     'partner.you': 'நீங்கள்',
@@ -1761,7 +1753,7 @@ const translations: Record<Language, Record<string, string>> = {
     'partner.daysTogether': 'இணைந்த நாட்கள்',
     'partner.coupleWalks': 'தம்பதி நடை',
     'partner.goalsAchieved': 'அடைந்த இலக்குகள்',
-    
+
     // Progress Additional
     'progress.noDataYet': 'இன்னும் தரவு இல்லை',
     'progress.startLogging': 'உங்கள் முன்னேற்றத்தை பார்க்க பதிவு தொடங்குங்கள்',
@@ -1780,7 +1772,7 @@ const translations: Record<Language, Record<string, string>> = {
     'progress.coupleJourney': 'தம்பதி பயணம்',
     'progress.walksTogether': 'ஒன்றாக நடை',
     'progress.weeksTogether': 'வாரங்கள் இணைந்து',
-    
+
     // Questionnaire
     'questionnaire.title': 'ஆரோக்கிய கேள்வித்தாள்',
     'questionnaire.progress': 'முன்னேற்றம்',
@@ -1858,3 +1850,4 @@ export function useLanguage() {
 
 // Export translations for reference
 export { translations };
+
