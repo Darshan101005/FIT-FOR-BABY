@@ -64,13 +64,13 @@ export default function EnterPinScreen() {
     const loadCoupleData = async () => {
       // First try to get from params
       const paramCoupleId = params.coupleId as string;
-      
+
       if (paramCoupleId) {
         // SECURITY: Validate that this coupleId belongs to the authenticated user
         // Prevent URL manipulation to view other couples' data
         const storedCoupleId = await AsyncStorage.getItem('coupleId');
         const userRole = await AsyncStorage.getItem('userRole');
-        
+
         // Only allow if:
         // 1. User is authenticated (has userRole)
         // 2. The coupleId matches the authenticated user's coupleId
@@ -81,7 +81,7 @@ export default function EnterPinScreen() {
           router.replace('/login');
           return;
         }
-        
+
         // Params are available and validated, use them
         setCoupleData({
           coupleId: paramCoupleId,
@@ -146,11 +146,11 @@ export default function EnterPinScreen() {
   const femaleStatus = coupleData?.femaleStatus || 'active';
   const showProfileSelection = coupleData?.showProfileSelection ?? true;
   const initialGender = coupleData?.initialGender || null;
-  
+
   // Profile selection state
   const [selectedGender, setSelectedGender] = useState<'male' | 'female' | null>(null);
   const [isProfileSelected, setIsProfileSelected] = useState(false);
-  
+
   // Update state when coupleData loads
   useEffect(() => {
     if (coupleData) {
@@ -158,7 +158,7 @@ export default function EnterPinScreen() {
       setIsProfileSelected(!coupleData.showProfileSelection && !!coupleData.initialGender);
     }
   }, [coupleData]);
-  
+
   const [profileData, setProfileData] = useState<ProfileData>({
     name: 'Loading...',
     gender: selectedGender || 'male',
@@ -182,16 +182,16 @@ export default function EnterPinScreen() {
   useEffect(() => {
     const loadProfile = async () => {
       if (!selectedGender || !coupleId) return;
-      
+
       try {
         const couple = await coupleService.get(coupleId);
         if (couple) {
           const user = couple[selectedGender];
           const names = user.name.split(' ');
-          const initials = names.length > 1 
+          const initials = names.length > 1
             ? `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
             : user.name.substring(0, 2).toUpperCase();
-          
+
           setProfileData({
             name: user.name,
             gender: selectedGender,
@@ -203,7 +203,7 @@ export default function EnterPinScreen() {
         console.error('Error loading profile:', error);
       }
     };
-    
+
     if (isProfileSelected && selectedGender) {
       loadProfile();
     }
@@ -218,6 +218,25 @@ export default function EnterPinScreen() {
       setAttempts(0);
     }
   }, [lockTimer, isLocked]);
+
+  // Keyboard support for web/laptop
+  useEffect(() => {
+    if (!isWeb || !isProfileSelected) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Handle number keys (both main keyboard and numpad)
+      if (/^[0-9]$/.test(event.key)) {
+        handleNumberPress(event.key);
+      }
+      // Handle backspace/delete
+      else if (event.key === 'Backspace' || event.key === 'Delete') {
+        handleBackspace();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isProfileSelected, pin, isLocked]); // Re-attach when these change
 
   const getGenderColor = (gender: 'male' | 'female') => {
     return gender === 'male' ? '#3b82f6' : '#ec4899';
@@ -234,7 +253,7 @@ export default function EnterPinScreen() {
 
   const handleNumberPress = (num: string) => {
     if (isLocked) return;
-    
+
     const emptyIndex = pin.findIndex(p => p === '');
     if (emptyIndex === -1) return;
 
@@ -266,7 +285,7 @@ export default function EnterPinScreen() {
 
   const handleBackspace = () => {
     if (isLocked) return;
-    
+
     const lastFilledIndex = pin.map((p, i) => p !== '' ? i : -1).filter(i => i !== -1).pop();
     if (lastFilledIndex === undefined) return;
 
@@ -278,15 +297,15 @@ export default function EnterPinScreen() {
 
   const verifyPin = async (enteredPin: string) => {
     if (!selectedGender) return;
-    
+
     try {
       const isValid = await coupleService.verifyPin(coupleId, selectedGender, enteredPin);
-      
+
       if (isValid) {
         // Success - show animation
         if (!isWeb) Vibration.vibrate(50);
         setIsSuccess(true);
-        
+
         // Animate success
         Animated.spring(successAnim, {
           toValue: 1,
@@ -294,21 +313,21 @@ export default function EnterPinScreen() {
           tension: 50,
           friction: 7,
         }).start();
-        
+
         // Update storage and redirect after animation
         await coupleService.updateLastLogin(coupleId, selectedGender);
-        
+
         // Register this device
         try {
           const browserName = Platform.OS === 'web' ? getBrowserName() : undefined;
           const deviceInfo = {
-            deviceName: Platform.OS === 'web' 
+            deviceName: Platform.OS === 'web'
               ? (navigator?.userAgent?.includes('Mobile') ? 'Mobile Browser' : 'Web Browser')
               : `${Platform.OS === 'ios' ? 'iPhone' : 'Android'} Device`,
-            deviceType: (Platform.OS === 'web' 
+            deviceType: (Platform.OS === 'web'
               ? (navigator?.userAgent?.includes('Mobile') ? 'mobile' : 'desktop')
               : 'mobile') as 'mobile' | 'tablet' | 'desktop' | 'web',
-            os: Platform.OS === 'web' 
+            os: Platform.OS === 'web'
               ? (navigator?.platform || 'Web')
               : `${Platform.OS === 'ios' ? 'iOS' : 'Android'}`,
             osVersion: Platform.OS === 'web' ? undefined : String(Platform.Version),
@@ -321,36 +340,36 @@ export default function EnterPinScreen() {
         } catch (deviceError) {
           console.log('Device registration error (non-critical):', deviceError);
         }
-        
+
         await AsyncStorage.setItem('userRole', 'user');
         await AsyncStorage.setItem('coupleId', coupleId);
         await AsyncStorage.setItem('userGender', selectedGender);
         await AsyncStorage.setItem('userId', profileData.userId);
         await AsyncStorage.setItem('userName', profileData.name);
-        
+
         // Clear intermediate auth state flags
         await AsyncStorage.removeItem('pendingProfileSelection');
         await AsyncStorage.removeItem('quickAccessMode');
-        
+
         // Set flag to force reload UserDataContext on home page
         await AsyncStorage.setItem('forceUserDataReload', 'true');
-        
+
         // Set session expiry (30 days for quick access)
         await setSessionExpiry(true);
-        
+
         // Refresh auth context state to sync with AsyncStorage
         await refreshAuthState();
-        
+
         setTimeout(() => {
           router.replace('/user/home' as any);
         }, 1200);
       } else {
         // Wrong PIN
         if (!isWeb) Vibration.vibrate([0, 100, 50, 100]);
-        
+
         const newAttempts = attempts + 1;
         setAttempts(newAttempts);
-        
+
         if (newAttempts >= 3) {
           setIsLocked(true);
           setLockTimer(30);
@@ -358,7 +377,7 @@ export default function EnterPinScreen() {
         } else {
           setError(`Incorrect PIN. ${3 - newAttempts} attempts remaining.`);
         }
-        
+
         // Shake animation
         Animated.sequence([
           Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
@@ -392,22 +411,22 @@ export default function EnterPinScreen() {
         setError('Account not found. Please try again.');
         return;
       }
-      
+
       const user = couple[gender];
-      
+
       // Check if user is inactive
       if (user.status === 'inactive') {
         setError('This profile is paused. Contact admin.');
         return;
       }
-      
+
       // Update basic info for this session (but NOT userId - that comes after PIN)
       await AsyncStorage.setItem('userRole', 'user');
       await AsyncStorage.setItem('coupleId', coupleId);
       await AsyncStorage.setItem('userGender', gender);
       // Don't set userId yet - that happens after successful PIN verification
       // This keeps the partial auth state until PIN is verified
-      
+
       // Check if password reset is needed (for profile-select mode from password login)
       if (!user.isPasswordReset) {
         // For password reset flow, set full auth since they'll re-enter password
@@ -415,13 +434,13 @@ export default function EnterPinScreen() {
         await AsyncStorage.setItem('userName', user.name);
         await AsyncStorage.removeItem('pendingProfileSelection');
         await AsyncStorage.removeItem('quickAccessMode');
-        
+
         // Refresh auth state so AuthContext knows user is authenticated
         await refreshAuthState();
-        
+
         router.replace({
           pathname: '/reset-password',
-          params: { 
+          params: {
             mode: 'first-login',
             coupleId: coupleId,
             gender: gender,
@@ -429,7 +448,7 @@ export default function EnterPinScreen() {
         });
         return;
       }
-      
+
       // Check if PIN needs to be set
       if (!user.isPinSet) {
         // For PIN setup flow, set full auth since they'll create a new PIN
@@ -437,13 +456,13 @@ export default function EnterPinScreen() {
         await AsyncStorage.setItem('userName', user.name);
         await AsyncStorage.removeItem('pendingProfileSelection');
         await AsyncStorage.removeItem('quickAccessMode');
-        
+
         // Refresh auth state so AuthContext knows user is authenticated
         await refreshAuthState();
-        
+
         router.replace({
           pathname: '/user/manage-pin',
-          params: { 
+          params: {
             mode: 'setup',
             coupleId: coupleId,
             gender: gender,
@@ -451,25 +470,25 @@ export default function EnterPinScreen() {
         });
         return;
       }
-      
+
       // For normal PIN entry - set profile data but keep partial auth state
       // Full auth (userId) will be set after successful PIN verification
       const names = user.name.split(' ');
-      const initials = names.length > 1 
+      const initials = names.length > 1
         ? `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
         : user.name.substring(0, 2).toUpperCase();
-      
+
       setProfileData({
         name: user.name,
         gender: gender,
         userId: user.id,
         initials: initials,
       });
-      
+
       // Mark profile as selected, show PIN entry
       setSelectedGender(gender);
       setIsProfileSelected(true);
-      
+
     } catch (error: any) {
       console.error('Profile selection error:', error);
       setError(error.message || 'Failed to select profile');
@@ -500,10 +519,10 @@ export default function EnterPinScreen() {
                     onPress={handleBackspace}
                     disabled={isLocked}
                   >
-                    <Ionicons 
-                      name="backspace-outline" 
-                      size={28} 
-                      color={isLocked ? colors.textMuted : colors.text} 
+                    <Ionicons
+                      name="backspace-outline"
+                      size={28}
+                      color={isLocked ? colors.textMuted : colors.text}
                     />
                   </TouchableOpacity>
                 );
@@ -512,7 +531,7 @@ export default function EnterPinScreen() {
                 <TouchableOpacity
                   key={colIndex}
                   style={[
-                    styles.numberKey, 
+                    styles.numberKey,
                     { backgroundColor: isDarkMode ? colors.cardBackground : '#f1f5f9' },
                     isLocked && { opacity: 0.5 },
                   ]}
@@ -563,13 +582,13 @@ export default function EnterPinScreen() {
       await AsyncStorage.multiRemove(['quickAccessMode', 'userRole', 'coupleId', 'userGender', 'pendingProfileSelection']);
       router.replace('/login');
     };
-    
+
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Simple back button */}
         <View style={styles.topBar}>
-          <TouchableOpacity 
-            onPress={handleBackToLogin} 
+          <TouchableOpacity
+            onPress={handleBackToLogin}
             style={[styles.backButton, { backgroundColor: isDarkMode ? colors.cardBackground : '#f1f5f9' }]}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -654,21 +673,21 @@ export default function EnterPinScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Success Overlay */}
       {isSuccess && (
-        <Animated.View 
+        <Animated.View
           style={[
             styles.successOverlay,
-            { 
+            {
               backgroundColor: colors.background,
               opacity: successAnim,
             }
           ]}
         >
-          <Animated.View 
+          <Animated.View
             style={[
               styles.successContent,
               {
                 transform: [
-                  { 
+                  {
                     scale: successAnim.interpolate({
                       inputRange: [0, 1],
                       outputRange: [0.5, 1],
@@ -699,10 +718,10 @@ export default function EnterPinScreen() {
               {profileData.initials}
             </Text>
             <View style={[styles.genderBadge, { backgroundColor: getGenderColor(selectedGender || 'male') }]}>
-              <Ionicons 
-                name={selectedGender === 'male' ? 'male' : 'female'} 
-                size={14} 
-                color="#fff" 
+              <Ionicons
+                name={selectedGender === 'male' ? 'male' : 'female'}
+                size={14}
+                color="#fff"
               />
             </View>
           </View>
@@ -717,7 +736,7 @@ export default function EnterPinScreen() {
           {isLocked ? `Locked for ${lockTimer}s` : 'Enter 4-digit PIN'}
         </Text>
 
-        <Animated.View 
+        <Animated.View
           style={[
             styles.pinContainer,
             { transform: [{ translateX: shakeAnim }] },
@@ -728,15 +747,15 @@ export default function EnterPinScreen() {
               key={index}
               style={[
                 styles.pinDot,
-                { 
+                {
                   backgroundColor: isDarkMode ? colors.cardBackground : '#f1f5f9',
                   borderColor: error ? '#ef4444' : colors.border,
                   transform: [
-                    { 
+                    {
                       scale: dotAnims[index].interpolate({
                         inputRange: [0, 1],
                         outputRange: [1, 1.05],
-                      }) 
+                      })
                     }
                   ],
                 },
@@ -745,15 +764,15 @@ export default function EnterPinScreen() {
               <Animated.View
                 style={[
                   styles.pinDotFill,
-                  { 
-                    backgroundColor: '#1f2937', // Black color for filled dots
+                  {
+                    backgroundColor: isDarkMode ? '#ffffff' : '#1f2937', // White in dark mode, dark in light mode
                     opacity: dotAnims[index],
                     transform: [
-                      { 
+                      {
                         scale: dotAnims[index].interpolate({
                           inputRange: [0, 1],
                           outputRange: [0.5, 1],
-                        }) 
+                        })
                       }
                     ],
                   },

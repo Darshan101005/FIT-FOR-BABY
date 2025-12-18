@@ -7,17 +7,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -67,12 +67,12 @@ export default function AdminUsersScreen() {
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const [nextCoupleId, setNextCoupleId] = useState('C_001');
   const [showTempPasswordModal, setShowTempPasswordModal] = useState(false);
-  const [tempPasswordInfo, setTempPasswordInfo] = useState({ 
-    coupleId: '', 
+  const [tempPasswordInfo, setTempPasswordInfo] = useState({
+    coupleId: '',
     maleName: '',
-    maleTempPassword: '', 
+    maleTempPassword: '',
     femaleName: '',
-    femaleTempPassword: '' 
+    femaleTempPassword: ''
   });
   const [currentAdminUid, setCurrentAdminUid] = useState('');
 
@@ -127,6 +127,8 @@ export default function AdminUsersScreen() {
     testDate: new Date().toISOString().split('T')[0],
     notes: '',
   });
+  const [editingTestId, setEditingTestId] = useState<string | null>(null); // For editing existing tests
+  const [isDeletingTest, setIsDeletingTest] = useState(false);
 
   // Enrollment form state
   const [enrollForm, setEnrollForm] = useState({
@@ -145,20 +147,20 @@ export default function AdminUsersScreen() {
   // Load couples from Firestore
   useEffect(() => {
     let isMounted = true;
-    
+
     const loadInitialData = async () => {
       try {
         // Get current admin UID
         const adminUid = await AsyncStorage.getItem('adminUid');
         if (adminUid && isMounted) setCurrentAdminUid(adminUid);
-        
+
         // Get next couple ID
         const nextId = await coupleService.getNextCoupleId();
         if (isMounted) {
           setNextCoupleId(nextId);
           setEnrollForm(prev => ({ ...prev, coupleId: nextId }));
         }
-        
+
         // Load all admins to map UID to names
         const allAdmins = await adminService.getAll();
         if (isMounted) {
@@ -173,9 +175,9 @@ export default function AdminUsersScreen() {
         // Don't show error toast for initial data load - not critical
       }
     };
-    
+
     loadInitialData();
-    
+
     // Subscribe to real-time updates
     const unsubscribe = coupleService.subscribe(
       (coupleList) => {
@@ -191,7 +193,7 @@ export default function AdminUsersScreen() {
           // Still set loading to false and show empty state
           setCouples([]);
           setLoading(false);
-          
+
           // Only show error if it's a permission/auth error (not empty collection)
           const errorMessage = error?.message?.toLowerCase() || '';
           if (errorMessage.includes('permission') || errorMessage.includes('unauthorized')) {
@@ -202,7 +204,7 @@ export default function AdminUsersScreen() {
         }
       }
     );
-    
+
     return () => {
       isMounted = false;
       unsubscribe();
@@ -245,19 +247,19 @@ export default function AdminUsersScreen() {
   const filteredCouples = couples.filter(couple => {
     // Add null safety checks
     if (!couple || !couple.male || !couple.female) return false;
-    
-    const matchesSearch = 
+
+    const matchesSearch =
       (couple.coupleId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (couple.male?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (couple.female?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (couple.male?.phone || '').includes(searchQuery) ||
       (couple.female?.phone || '').includes(searchQuery);
-    
-    const matchesStatus = filterStatus === 'all' || 
+
+    const matchesStatus = filterStatus === 'all' ||
       couple.status === filterStatus ||
-      couple.male?.status === filterStatus || 
+      couple.male?.status === filterStatus ||
       couple.female?.status === filterStatus;
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -277,19 +279,46 @@ export default function AdminUsersScreen() {
         showToast('Please enter names for both male and female', 'error');
         return;
       }
-      
+
       // Validate contact info - at least 1 mobile AND 1 email between the couple
       if (!validateContactInfo()) {
         showToast('Couple must have at least 1 mobile number AND 1 email between them', 'error');
         return;
       }
-      
+
       setActionLoading(true);
-      
+
       try {
+        // Check for duplicate phone numbers and emails
+        const duplicateCheck = await coupleService.checkDuplicateCredentials(
+          enrollForm.malePhone,
+          enrollForm.maleEmail,
+          enrollForm.femalePhone,
+          enrollForm.femaleEmail
+        );
+
+        if (duplicateCheck.isDuplicate) {
+          // Build error message with all conflicts
+          const conflictMessages = duplicateCheck.conflicts.map(conflict => {
+            const fieldLabels: Record<string, string> = {
+              malePhone: 'Male phone',
+              maleEmail: 'Male email',
+              femalePhone: 'Female phone',
+              femaleEmail: 'Female email',
+            };
+            return `${fieldLabels[conflict.field]} "${conflict.value}" is already used by ${conflict.conflictingUserName} (${conflict.conflictingCoupleId})`;
+          });
+
+          // Show first conflict as toast, log all
+          showToast(conflictMessages[0], 'error');
+          console.warn('Duplicate credentials found:', conflictMessages);
+          setActionLoading(false);
+          return;
+        }
+
         // Get current admin name
         const currentAdminName = adminsMap[currentAdminUid] || 'Admin';
-        
+
         // Create couple in Firestore
         const result = await coupleService.create({
           coupleId: enrollForm.coupleId,
@@ -309,7 +338,7 @@ export default function AdminUsersScreen() {
             age: enrollForm.femaleAge ? parseInt(enrollForm.femaleAge) : undefined,
           },
         });
-        
+
         // Show temp password modal with individual passwords
         setTempPasswordInfo({
           coupleId: result.coupleId,
@@ -320,7 +349,7 @@ export default function AdminUsersScreen() {
         });
         setShowEnrollModal(false);
         setShowTempPasswordModal(true);
-        
+
         // Reset form
         setEnrollStep(1);
         const newNextId = await coupleService.getNextCoupleId();
@@ -337,7 +366,7 @@ export default function AdminUsersScreen() {
           femalePhone: '',
           femaleAge: '',
         });
-        
+
         showToast(`Couple ${result.coupleId} enrolled successfully!`, 'success');
       } catch (error: any) {
         console.error('Error enrolling couple:', error);
@@ -353,7 +382,7 @@ export default function AdminUsersScreen() {
       const couple = couples.find(c => c.coupleId === coupleId);
       const userName = couple ? couple[gender].name : '';
       const userId = `${coupleId}_${gender.charAt(0).toUpperCase()}`;
-      
+
       switch (action) {
         case 'edit':
           if (couple) {
@@ -386,7 +415,7 @@ export default function AdminUsersScreen() {
           setActionLoading(true);
           const newPassword = await coupleService.forcePasswordReset(coupleId, gender);
           // Show single user password reset modal
-          setTempPasswordInfo({ 
+          setTempPasswordInfo({
             coupleId: coupleId,
             maleName: gender === 'male' ? userName : '',
             maleTempPassword: gender === 'male' ? newPassword : '',
@@ -425,14 +454,36 @@ export default function AdminUsersScreen() {
   // Handle save edit profile
   const handleSaveEdit = async () => {
     if (!editingUser) return;
-    
-      try {
+
+    try {
       setActionLoading(true);
       const { coupleId, gender } = editingUser;
-      
+
+      // Check for duplicate phone/email (exclude current couple)
+      if (editForm.phone.trim() || editForm.email.trim()) {
+        const duplicateCheck = await coupleService.checkDuplicateCredentials(
+          gender === 'male' ? editForm.phone : undefined,
+          gender === 'male' ? editForm.email : undefined,
+          gender === 'female' ? editForm.phone : undefined,
+          gender === 'female' ? editForm.email : undefined,
+          coupleId // Exclude current couple
+        );
+
+        if (duplicateCheck.isDuplicate) {
+          const conflict = duplicateCheck.conflicts[0];
+          const fieldLabel = conflict.field.includes('Phone') ? 'Phone' : 'Email';
+          showToast(
+            `${fieldLabel} "${conflict.value}" is already used by ${conflict.conflictingUserName} (${conflict.conflictingCoupleId})`,
+            'error'
+          );
+          setActionLoading(false);
+          return;
+        }
+      }
+
       // Build update object with only changed fields
       const updates: Record<string, any> = {};
-      
+
       if (editForm.name.trim()) updates[`${gender}.name`] = editForm.name.trim();
       if (editForm.email.trim()) updates[`${gender}.email`] = editForm.email.trim();
       if (editForm.phone.trim()) updates[`${gender}.phone`] = editForm.phone.trim();
@@ -440,7 +491,7 @@ export default function AdminUsersScreen() {
       if (editForm.dateOfBirth) updates[`${gender}.dateOfBirth`] = editForm.dateOfBirth;
       if (editForm.weight) updates[`${gender}.weight`] = parseFloat(editForm.weight);
       if (editForm.height) updates[`${gender}.height`] = parseFloat(editForm.height);
-      
+
       // Calculate BMI if both weight and height are provided
       if (editForm.weight && editForm.height) {
         const weightKg = parseFloat(editForm.weight);
@@ -448,7 +499,7 @@ export default function AdminUsersScreen() {
         const bmi = (weightKg / (heightM * heightM)).toFixed(1);
         updates[`${gender}.bmi`] = bmi;
       }
-      
+
       // Address fields
       if (editForm.addressLine1 || editForm.addressLine2 || editForm.city || editForm.state || editForm.pincode) {
         updates[`${gender}.address`] = {
@@ -459,7 +510,7 @@ export default function AdminUsersScreen() {
           pincode: editForm.pincode.trim(),
         };
       }
-      
+
       // Female fertility fields (only for female users)
       if (gender === 'female') {
         if (editForm.dateOfOvarianInduction) updates[`${gender}.dateOfOvarianInduction`] = editForm.dateOfOvarianInduction.trim();
@@ -468,9 +519,9 @@ export default function AdminUsersScreen() {
         if (editForm.typeOfInfertility) updates[`${gender}.typeOfInfertility`] = editForm.typeOfInfertility.trim();
         if (editForm.lastMenstrualPeriod) updates[`${gender}.lastMenstrualPeriod`] = editForm.lastMenstrualPeriod.trim();
       }
-      
+
       await coupleService.updateUserField(coupleId, gender, updates);
-      
+
       setShowEditModal(false);
       setEditingUser(null);
       showToast('Profile updated successfully', 'success');
@@ -496,7 +547,7 @@ export default function AdminUsersScreen() {
     });
     setShowTestModal(true);
     setIsLoadingTests(true);
-    
+
     try {
       const tests = await lipidTestService.getTestResults(coupleId, gender);
       setExistingTests(tests);
@@ -514,11 +565,11 @@ export default function AdminUsersScreen() {
       showToast('No user selected', 'error');
       return;
     }
-    
+
     // Debug: Log form values - use Alert for visibility
     console.log('Test Form Values:', JSON.stringify(testForm));
     console.log('Testing User:', JSON.stringify(testingUser));
-    
+
     // Validate all fields are filled
     const missingFields = [];
     if (!testForm.cholesterol || testForm.cholesterol.trim() === '') missingFields.push('Cholesterol');
@@ -527,24 +578,24 @@ export default function AdminUsersScreen() {
     if (!testForm.ldlCholesterol || testForm.ldlCholesterol.trim() === '') missingFields.push('LDL Cholesterol');
     if (!testForm.cholesterolHdlRatio || testForm.cholesterolHdlRatio.trim() === '') missingFields.push('Cholesterol/HDL Ratio');
     if (!testForm.testDate || testForm.testDate.trim() === '') missingFields.push('Test Date');
-    
+
     if (missingFields.length > 0) {
       console.log('Missing fields:', missingFields);
       showToast(`Please fill: ${missingFields.join(', ')}`, 'error');
       return;
     }
-    
+
     // Check if user already has 2 tests
     if (existingTests.length >= 2) {
       showToast('Maximum 2 tests allowed per user', 'error');
       return;
     }
-    
+
     setIsSavingTest(true);
-    
+
     try {
       const adminName = await AsyncStorage.getItem('adminName') || 'Admin';
-      
+
       // Prepare data for Firebase
       const testData = {
         cholesterol: parseFloat(testForm.cholesterol),
@@ -555,7 +606,7 @@ export default function AdminUsersScreen() {
         testDate: testForm.testDate,
         notes: testForm.notes,
       };
-      
+
       console.log('Saving test with data:', {
         coupleId: testingUser.coupleId,
         gender: testingUser.gender,
@@ -563,7 +614,7 @@ export default function AdminUsersScreen() {
         adminUid: currentAdminUid,
         adminName,
       });
-      
+
       const result = await lipidTestService.addTestResult(
         testingUser.coupleId,
         testingUser.gender,
@@ -571,9 +622,9 @@ export default function AdminUsersScreen() {
         currentAdminUid,
         adminName
       );
-      
+
       console.log('Firebase result:', result);
-      
+
       if (result.success) {
         showToast(`Test ${existingTests.length + 1} saved successfully`, 'success');
         // Reload tests
@@ -606,6 +657,96 @@ export default function AdminUsersScreen() {
     }
   };
 
+  // Handle edit test - populate form with existing test data
+  const handleEditTest = (test: LipidTestResult) => {
+    setEditingTestId(test.id);
+    setTestForm({
+      cholesterol: test.cholesterol.toString(),
+      triglyceride: test.triglyceride.toString(),
+      hdlCholesterol: test.hdlCholesterol.toString(),
+      ldlCholesterol: test.ldlCholesterol.toString(),
+      cholesterolHdlRatio: test.cholesterolHdlRatio.toString(),
+      testDate: test.testDate,
+      notes: test.notes || '',
+    });
+  };
+
+  // Handle cancel edit
+  const handleCancelEdit = () => {
+    setEditingTestId(null);
+    setTestForm({
+      cholesterol: '',
+      triglyceride: '',
+      hdlCholesterol: '',
+      ldlCholesterol: '',
+      cholesterolHdlRatio: '',
+      testDate: new Date().toISOString().split('T')[0],
+      notes: '',
+    });
+  };
+
+  // Handle update test result
+  const handleUpdateTestResult = async () => {
+    if (!testingUser || !editingTestId) return;
+
+    setIsSavingTest(true);
+    try {
+      const testData = {
+        cholesterol: parseFloat(testForm.cholesterol),
+        triglyceride: parseFloat(testForm.triglyceride),
+        hdlCholesterol: parseFloat(testForm.hdlCholesterol),
+        ldlCholesterol: parseFloat(testForm.ldlCholesterol),
+        cholesterolHdlRatio: parseFloat(testForm.cholesterolHdlRatio),
+        testDate: testForm.testDate,
+        notes: testForm.notes,
+      };
+
+      const success = await lipidTestService.updateTestResult(
+        testingUser.coupleId,
+        editingTestId,
+        testData
+      );
+
+      if (success) {
+        showToast('Test updated successfully', 'success');
+        // Reload tests
+        const tests = await lipidTestService.getTestResults(testingUser.coupleId, testingUser.gender);
+        setExistingTests(tests);
+        handleCancelEdit();
+      } else {
+        showToast('Failed to update test', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error updating test:', error);
+      showToast(error.message || 'Failed to update test', 'error');
+    } finally {
+      setIsSavingTest(false);
+    }
+  };
+
+  // Handle delete test result
+  const handleDeleteTest = async (testId: string) => {
+    if (!testingUser) return;
+
+    setIsDeletingTest(true);
+    try {
+      const success = await lipidTestService.deleteTestResult(testingUser.coupleId, testId);
+      if (success) {
+        showToast('Test deleted successfully', 'success');
+        // Reload tests
+        const tests = await lipidTestService.getTestResults(testingUser.coupleId, testingUser.gender);
+        setExistingTests(tests);
+      } else {
+        showToast('Failed to delete test', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error deleting test:', error);
+      showToast(error.message || 'Failed to delete test', 'error');
+    } finally {
+      setIsDeletingTest(false);
+    }
+  };
+
   // Handle delete couple confirmation
   const handleDeleteCouple = (coupleId: string, maleName: string, femaleName: string) => {
     setDeletingCouple({ coupleId, maleName, femaleName });
@@ -615,13 +756,18 @@ export default function AdminUsersScreen() {
   // Confirm delete couple
   const confirmDeleteCouple = async () => {
     if (!deletingCouple) return;
-    
+
     try {
       setActionLoading(true);
       await coupleService.delete(deletingCouple.coupleId);
       setShowDeleteModal(false);
       setDeletingCouple(null);
       showToast(`Couple ${deletingCouple.coupleId} deleted successfully`, 'success');
+
+      // Refresh the next couple ID for enrollment to keep numbering in sync
+      const newNextId = await coupleService.getNextCoupleId();
+      setNextCoupleId(newNextId);
+      setEnrollForm(prev => ({ ...prev, coupleId: newNextId }));
     } catch (error: any) {
       console.error('Error deleting couple:', error);
       showToast(error.message || 'Failed to delete couple', 'error');
@@ -641,12 +787,12 @@ export default function AdminUsersScreen() {
   // Export single user data as PDF
   const handleExportSingleUser = async (couple: Couple, gender: 'male' | 'female') => {
     setActionLoading(true);
-    
+
     try {
       const coupleId = couple.coupleId;
       const user = couple[gender];
       const userId = `${coupleId}_${gender === 'male' ? 'M' : 'F'}`;
-      
+
       const today = new Date();
       const thirtyDaysAgo = new Date(today);
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -1072,42 +1218,42 @@ export default function AdminUsersScreen() {
       ${(() => {
         // Merge all dates and aggregate data
         const dateMap = new Map<string, { steps: number; exercise: number; weight: number | null; dietLogged: boolean }>();
-        
+
         // Add steps data (aggregate by date)
         steps.forEach(s => {
           const existing = dateMap.get(s.date) || { steps: 0, exercise: 0, weight: null, dietLogged: false };
           existing.steps += (s.stepCount || 0);
           dateMap.set(s.date, existing);
         });
-        
+
         // Add exercise data (aggregate by date)
         exerciseLogs.forEach(e => {
           const existing = dateMap.get(e.date) || { steps: 0, exercise: 0, weight: null, dietLogged: false };
           existing.exercise += (e.duration || 0);
           dateMap.set(e.date, existing);
         });
-        
+
         // Add weight data (take the latest for each date)
         weightLogs.forEach(w => {
           const existing = dateMap.get(w.date) || { steps: 0, exercise: 0, weight: null, dietLogged: false };
           existing.weight = w.weight;
           dateMap.set(w.date, existing);
         });
-        
+
         // Add food log data (check if logged)
         foodLogs.forEach(f => {
           const existing = dateMap.get(f.date) || { steps: 0, exercise: 0, weight: null, dietLogged: false };
           existing.dietLogged = true;
           dateMap.set(f.date, existing);
         });
-        
+
         // Sort dates descending
         const sortedDates = Array.from(dateMap.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-        
+
         if (sortedDates.length === 0) {
           return '<div class="no-data">No activity data recorded in the last 30 days</div>';
         }
-        
+
         return `
           <table class="activity-table">
             <thead>
@@ -1160,7 +1306,7 @@ export default function AdminUsersScreen() {
       const today = new Date();
       const thirtyDaysAgo = new Date(today);
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
+
       const formatDateStr = (date: Date) => date.toISOString().split('T')[0];
 
       // Initialize data arrays
@@ -1306,7 +1452,7 @@ export default function AdminUsersScreen() {
   // Export all couples data
   const handleExportAllCouples = async () => {
     setIsExporting(true);
-    
+
     try {
       const today = new Date();
       const thirtyDaysAgo = new Date(today);
@@ -1314,7 +1460,7 @@ export default function AdminUsersScreen() {
       const sevenDaysAgo = new Date(today);
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       const formatDateStr = (date: Date) => date.toISOString().split('T')[0];
-      
+
       showToast('Fetching complete data for all couples...', 'success');
 
       // Fetch activity data for ALL couples
@@ -1331,7 +1477,7 @@ export default function AdminUsersScreen() {
           questionnaireService.getProgress(couple.coupleId, 'male').catch(() => null),
           questionnaireService.getProgress(couple.coupleId, 'female').catch(() => null),
         ]);
-        
+
         return {
           couple,
           maleSteps: maleSteps || [],
@@ -1357,7 +1503,7 @@ export default function AdminUsersScreen() {
       // Collect all unique questionnaire questions from all users
       const maleQuestionTexts: string[] = [];
       const femaleQuestionTexts: string[] = [];
-      
+
       for (const data of allCouplesData) {
         if (data.maleQuestionnaire?.answers) {
           Object.entries(data.maleQuestionnaire.answers).forEach(([_, answer]: [string, any]) => {
@@ -1376,15 +1522,15 @@ export default function AdminUsersScreen() {
           });
         }
       }
-      
+
       const s = ',';
       let csv = '\ufeff'; // BOM for Excel
-      
+
       // ===== MALE TABLE =====
       csv += `FIT FOR BABY - MALE USERS DATA\n`;
       csv += `Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
       csv += `Total Male Users: ${couples.length}\n\n`;
-      
+
       // Male header row
       csv += `Couple ID${s}Name${s}Email${s}Phone${s}Age${s}DOB${s}Weight (kg)${s}Height (cm)${s}BMI${s}Status${s}`;
       csv += `Address Line 1${s}Address Line 2${s}City${s}State${s}Pincode${s}`;
@@ -1396,16 +1542,16 @@ export default function AdminUsersScreen() {
         csv += `${s}${escapeCSV(q)}`;
       }
       csv += `\n`;
-      
+
       // Male data rows
       for (const data of allCouplesData) {
         const { couple, maleSteps, maleWeight, maleExercise, maleFood, maleQuestionnaire } = data;
-        
+
         const maleTotalSteps = maleSteps.reduce((sum, step) => sum + (step.stepCount || 0), 0);
         const maleAvgSteps = maleSteps.length > 0 ? Math.round(maleTotalSteps / maleSteps.length) : 0;
         const maleExerciseMins = maleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
         const maleLatestWeight = maleWeight.length > 0 ? maleWeight[0].weight : '';
-        
+
         csv += `${escapeCSV(couple.coupleId)}${s}`;
         csv += `${escapeCSV(couple.male.name)}${s}`;
         csv += `${escapeCSV(couple.male.email || '')}${s}`;
@@ -1433,7 +1579,7 @@ export default function AdminUsersScreen() {
         csv += `${maleQuestionnaire?.progress?.percentComplete || 0}%${s}`;
         const maleAnswerCount = maleQuestionnaire?.answers ? Object.keys(maleQuestionnaire.answers).length : 0;
         csv += `${maleAnswerCount}`;
-        
+
         // Add individual questionnaire answers for male
         for (const q of maleQuestionTexts) {
           let answerValue = '';
@@ -1448,15 +1594,15 @@ export default function AdminUsersScreen() {
         }
         csv += `\n`;
       }
-      
+
       // Add spacing between tables
       csv += `\n\n\n`;
-      
+
       // ===== FEMALE TABLE =====
       csv += `FIT FOR BABY - FEMALE USERS DATA\n`;
       csv += `Generated: ${today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
       csv += `Total Female Users: ${couples.length}\n\n`;
-      
+
       // Female header row
       csv += `Couple ID${s}Name${s}Email${s}Phone${s}Age${s}DOB${s}Weight (kg)${s}Height (cm)${s}BMI${s}Status${s}`;
       csv += `Address Line 1${s}Address Line 2${s}City${s}State${s}Pincode${s}`;
@@ -1469,16 +1615,16 @@ export default function AdminUsersScreen() {
         csv += `${s}${escapeCSV(q)}`;
       }
       csv += `\n`;
-      
+
       // Female data rows
       for (const data of allCouplesData) {
         const { couple, femaleSteps, femaleWeight, femaleExercise, femaleFood, femaleQuestionnaire } = data;
-        
+
         const femaleTotalSteps = femaleSteps.reduce((sum, step) => sum + (step.stepCount || 0), 0);
         const femaleAvgSteps = femaleSteps.length > 0 ? Math.round(femaleTotalSteps / femaleSteps.length) : 0;
         const femaleExerciseMins = femaleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
         const femaleLatestWeight = femaleWeight.length > 0 ? femaleWeight[0].weight : '';
-        
+
         csv += `${escapeCSV(couple.coupleId)}${s}`;
         csv += `${escapeCSV(couple.female.name)}${s}`;
         csv += `${escapeCSV(couple.female.email || '')}${s}`;
@@ -1511,7 +1657,7 @@ export default function AdminUsersScreen() {
         csv += `${femaleQuestionnaire?.progress?.percentComplete || 0}%${s}`;
         const femaleAnswerCount = femaleQuestionnaire?.answers ? Object.keys(femaleQuestionnaire.answers).length : 0;
         csv += `${femaleAnswerCount}`;
-        
+
         // Add individual questionnaire answers for female
         for (const q of femaleQuestionTexts) {
           let answerValue = '';
@@ -1526,7 +1672,7 @@ export default function AdminUsersScreen() {
         }
         csv += `\n`;
       }
-        
+
       if (isWeb) {
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -1543,7 +1689,7 @@ export default function AdminUsersScreen() {
         await Sharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: 'Export All Couples' });
         showToast('Complete data ready to share!', 'success');
       }
-      
+
       setShowExportAllModal(false);
     } catch (error) {
       console.error('Export all error:', error);
@@ -1576,10 +1722,10 @@ export default function AdminUsersScreen() {
     };
 
     // Calculate totals
-  const maleTotalSteps = maleSteps.reduce((sum, s) => sum + (typeof s.stepCount === 'number' ? s.stepCount : s.steps || 0), 0);
-  const femaleTotalSteps = femaleSteps.reduce((sum, s) => sum + (typeof s.stepCount === 'number' ? s.stepCount : s.steps || 0), 0);
-  const maleAvgSteps = maleSteps.length > 0 ? Math.round(maleTotalSteps / maleSteps.length) : 0;
-  const femaleAvgSteps = femaleSteps.length > 0 ? Math.round(femaleTotalSteps / femaleSteps.length) : 0;
+    const maleTotalSteps = maleSteps.reduce((sum, s) => sum + (typeof s.stepCount === 'number' ? s.stepCount : s.steps || 0), 0);
+    const femaleTotalSteps = femaleSteps.reduce((sum, s) => sum + (typeof s.stepCount === 'number' ? s.stepCount : s.steps || 0), 0);
+    const maleAvgSteps = maleSteps.length > 0 ? Math.round(maleTotalSteps / maleSteps.length) : 0;
+    const femaleAvgSteps = femaleSteps.length > 0 ? Math.round(femaleTotalSteps / femaleSteps.length) : 0;
     const maleExerciseMinutes = maleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
     const femaleExerciseMinutes = femaleExercise.reduce((sum, e) => sum + (e.duration || 0), 0);
 
@@ -1727,45 +1873,45 @@ export default function AdminUsersScreen() {
             <thead><tr><th>Date</th><th>Steps</th><th>Goal</th><th>Status</th></tr></thead>
             <tbody>
               ${maleSteps.slice(0, 15).map(s => {
-                // Use admin-side daily step target if available, otherwise fallback
-                let goal = 3000;
-                if (s.dailyStepTarget) {
-                  goal = typeof s.dailyStepTarget === 'number' ? s.dailyStepTarget : parseInt(s.dailyStepTarget);
-                } else if (typeof s.goal === 'number') {
-                  goal = s.goal;
-                } else if (s.goal) {
-                  goal = parseInt(s.goal);
-                }
-                const steps = (typeof s.stepCount === 'number' ? s.stepCount : s.steps) || 0;
-                const today = new Date();
-                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-                let dateStr = '';
-                if (s.date) {
-                  if (typeof s.date === 'string') {
-                    dateStr = s.date;
-                  } else if (s.date.toDate) {
-                    const d = s.date.toDate();
-                    dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                  } else if (s.date.toISOString) {
-                    dateStr = s.date.toISOString().split('T')[0];
-                  }
-                }
-                let status = '';
-                let statusColor = '';
-                if (dateStr === todayStr) {
-                  status = '⏳ In Progress';
-                  statusColor = '#f59e0b';
-                } else {
-                  if (steps >= goal) {
-                    status = '✅ Completed';
-                    statusColor = '#16a34a';
-                  } else {
-                    status = '❌ Not Completed';
-                    statusColor = '#ef4444';
-                  }
-                }
-                return `<tr><td>${formatDate(s.date)}</td><td>${steps.toLocaleString()}</td><td>${goal.toLocaleString()}</td><td style=\"color: ${statusColor};\">${status}</td></tr>`;
-              }).join('')}
+      // Use admin-side daily step target if available, otherwise fallback
+      let goal = 3000;
+      if (s.dailyStepTarget) {
+        goal = typeof s.dailyStepTarget === 'number' ? s.dailyStepTarget : parseInt(s.dailyStepTarget);
+      } else if (typeof s.goal === 'number') {
+        goal = s.goal;
+      } else if (s.goal) {
+        goal = parseInt(s.goal);
+      }
+      const steps = (typeof s.stepCount === 'number' ? s.stepCount : s.steps) || 0;
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      let dateStr = '';
+      if (s.date) {
+        if (typeof s.date === 'string') {
+          dateStr = s.date;
+        } else if (s.date.toDate) {
+          const d = s.date.toDate();
+          dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        } else if (s.date.toISOString) {
+          dateStr = s.date.toISOString().split('T')[0];
+        }
+      }
+      let status = '';
+      let statusColor = '';
+      if (dateStr === todayStr) {
+        status = '⏳ In Progress';
+        statusColor = '#f59e0b';
+      } else {
+        if (steps >= goal) {
+          status = '✅ Completed';
+          statusColor = '#16a34a';
+        } else {
+          status = '❌ Not Completed';
+          statusColor = '#ef4444';
+        }
+      }
+      return `<tr><td>${formatDate(s.date)}</td><td>${steps.toLocaleString()}</td><td>${goal.toLocaleString()}</td><td style=\"color: ${statusColor};\">${status}</td></tr>`;
+    }).join('')}
             </tbody>
           </table>` : '<p style=\"color: #94a3b8;\">No data</p>'}
         </div>
@@ -1776,45 +1922,45 @@ export default function AdminUsersScreen() {
             <thead><tr><th>Date</th><th>Steps</th><th>Goal</th><th>Status</th></tr></thead>
             <tbody>
               ${femaleSteps.slice(0, 15).map(s => {
-                // Use admin-side daily step target if available, otherwise fallback
-                let goal = 3000;
-                if (s.dailyStepTarget) {
-                  goal = typeof s.dailyStepTarget === 'number' ? s.dailyStepTarget : parseInt(s.dailyStepTarget);
-                } else if (typeof s.goal === 'number') {
-                  goal = s.goal;
-                } else if (s.goal) {
-                  goal = parseInt(s.goal);
-                }
-                const steps = (typeof s.stepCount === 'number' ? s.stepCount : s.steps) || 0;
-                const today = new Date();
-                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-                let dateStr = '';
-                if (s.date) {
-                  if (typeof s.date === 'string') {
-                    dateStr = s.date;
-                  } else if (s.date.toDate) {
-                    const d = s.date.toDate();
-                    dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                  } else if (s.date.toISOString) {
-                    dateStr = s.date.toISOString().split('T')[0];
-                  }
-                }
-                let status = '';
-                let statusColor = '';
-                if (dateStr === todayStr) {
-                  status = '⏳ In Progress';
-                  statusColor = '#f59e0b';
-                } else {
-                  if (steps >= goal) {
-                    status = '✅ Completed';
-                    statusColor = '#16a34a';
-                  } else {
-                    status = '❌ Not Completed';
-                    statusColor = '#ef4444';
-                  }
-                }
-                return `<tr><td>${formatDate(s.date)}</td><td>${steps.toLocaleString()}</td><td>${goal.toLocaleString()}</td><td style=\"color: ${statusColor};\">${status}</td></tr>`;
-              }).join('')}
+      // Use admin-side daily step target if available, otherwise fallback
+      let goal = 3000;
+      if (s.dailyStepTarget) {
+        goal = typeof s.dailyStepTarget === 'number' ? s.dailyStepTarget : parseInt(s.dailyStepTarget);
+      } else if (typeof s.goal === 'number') {
+        goal = s.goal;
+      } else if (s.goal) {
+        goal = parseInt(s.goal);
+      }
+      const steps = (typeof s.stepCount === 'number' ? s.stepCount : s.steps) || 0;
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      let dateStr = '';
+      if (s.date) {
+        if (typeof s.date === 'string') {
+          dateStr = s.date;
+        } else if (s.date.toDate) {
+          const d = s.date.toDate();
+          dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        } else if (s.date.toISOString) {
+          dateStr = s.date.toISOString().split('T')[0];
+        }
+      }
+      let status = '';
+      let statusColor = '';
+      if (dateStr === todayStr) {
+        status = '⏳ In Progress';
+        statusColor = '#f59e0b';
+      } else {
+        if (steps >= goal) {
+          status = '✅ Completed';
+          statusColor = '#16a34a';
+        } else {
+          status = '❌ Not Completed';
+          statusColor = '#ef4444';
+        }
+      }
+      return `<tr><td>${formatDate(s.date)}</td><td>${steps.toLocaleString()}</td><td>${goal.toLocaleString()}</td><td style=\"color: ${statusColor};\">${status}</td></tr>`;
+    }).join('')}
             </tbody>
           </table>` : '<p style=\"color: #94a3b8;\">No data</p>'}
         </div>
@@ -1953,21 +2099,21 @@ export default function AdminUsersScreen() {
   }, separator: string = ',') => {
     const { couple, maleSteps, femaleSteps, maleWeight, femaleWeight, maleExercise, femaleExercise, maleQuestionnaire, femaleQuestionnaire } = data;
     const s = separator;
-    
+
     let csv = '';
-    
+
     // Header Info
     csv += `Fit for Baby - User Data Export\n`;
     csv += `Generated${s}${new Date().toLocaleString()}\n`;
     csv += `\n`;
-    
+
     // Couple Info
     csv += `COUPLE INFORMATION\n`;
     csv += `Couple ID${s}${couple.coupleId}\n`;
     csv += `Status${s}${couple.status}\n`;
     csv += `Enrolled${s}${couple.enrollmentDate}\n`;
     csv += `\n`;
-    
+
     // Male User Info
     csv += `MALE USER - ${couple.male.name}\n`;
     csv += `ID${s}${couple.male.id || couple.coupleId + '_M'}\n`;
@@ -1978,7 +2124,7 @@ export default function AdminUsersScreen() {
     csv += `Height${s}${couple.male.height ? couple.male.height + ' cm' : 'N/A'}\n`;
     csv += `BMI${s}${couple.male.bmi || 'N/A'}\n`;
     csv += `\n`;
-    
+
     // Female User Info
     csv += `FEMALE USER - ${couple.female.name}\n`;
     csv += `ID${s}${couple.female.id || couple.coupleId + '_F'}\n`;
@@ -1989,7 +2135,7 @@ export default function AdminUsersScreen() {
     csv += `Height${s}${couple.female.height ? couple.female.height + ' cm' : 'N/A'}\n`;
     csv += `BMI${s}${couple.female.bmi || 'N/A'}\n`;
     csv += `\n`;
-    
+
     // Steps Data
     csv += `STEPS DATA (MALE)\n`;
     csv += `Date${s}Steps${s}Goal\n`;
@@ -1997,14 +2143,14 @@ export default function AdminUsersScreen() {
       csv += `${step.date}${s}${step.steps || 0}${s}${step.goal || 10000}\n`;
     });
     csv += `\n`;
-    
+
     csv += `STEPS DATA (FEMALE)\n`;
     csv += `Date${s}Steps${s}Goal\n`;
     femaleSteps.forEach(step => {
       csv += `${step.date}${s}${step.steps || 0}${s}${step.goal || 10000}\n`;
     });
     csv += `\n`;
-    
+
     // Weight Data
     csv += `WEIGHT DATA (MALE)\n`;
     csv += `Date${s}Weight (kg)${s}Notes\n`;
@@ -2012,14 +2158,14 @@ export default function AdminUsersScreen() {
       csv += `${w.date}${s}${w.weight}${s}${(w.notes || '').replace(/,/g, ' ')}\n`;
     });
     csv += `\n`;
-    
+
     csv += `WEIGHT DATA (FEMALE)\n`;
     csv += `Date${s}Weight (kg)${s}Notes\n`;
     femaleWeight.forEach(w => {
       csv += `${w.date}${s}${w.weight}${s}${(w.notes || '').replace(/,/g, ' ')}\n`;
     });
     csv += `\n`;
-    
+
     // Questionnaire Data
     if (maleQuestionnaire) {
       csv += `QUESTIONNAIRE (MALE)\n`;
@@ -2037,7 +2183,7 @@ export default function AdminUsersScreen() {
       }
       csv += `\n`;
     }
-    
+
     if (femaleQuestionnaire) {
       csv += `QUESTIONNAIRE (FEMALE)\n`;
       csv += `Status${s}${femaleQuestionnaire.isComplete ? 'Completed' : femaleQuestionnaire.status === 'in-progress' ? 'In Progress' : 'Not Started'}\n`;
@@ -2054,7 +2200,7 @@ export default function AdminUsersScreen() {
       }
       csv += `\n`;
     }
-    
+
     // Exercise Data
     csv += `EXERCISE DATA (MALE)\n`;
     csv += `Date${s}Type${s}Duration (min)${s}Calories\n`;
@@ -2062,13 +2208,13 @@ export default function AdminUsersScreen() {
       csv += `${e.date}${s}${e.exerciseType || e.type || 'Exercise'}${s}${e.duration || 0}${s}${e.caloriesBurned || ''}\n`;
     });
     csv += `\n`;
-    
+
     csv += `EXERCISE DATA (FEMALE)\n`;
     csv += `Date${s}Type${s}Duration (min)${s}Calories\n`;
     femaleExercise.forEach(e => {
       csv += `${e.date}${s}${e.exerciseType || e.type || 'Exercise'}${s}${e.duration || 0}${s}${e.caloriesBurned || ''}\n`;
     });
-    
+
     return csv;
   };
 
@@ -2223,7 +2369,7 @@ export default function AdminUsersScreen() {
                   <View style={[styles.miniStatusBadge, { backgroundColor: getStatusColor(couple.male.status) }]} />
                 </View>
               </View>
-              
+
               <View style={styles.userDetails}>
                 <View style={styles.userDetailRow}>
                   <Ionicons name="person" size={14} color={COLORS.textMuted} />
@@ -2293,7 +2439,7 @@ export default function AdminUsersScreen() {
                     <Text style={styles.userDetailText}>Last Login: {couple.male.lastActive}</Text>
                   </View>
                 ) : null}
-                
+
                 {/* Setup Status & Temp Password */}
                 <View style={styles.setupStatusRow}>
                   <View style={[styles.setupBadge, { backgroundColor: couple.male.isPasswordReset ? COLORS.success + '20' : COLORS.warning + '20' }]}>
@@ -2309,7 +2455,7 @@ export default function AdminUsersScreen() {
                     </Text>
                   </View>
                 </View>
-                
+
                 {/* Show temp password if not yet reset */}
                 {!couple.male.isPasswordReset && couple.male.tempPassword && (
                   <View style={styles.tempPasswordRow}>
@@ -2372,7 +2518,7 @@ export default function AdminUsersScreen() {
                   <View style={[styles.miniStatusBadge, { backgroundColor: getStatusColor(couple.female.status) }]} />
                 </View>
               </View>
-              
+
               <View style={styles.userDetails}>
                 <View style={styles.userDetailRow}>
                   <Ionicons name="person" size={14} color={COLORS.textMuted} />
@@ -2442,7 +2588,7 @@ export default function AdminUsersScreen() {
                     <Text style={styles.userDetailText}>Last Login: {couple.female.lastActive}</Text>
                   </View>
                 ) : null}
-                
+
                 {/* Setup Status & Temp Password */}
                 <View style={styles.setupStatusRow}>
                   <View style={[styles.setupBadge, { backgroundColor: couple.female.isPasswordReset ? COLORS.success + '20' : COLORS.warning + '20' }]}>
@@ -2458,7 +2604,7 @@ export default function AdminUsersScreen() {
                     </Text>
                   </View>
                 </View>
-                
+
                 {/* Show temp password if not yet reset */}
                 {!couple.female.isPasswordReset && couple.female.tempPassword && (
                   <View style={styles.tempPasswordRow}>
@@ -2563,7 +2709,7 @@ export default function AdminUsersScreen() {
               // Step 1: Couple Profile
               <View style={styles.formSection}>
                 <Text style={styles.formSectionTitle}>Couple Profile</Text>
-                
+
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Couple ID</Text>
                   <View style={styles.readOnlyInput}>
@@ -2731,13 +2877,23 @@ export default function AdminUsersScreen() {
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={styles.submitButton}
+              style={[styles.submitButton, actionLoading && { opacity: 0.7 }]}
               onPress={handleEnrollSubmit}
+              disabled={actionLoading}
             >
-              <Text style={styles.submitButtonText}>
-                {enrollStep === 1 ? 'Continue' : 'Enroll Couple'}
-              </Text>
-              <Ionicons name={enrollStep === 1 ? 'arrow-forward' : 'checkmark'} size={18} color="#fff" />
+              {actionLoading && enrollStep === 2 ? (
+                <>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={[styles.submitButtonText, { marginLeft: 8 }]}>Enrolling...</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.submitButtonText}>
+                    {enrollStep === 1 ? 'Continue' : 'Enroll Couple'}
+                  </Text>
+                  <Ionicons name={enrollStep === 1 ? 'arrow-forward' : 'checkmark'} size={18} color="#fff" />
+                </>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -2767,7 +2923,7 @@ export default function AdminUsersScreen() {
   const renderTempPasswordModal = () => {
     // Determine if this is a single user reset or enrollment (both users)
     const isSingleUserReset = !tempPasswordInfo.maleTempPassword || !tempPasswordInfo.femaleTempPassword;
-    
+
     return (
       <Modal
         visible={showTempPasswordModal}
@@ -2785,7 +2941,7 @@ export default function AdminUsersScreen() {
                 {isSingleUserReset ? 'Password Reset Successful!' : 'Enrollment Successful!'}
               </Text>
               <Text style={styles.tempPasswordSubtitle}>
-                {isSingleUserReset 
+                {isSingleUserReset
                   ? 'Share this new password with the user'
                   : 'Share these credentials with each user individually'}
               </Text>
@@ -2852,11 +3008,11 @@ export default function AdminUsersScreen() {
   // Edit Profile Modal
   const renderEditModal = () => {
     if (!editingUser) return null;
-    
+
     const genderColor = editingUser.gender === 'male' ? COLORS.primary : COLORS.accent;
     const genderIcon = editingUser.gender === 'male' ? 'male' : 'female';
     const userId = `${editingUser.coupleId}_${editingUser.gender.charAt(0).toUpperCase()}`;
-    
+
     return (
       <Modal
         visible={showEditModal}
@@ -2886,7 +3042,7 @@ export default function AdminUsersScreen() {
               <View style={styles.formSection}>
                 {/* Personal Information */}
                 <Text style={styles.formSectionTitle}>Personal Information</Text>
-                
+
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Full Name *</Text>
                   <TextInput
@@ -2949,7 +3105,7 @@ export default function AdminUsersScreen() {
 
                 {/* Health Metrics */}
                 <Text style={[styles.formSectionTitle, { marginTop: 20 }]}>Health Metrics</Text>
-                
+
                 <View style={styles.inputRow}>
                   <View style={[styles.inputGroup, { flex: 1 }]}>
                     <Text style={styles.inputLabel}>Weight (kg)</Text>
@@ -2977,7 +3133,7 @@ export default function AdminUsersScreen() {
 
                 {/* Address */}
                 <Text style={[styles.formSectionTitle, { marginTop: 20 }]}>Address</Text>
-                
+
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Address Line 1</Text>
                   <TextInput
@@ -3039,7 +3195,7 @@ export default function AdminUsersScreen() {
                 {editingUser?.gender === 'female' && (
                   <>
                     <Text style={[styles.formSectionTitle, { marginTop: 20 }]}>Fertility Information</Text>
-                    
+
                     <View style={styles.inputRow}>
                       <View style={[styles.inputGroup, { flex: 1 }]}>
                         <Text style={styles.inputLabel}>Date of Ovarian Induction</Text>
@@ -3126,9 +3282,9 @@ export default function AdminUsersScreen() {
   // Lipid Test Modal
   const renderTestModal = () => {
     if (!testingUser) return null;
-    
+
     const canAddTest = existingTests.length < 2;
-    
+
     return (
       <Modal
         visible={showTestModal}
@@ -3140,8 +3296,8 @@ export default function AdminUsersScreen() {
           <View style={[styles.modalContent, { maxWidth: 500 }]}>
             {/* Header */}
             <View style={styles.modalHeader}>
-              <View style={styles.modalHeader}>
-                <View style={[styles.modalHeader, { backgroundColor: COLORS.accent + '20' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: COLORS.accent + '20', justifyContent: 'center', alignItems: 'center' }}>
                   <Ionicons name="flask" size={24} color={COLORS.accent} />
                 </View>
                 <View>
@@ -3165,10 +3321,32 @@ export default function AdminUsersScreen() {
                 <View style={styles.existingTestsSection}>
                   <Text style={styles.sectionTitle}>Previous Tests ({existingTests.length}/2)</Text>
                   {existingTests.map((test, index) => (
-                    <View key={test.id} style={styles.existingTestCard}>
+                    <View key={test.id} style={[styles.existingTestCard, editingTestId === test.id && { borderColor: COLORS.primary, borderWidth: 2 }]}>
                       <View style={styles.testCardHeader}>
                         <Text style={styles.testCardTitle}>Test {test.testNumber}</Text>
-                        <Text style={styles.testCardDate}>{test.testDate}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={styles.testCardDate}>{test.testDate}</Text>
+                          {/* Edit Button */}
+                          <TouchableOpacity
+                            onPress={() => handleEditTest(test)}
+                            style={{ padding: 4 }}
+                            disabled={isDeletingTest}
+                          >
+                            <Ionicons name="create-outline" size={18} color={COLORS.primary} />
+                          </TouchableOpacity>
+                          {/* Delete Button */}
+                          <TouchableOpacity
+                            onPress={() => handleDeleteTest(test.id)}
+                            style={{ padding: 4 }}
+                            disabled={isDeletingTest}
+                          >
+                            {isDeletingTest ? (
+                              <ActivityIndicator size="small" color={COLORS.error} />
+                            ) : (
+                              <Ionicons name="trash-outline" size={18} color={COLORS.error} />
+                            )}
+                          </TouchableOpacity>
+                        </View>
                       </View>
                       <View style={styles.testResultsGrid}>
                         <View style={styles.testResultItem}>
@@ -3207,10 +3385,19 @@ export default function AdminUsersScreen() {
               )}
 
               {/* Add New Test Form */}
-              {canAddTest ? (
+              {(canAddTest || editingTestId) ? (
                 <View style={styles.addTestSection}>
-                  <Text style={styles.sectionTitle}>Add Test {existingTests.length + 1}</Text>
-                  
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.sectionTitle}>
+                      {editingTestId ? 'Edit Test' : `Add Test ${existingTests.length + 1}`}
+                    </Text>
+                    {editingTestId && (
+                      <TouchableOpacity onPress={handleCancelEdit} style={{ padding: 4 }}>
+                        <Text style={{ color: COLORS.textMuted, fontSize: 14 }}>Cancel</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
                   <View style={styles.testFormRow}>
                     <View style={styles.testInputGroup}>
                       <Text style={styles.testInputLabel}>Cholesterol (mg/dL) *</Text>
@@ -3335,18 +3522,20 @@ export default function AdminUsersScreen() {
               >
                 <Text style={[styles.modalButtonText, { color: COLORS.textSecondary }]}>Close</Text>
               </TouchableOpacity>
-              {canAddTest && (
+              {(canAddTest || editingTestId) && (
                 <TouchableOpacity
-                  style={[styles.modalButton, { backgroundColor: COLORS.accent, minWidth: 140 }, isSavingTest && { opacity: 0.6 }]}
-                  onPress={handleSaveTestResult}
+                  style={[styles.modalButton, { backgroundColor: editingTestId ? COLORS.primary : COLORS.accent, minWidth: 140 }, isSavingTest && { opacity: 0.6 }]}
+                  onPress={editingTestId ? handleUpdateTestResult : handleSaveTestResult}
                   disabled={isSavingTest}
                 >
                   {isSavingTest ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <>
-                      <Ionicons name="save" size={18} color="#fff" />
-                      <Text style={[styles.modalButtonText, { color: '#fff' }]}>Save Test</Text>
+                      <Ionicons name={editingTestId ? "checkmark" : "save"} size={18} color="#fff" />
+                      <Text style={[styles.modalButtonText, { color: '#fff' }]}>
+                        {editingTestId ? 'Update Test' : 'Save Test'}
+                      </Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -3379,7 +3568,7 @@ export default function AdminUsersScreen() {
   // Delete Confirmation Modal
   const renderDeleteModal = () => {
     if (!deletingCouple) return null;
-    
+
     return (
       <Modal
         visible={showDeleteModal}
@@ -3393,7 +3582,7 @@ export default function AdminUsersScreen() {
             <View style={[styles.deleteIconCircle, { backgroundColor: COLORS.error + '15' }]}>
               <Ionicons name="warning" size={40} color={COLORS.error} />
             </View>
-            
+
             <Text style={styles.deleteTitle}>Delete Couple?</Text>
             <Text style={styles.deleteSubtitle}>
               Are you sure you want to delete couple {deletingCouple.coupleId}?
@@ -3401,7 +3590,7 @@ export default function AdminUsersScreen() {
             <Text style={styles.deleteNames}>
               {deletingCouple.maleName} & {deletingCouple.femaleName}
             </Text>
-            
+
             <View style={styles.deleteWarning}>
               <Ionicons name="information-circle" size={16} color={COLORS.error} />
               <Text style={styles.deleteWarningText}>
@@ -3411,20 +3600,28 @@ export default function AdminUsersScreen() {
 
             <View style={styles.deleteButtonRow}>
               <TouchableOpacity
-                style={[styles.deleteButton, styles.deleteButtonCancel]}
+                style={[styles.deleteButton, styles.deleteButtonCancel, actionLoading && { opacity: 0.5 }]}
                 onPress={() => {
                   setShowDeleteModal(false);
                   setDeletingCouple(null);
                 }}
+                disabled={actionLoading}
               >
                 <Text style={[styles.deleteButtonText, { color: COLORS.textSecondary }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.deleteButton, styles.deleteButtonConfirm]}
+                style={[styles.deleteButton, styles.deleteButtonConfirm, actionLoading && { opacity: 0.7 }]}
                 onPress={confirmDeleteCouple}
+                disabled={actionLoading}
               >
-                <Ionicons name="trash" size={18} color="#fff" />
-                <Text style={[styles.deleteButtonText, { color: '#fff' }]}>Delete</Text>
+                {actionLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="trash" size={18} color="#fff" />
+                    <Text style={[styles.deleteButtonText, { color: '#fff' }]}>Delete</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -3436,7 +3633,7 @@ export default function AdminUsersScreen() {
   // Export Modal
   const renderExportModal = () => {
     if (!exportingCouple) return null;
-    
+
     return (
       <Modal
         visible={showExportModal}
@@ -3450,7 +3647,7 @@ export default function AdminUsersScreen() {
             <View style={[styles.deleteIconCircle, { backgroundColor: COLORS.primary + '15' }]}>
               <Ionicons name="download" size={40} color={COLORS.primary} />
             </View>
-            
+
             <Text style={styles.deleteTitle}>Export User Data</Text>
             <Text style={styles.deleteSubtitle}>
               Export data for couple {exportingCouple.coupleId}
@@ -3458,7 +3655,7 @@ export default function AdminUsersScreen() {
             <Text style={styles.deleteNames}>
               {exportingCouple.male.name} & {exportingCouple.female.name}
             </Text>
-            
+
             {/* Export Selection - Who to export */}
             <View style={{ marginTop: 20, width: '100%' }}>
               <Text style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 10, fontWeight: '600' }}>EXPORT DATA FOR:</Text>
@@ -3534,7 +3731,7 @@ export default function AdminUsersScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-            
+
             {/* Data Included */}
             <View style={{ backgroundColor: COLORS.background, padding: 12, borderRadius: 10, marginTop: 16, width: '100%' }}>
               <Text style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 6, fontWeight: '600' }}>DATA INCLUDED:</Text>
@@ -3547,7 +3744,7 @@ export default function AdminUsersScreen() {
                 • Questionnaire progress
               </Text>
             </View>
-            
+
             {/* Export Format Selection */}
             <View style={{ marginTop: 20, width: '100%' }}>
               <Text style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 10, fontWeight: '600' }}>SELECT FORMAT:</Text>
@@ -3567,10 +3764,10 @@ export default function AdminUsersScreen() {
                     }}
                     onPress={() => setExportFormat(format)}
                   >
-                    <Ionicons 
-                      name={format === 'pdf' ? 'document-text' : format === 'csv' ? 'grid' : 'document'} 
-                      size={20} 
-                      color={exportFormat === format ? '#fff' : COLORS.textSecondary} 
+                    <Ionicons
+                      name={format === 'pdf' ? 'document-text' : format === 'csv' ? 'grid' : 'document'}
+                      size={20}
+                      color={exportFormat === format ? '#fff' : COLORS.textSecondary}
                     />
                     <Text style={{
                       fontSize: 12,
@@ -3632,12 +3829,12 @@ export default function AdminUsersScreen() {
             <View style={[styles.deleteIconCircle, { backgroundColor: COLORS.accent + '15' }]}>
               <Ionicons name="cloud-download" size={40} color={COLORS.accent} />
             </View>
-            
+
             <Text style={styles.deleteTitle}>Export All Couples</Text>
             <Text style={styles.deleteSubtitle}>
               Export summary data for all {couples.length} couples
             </Text>
-            
+
             {/* Data Included */}
             <View style={{ backgroundColor: COLORS.background, padding: 12, borderRadius: 10, marginTop: 16, width: '100%' }}>
               <Text style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 6, fontWeight: '600' }}>DATA INCLUDED:</Text>
@@ -3649,7 +3846,7 @@ export default function AdminUsersScreen() {
                 • Age & Account Status
               </Text>
             </View>
-            
+
             <View style={[styles.deleteButtonRow, { marginTop: 24 }]}>
               <TouchableOpacity
                 style={[styles.deleteButton, styles.deleteButtonCancel]}
@@ -3692,22 +3889,22 @@ export default function AdminUsersScreen() {
   const renderEmptyState = () => {
     const isFiltered = searchQuery || filterStatus !== 'all';
     const hasNoCouples = couples.length === 0;
-    
+
     return (
       <View style={styles.emptyState}>
         <View style={[styles.emptyIconCircle, { backgroundColor: COLORS.primary + '10' }]}>
-          <Ionicons 
-            name={hasNoCouples ? "people-outline" : "search-outline"} 
-            size={48} 
-            color={COLORS.primary} 
+          <Ionicons
+            name={hasNoCouples ? "people-outline" : "search-outline"}
+            size={48}
+            color={COLORS.primary}
           />
         </View>
         <Text style={styles.emptyTitle}>
           {hasNoCouples ? 'No couples enrolled yet' : 'No couples found'}
         </Text>
         <Text style={styles.emptySubtitle}>
-          {hasNoCouples 
-            ? 'Get started by enrolling your first couple using the button above' 
+          {hasNoCouples
+            ? 'Get started by enrolling your first couple using the button above'
             : 'Try adjusting your search or filters'}
         </Text>
         {hasNoCouples && (
@@ -3738,7 +3935,7 @@ export default function AdminUsersScreen() {
   return (
     <View style={styles.container}>
       {renderHeader()}
-      
+
       <ScrollView
         contentContainerStyle={[styles.scrollContent, !isMobile && styles.scrollContentDesktop]}
         showsVerticalScrollIndicator={false}
@@ -3760,7 +3957,7 @@ export default function AdminUsersScreen() {
       {renderExportModal()}
       {renderExportAllModal()}
       {toast.visible && renderToast()}
-      
+
       {/* Loading overlay for actions */}
       {actionLoading && (
         <View style={styles.loadingOverlay}>
@@ -4739,127 +4936,127 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   // Test Modal Styles
-    existingTestsSection: {
-      marginBottom: 20,
-    },
-    sectionTitle: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: COLORS.textPrimary,
-      marginBottom: 12,
-    },
-    existingTestCard: {
-      backgroundColor: COLORS.borderLight,
-      borderRadius: 12,
-      padding: 14,
-      marginBottom: 12,
-    },
-    testCardHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 12,
-    },
-    testCardTitle: {
-      fontSize: 15,
-      fontWeight: '700',
-      color: COLORS.primary,
-    },
-    testCardDate: {
-      fontSize: 13,
-      color: COLORS.textSecondary,
-    },
-    testResultsGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    testResultItem: {
-      backgroundColor: COLORS.surface,
-      borderRadius: 8,
-      padding: 10,
-      minWidth: '48%',
-      flex: 1,
-    },
-    testResultLabel: {
-      fontSize: 11,
-      color: COLORS.textMuted,
-      marginBottom: 2,
-    },
-    testResultValue: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: COLORS.textPrimary,
-    },
-    testNotes: {
-      fontSize: 12,
-      color: COLORS.textSecondary,
-      fontStyle: 'italic',
-      marginTop: 10,
-    },
-    testEnteredBy: {
-      fontSize: 11,
-      color: COLORS.textMuted,
-      marginTop: 8,
-    },
-    noTestsMessage: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 30,
-      gap: 8,
-    },
-    noTestsText: {
-      fontSize: 14,
-      color: COLORS.textMuted,
-    },
-    addTestSection: {
-      marginTop: 10,
-      paddingTop: 16,
-      borderTopWidth: 1,
-      borderTopColor: COLORS.border,
-    },
-    testFormRow: {
-      flexDirection: 'row',
-      gap: 12,
-      marginBottom: 12,
-    },
-    testInputGroup: {
-      flex: 1,
-    },
-    testInputGroupFull: {
-      marginBottom: 12,
-    },
-    testInputLabel: {
-      fontSize: 13,
-      fontWeight: '500',
-      color: COLORS.textSecondary,
-      marginBottom: 6,
-    },
-    testInput: {
-      backgroundColor: COLORS.borderLight,
-      borderRadius: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 15,
-      color: COLORS.textPrimary,
-      borderWidth: 1,
-      borderColor: COLORS.border,
-    },
-    maxTestsReached: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: COLORS.success + '15',
-      borderRadius: 12,
-      padding: 16,
-      gap: 10,
-      marginTop: 16,
-    },
-    maxTestsText: {
-      fontSize: 14,
-      color: COLORS.success,
-      fontWeight: '500',
-    },
+  existingTestsSection: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 12,
+  },
+  existingTestCard: {
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+  },
+  testCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  testCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  testCardDate: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  testResultsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  testResultItem: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    padding: 10,
+    minWidth: '48%',
+    flex: 1,
+  },
+  testResultLabel: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginBottom: 2,
+  },
+  testResultValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  testNotes: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 10,
+  },
+  testEnteredBy: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 8,
+  },
+  noTestsMessage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 30,
+    gap: 8,
+  },
+  noTestsText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+  },
+  addTestSection: {
+    marginTop: 10,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  testFormRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  testInputGroup: {
+    flex: 1,
+  },
+  testInputGroupFull: {
+    marginBottom: 12,
+  },
+  testInputLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    marginBottom: 6,
+  },
+  testInput: {
+    backgroundColor: COLORS.borderLight,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  maxTestsReached: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.success + '15',
+    borderRadius: 12,
+    padding: 16,
+    gap: 10,
+    marginTop: 16,
+  },
+  maxTestsText: {
+    fontSize: 14,
+    color: COLORS.success,
+    fontWeight: '500',
+  },
   // Styled Test and Export Buttons
   testButton: {
     backgroundColor: COLORS.accent,

@@ -1,4 +1,5 @@
 import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useUserData } from '@/context/UserDataContext';
 import { cloudinaryService } from '@/services/cloudinary.service';
 import { coupleService, coupleStepsService, formatDateString } from '@/services/firestore.service';
@@ -57,6 +58,7 @@ export default function LogStepsScreen() {
   const isMobile = screenWidth < 768;
   const { refreshDailyData, globalSettings } = useUserData();
   const { t } = useLanguage();
+  const { colors, isDarkMode } = useTheme();
 
   const [stepCount, setStepCount] = useState('');
   const [stepEntries, setStepEntries] = useState<StepEntry[]>([]);
@@ -79,15 +81,15 @@ export default function LogStepsScreen() {
             AsyncStorage.getItem('coupleId'),
             AsyncStorage.getItem('userGender'),
           ]);
-          
+
           if (storedCoupleId && storedGender) {
             setCoupleId(storedCoupleId);
             setUserGender(storedGender as 'male' | 'female');
-            
+
             // Load today's step entries from Firestore
             const today = formatDateString(new Date());
             const entries = await coupleStepsService.getByDate(storedCoupleId, storedGender as 'male' | 'female', today);
-            
+
             // Convert Firestore entries to local format
             const localEntries: StepEntry[] = entries.map(entry => ({
               id: entry.id,
@@ -95,7 +97,7 @@ export default function LogStepsScreen() {
               loggedAt: entry.loggedAt?.toDate() || new Date(),
               proofImageUrl: entry.proofImageUrl,
             }));
-            
+
             setStepEntries(localEntries);
           }
         } catch (error) {
@@ -105,7 +107,7 @@ export default function LogStepsScreen() {
           setIsLoading(false);
         }
       };
-      
+
       loadData();
     }, [])
   );
@@ -130,19 +132,19 @@ export default function LogStepsScreen() {
 
   const pickImageFromGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
+
     if (status !== 'granted') {
       showToast('Permission to access gallery is required', 'error');
       return;
     }
-    
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.8,
     });
-    
+
     if (!result.canceled && result.assets[0]) {
       setImageUri(result.assets[0].uri);
       showToast('Image selected successfully', 'success');
@@ -151,18 +153,18 @@ export default function LogStepsScreen() {
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    
+
     if (status !== 'granted') {
       showToast('Permission to access camera is required', 'error');
       return;
     }
-    
+
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.8,
     });
-    
+
     if (!result.canceled && result.assets[0]) {
       setImageUri(result.assets[0].uri);
       showToast('Photo captured successfully', 'success');
@@ -183,11 +185,11 @@ export default function LogStepsScreen() {
 
     setIsSaving(true);
     setUploadProgress(0);
-    
+
     try {
       const stepsToAdd = parseInt(stepCount);
       let proofImageUrl: string | null = null;
-      
+
       // Upload image if provided
       if (imageUri) {
         showToast('Uploading proof image...', 'success');
@@ -198,14 +200,14 @@ export default function LogStepsScreen() {
           (progress) => setUploadProgress(progress)
         );
       }
-      
+
       const entryId = await coupleStepsService.add(coupleId, userGender, {
         stepCount: stepsToAdd,
         proofImageUrl: proofImageUrl || undefined,
         proofType: imageUri ? 'gallery' : undefined,
         source: 'manual',
       });
-      
+
       // Update streak for logging activity
       await coupleService.updateStreak(coupleId, userGender);
 
@@ -219,19 +221,19 @@ export default function LogStepsScreen() {
 
       const updatedEntries = [newEntry, ...stepEntries];
       setStepEntries(updatedEntries);
-      
+
       // Also update AsyncStorage for home page quick access
       const totalSteps = updatedEntries.reduce((sum, e) => sum + e.stepCount, 0);
       await AsyncStorage.setItem(STEPS_STORAGE_KEY, JSON.stringify({
         date: new Date().toDateString(),
         totalSteps: totalSteps
       }));
-      
+
       setStepCount('');
       setImageUri(null);
       setUploadProgress(0);
       showToast(`${stepsToAdd.toLocaleString()} steps added! Total: ${totalSteps.toLocaleString()}`, 'success');
-      
+
       // Refresh context data so home page shows updated values
       refreshDailyData();
     } catch (error) {
@@ -256,20 +258,20 @@ export default function LogStepsScreen() {
     try {
       // Delete from Firestore
       await coupleStepsService.delete(coupleId, id);
-      
+
       // Remove from local state
       const updatedEntries = stepEntries.filter(entry => entry.id !== id);
       setStepEntries(updatedEntries);
-      
+
       // Update AsyncStorage
       const totalSteps = updatedEntries.reduce((sum, entry) => sum + entry.stepCount, 0);
       await AsyncStorage.setItem(STEPS_STORAGE_KEY, JSON.stringify({
         date: new Date().toDateString(),
         totalSteps: totalSteps
       }));
-      
+
       showToast(t('log.steps.entryDeleted'), 'success');
-      
+
       // Refresh context data
       refreshDailyData();
     } catch (error) {
@@ -287,9 +289,9 @@ export default function LogStepsScreen() {
   };
 
   const formatDate = () => {
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      month: 'long', 
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      month: 'long',
       day: 'numeric',
       year: 'numeric'
     };
@@ -297,43 +299,44 @@ export default function LogStepsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Toast */}
       {toast.visible && (
         <Animated.View
           style={[
             styles.toast,
+            { backgroundColor: colors.cardBackground },
             toast.type === 'error' ? styles.toastError : styles.toastSuccess,
             { transform: [{ translateY: toastAnim }] }
           ]}
         >
           <View style={styles.toastContent}>
-            <Ionicons 
-              name={toast.type === 'error' ? 'close-circle' : 'checkmark-circle'} 
-              size={22} 
-              color={toast.type === 'error' ? COLORS.error : COLORS.accent} 
+            <Ionicons
+              name={toast.type === 'error' ? 'close-circle' : 'checkmark-circle'}
+              size={22}
+              color={toast.type === 'error' ? COLORS.error : COLORS.accent}
             />
-            <Text style={styles.toastText}>{toast.message}</Text>
+            <Text style={[styles.toastText, { color: colors.text }]}>{toast.message}</Text>
           </View>
         </Animated.View>
       )}
 
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
+      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+        <TouchableOpacity
+          style={[styles.backButton, { backgroundColor: isDarkMode ? colors.border : '#f1f5f9' }]}
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color="#0f172a" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{t('log.steps.title')}</Text>
-          <Text style={styles.headerSubtitle}>{formatDate()}</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>{t('log.steps.title')}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>{formatDate()}</Text>
         </View>
       </View>
 
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
@@ -352,23 +355,23 @@ export default function LogStepsScreen() {
               </LinearGradient>
             </View>
 
-            <Text style={styles.stepTitle}>{t('log.steps.title')}</Text>
-            <Text style={styles.stepDescription}>
+            <Text style={[styles.stepTitle, { color: colors.text }]}>{t('log.steps.title')}</Text>
+            <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
               {t('log.steps.stepCounterDesc')}
             </Text>
 
             {/* Image Upload Section - Optional */}
             <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>{t('log.steps.stepCounter')} <Text style={{ color: COLORS.textMuted, fontWeight: '400' }}>({t('feedback.other').toLowerCase() === 'other' ? 'Optional' : 'விருப்பம்'})</Text></Text>
-              
+              <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.steps.stepCounter')} <Text style={{ color: colors.textMuted, fontWeight: '400' }}>({t('feedback.other').toLowerCase() === 'other' ? 'Optional' : 'விருப்பம்'})</Text></Text>
+
               {imageUri ? (
                 <View style={styles.imagePreviewContainer}>
-                  <Image 
-                    source={{ uri: imageUri }} 
+                  <Image
+                    source={{ uri: imageUri }}
                     style={styles.imagePreview}
                     contentFit="cover"
                   />
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.changeImageButton}
                     onPress={() => setImageUri(null)}
                   >
@@ -377,7 +380,7 @@ export default function LogStepsScreen() {
                 </View>
               ) : (
                 <View style={styles.imageUploadRow}>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.uploadButton, { backgroundColor: COLORS.primaryDark }]}
                     onPress={pickImageFromGallery}
                     activeOpacity={0.8}
@@ -391,7 +394,7 @@ export default function LogStepsScreen() {
                     </LinearGradient>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.uploadButton, { backgroundColor: COLORS.accentDark }]}
                     onPress={takePhoto}
                     activeOpacity={0.8}
@@ -410,13 +413,13 @@ export default function LogStepsScreen() {
 
             {/* Step Input Section */}
             <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>{t('log.steps.count')}</Text>
-              <View style={styles.textInputContainer}>
-                <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.textSecondary} />
+              <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.steps.count')}</Text>
+              <View style={[styles.textInputContainer, { backgroundColor: isDarkMode ? colors.cardBackground : COLORS.background }]}>
+                <MaterialCommunityIcons name="shoe-print" size={20} color={colors.textSecondary} />
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, { color: colors.text }]}
                   placeholder={t('log.steps.enterSteps')}
-                  placeholderTextColor={COLORS.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   keyboardType="number-pad"
                   value={stepCount}
                   onChangeText={(text) => setStepCount(text.replace(/[^0-9]/g, ''))}
@@ -438,8 +441,8 @@ export default function LogStepsScreen() {
               >
                 {isSaving ? (
                   <Text style={styles.submitButtonText}>
-                    {uploadProgress > 0 && uploadProgress < 100 
-                      ? `${t('common.loading')} ${Math.round(uploadProgress)}%` 
+                    {uploadProgress > 0 && uploadProgress < 100
+                      ? `${t('common.loading')} ${Math.round(uploadProgress)}%`
                       : t('common.loading')}
                   </Text>
                 ) : (
@@ -450,12 +453,12 @@ export default function LogStepsScreen() {
                 )}
               </LinearGradient>
             </TouchableOpacity>
-            
+
             {/* Helper text for optional image */}
             {!imageUri && (
-              <View style={[styles.proofRequiredMessage, { backgroundColor: COLORS.primary + '10', borderColor: COLORS.primary + '30', marginBottom: 18 }]}> 
+              <View style={[styles.proofRequiredMessage, { backgroundColor: COLORS.primary + '10', borderColor: COLORS.primary + '30', marginBottom: 18 }]}>
                 <Ionicons name="information-circle-outline" size={16} color={COLORS.primary} />
-                <Text style={[styles.proofRequiredText, { color: COLORS.primary }]}> 
+                <Text style={[styles.proofRequiredText, { color: COLORS.primary }]}>
                   {t('log.steps.stepCounterDesc')}
                 </Text>
               </View>
@@ -465,30 +468,30 @@ export default function LogStepsScreen() {
             {stepEntries.length > 0 && (
               <View style={styles.entriesSection}>
                 <View style={styles.entriesHeader}>
-                  <Text style={styles.inputLabel}>{t('log.steps.todaysTotal')} ({stepEntries.length})</Text>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>{t('log.steps.todaysTotal')} ({stepEntries.length})</Text>
                   <View style={styles.goalRow}>
-                    <View style={styles.goalBadge}>
-                      <Text style={styles.goalBadgeText}>
+                    <View style={[styles.goalBadge, isDarkMode && { backgroundColor: COLORS.accent + '20' }]}>
+                      <Text style={[styles.goalBadgeText, isDarkMode && { color: COLORS.accent }]}>
                         Goal: {globalSettings?.dailySteps ? globalSettings.dailySteps.toLocaleString() : '—'}
                       </Text>
                     </View>
                   </View>
                 </View>
                 {stepEntries.map((entry, index) => (
-                  <View key={entry.id} style={styles.entryCard}>
+                  <View key={entry.id} style={[styles.entryCard, { backgroundColor: colors.cardBackground }]}>
                     <View style={styles.entryContent}>
                       <View style={styles.entryLeft}>
-                        <View style={styles.entryIconContainer}>
+                        <View style={[styles.entryIconContainer, isDarkMode && { backgroundColor: COLORS.accent + '20' }]}>
                           <MaterialCommunityIcons name="shoe-print" size={20} color={COLORS.accent} />
                         </View>
                         <View style={styles.entryInfo}>
-                          <Text style={styles.entrySteps}>{entry.stepCount.toLocaleString()} {t('home.steps')}</Text>
-                          <Text style={styles.entryTime}>{formatTime(entry.loggedAt)}</Text>
+                          <Text style={[styles.entrySteps, { color: colors.text }]}>{entry.stepCount.toLocaleString()} {t('home.steps')}</Text>
+                          <Text style={[styles.entryTime, { color: colors.textSecondary }]}>{formatTime(entry.loggedAt)}</Text>
                         </View>
                       </View>
                       {index === 0 && (
-                        <TouchableOpacity 
-                          style={styles.deleteButton}
+                        <TouchableOpacity
+                          style={[styles.deleteButton, isDarkMode && { backgroundColor: COLORS.error + '20' }]}
                           onPress={() => handleRemoveEntry(entry.id)}
                         >
                           <Ionicons name="trash-outline" size={20} color={COLORS.error} />
@@ -503,16 +506,16 @@ export default function LogStepsScreen() {
             {/* Empty State */}
             {stepEntries.length === 0 && (
               <View style={styles.emptyState}>
-                <MaterialCommunityIcons name="shoe-print" size={48} color={COLORS.border} />
-                <Text style={styles.emptyStateText}>{t('log.steps.noHistory')}</Text>
-                <Text style={styles.emptyStateHint}>{t('log.steps.enterSteps')}</Text>
+                <MaterialCommunityIcons name="shoe-print" size={48} color={colors.border} />
+                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>{t('log.steps.noHistory')}</Text>
+                <Text style={[styles.emptyStateHint, { color: colors.textMuted }]}>{t('log.steps.enterSteps')}</Text>
               </View>
             )}
 
             {/* Info Card */}
-            <View style={styles.infoCard}>
-              <Ionicons name="information-circle" size={24} color={COLORS.primary} />
-              <Text style={styles.infoText}>
+            <View style={[styles.infoCard, { backgroundColor: isDarkMode ? colors.primary + '15' : COLORS.primaryLight }]}>
+              <Ionicons name="information-circle" size={24} color={colors.primary} />
+              <Text style={[styles.infoText, { color: isDarkMode ? colors.primary : COLORS.primaryDark }]}>
                 {t('log.steps.stepCounterDesc')}
               </Text>
             </View>

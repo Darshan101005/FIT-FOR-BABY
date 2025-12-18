@@ -5,24 +5,24 @@
 import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
 import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DeviceStatus, DoctorVisit, DoctorVisitStatus, ExerciseLog, Feedback, FeedbackCategory, FeedbackStatus, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, UserDevice, WeightLog } from '@/types/firebase.types';
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    deleteField,
-    doc,
-    getDoc,
-    getDocs,
-    increment,
-    limit,
-    onSnapshot,
-    orderBy,
-    query,
-    setDoc,
-    Timestamp,
-    Unsubscribe,
-    updateDoc,
-    where,
-    writeBatch
+  addDoc,
+  collection,
+  deleteDoc,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  increment,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  Timestamp,
+  Unsubscribe,
+  updateDoc,
+  where,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -513,11 +513,11 @@ export const coupleService = {
     try {
       const couplesRef = collection(db, COLLECTIONS.COUPLES);
       const snapshot = await getDocs(couplesRef);
-      
+
       if (snapshot.empty) {
         return 'C_001';
       }
-      
+
       // Find the highest ID number
       let maxIdNum = 0;
       snapshot.docs.forEach(doc => {
@@ -527,7 +527,7 @@ export const coupleService = {
           if (idNum > maxIdNum) maxIdNum = idNum;
         }
       });
-      
+
       return `C_${String(maxIdNum + 1).padStart(3, '0')}`;
     } catch (error) {
       console.error('Error getting next couple ID:', error);
@@ -546,7 +546,7 @@ export const coupleService = {
   }): Promise<{ coupleId: string; maleTempPassword: string; femaleTempPassword: string }> {
     const maleTempPassword = generateTempPassword();
     const femaleTempPassword = generateTempPassword();
-    
+
     // Build male user object - only include non-empty values
     const maleData: Record<string, any> = {
       id: `${data.coupleId}_M`,
@@ -572,7 +572,7 @@ export const coupleService = {
     if (data.female.email) femaleData.email = data.female.email;
     if (data.female.phone) femaleData.phone = data.female.phone;
     if (data.female.age) femaleData.age = data.female.age;
-    
+
     const coupleData: Record<string, any> = {
       id: data.coupleId,
       coupleId: data.coupleId,
@@ -584,19 +584,19 @@ export const coupleService = {
       createdAt: now(),
       updatedAt: now(),
     };
-    
+
     // Add enrolledByName if provided
     if (data.enrolledByName) {
       coupleData.enrolledByName = data.enrolledByName;
     }
-    
+
     const coupleRef = doc(db, COLLECTIONS.COUPLES, data.coupleId);
     await setDoc(coupleRef, coupleData);
-    
-    return { 
-      coupleId: data.coupleId, 
-      maleTempPassword, 
-      femaleTempPassword 
+
+    return {
+      coupleId: data.coupleId,
+      maleTempPassword,
+      femaleTempPassword
     };
   },
 
@@ -625,19 +625,19 @@ export const coupleService = {
     try {
       const couplesRef = collection(db, COLLECTIONS.COUPLES);
       // Note: Simple query without orderBy to avoid index requirements
-      return onSnapshot(couplesRef, 
+      return onSnapshot(couplesRef,
         (snapshot) => {
           // Empty collection is valid - not an error
           const couples = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() }))
             // Filter out malformed couples without male/female data
             .filter((couple: any) => {
-              return couple && 
-                     couple.coupleId && 
-                     couple.male && 
-                     couple.female &&
-                     typeof couple.male === 'object' &&
-                     typeof couple.female === 'object';
+              return couple &&
+                couple.coupleId &&
+                couple.male &&
+                couple.female &&
+                typeof couple.male === 'object' &&
+                typeof couple.female === 'object';
             });
           // Sort client-side by coupleId (C_001, C_002, etc.)
           couples.sort((a: any, b: any) => {
@@ -649,12 +649,12 @@ export const coupleService = {
         (error) => {
           // Log for debugging
           console.error('Couples subscription error:', error);
-          
+
           // Call error handler only for actual errors (permission, network, etc.)
           if (onError) {
             onError(error);
           }
-          
+
           // Return empty array so UI can still render
           callback([]);
         }
@@ -667,14 +667,14 @@ export const coupleService = {
         onError(error);
       }
       // Return a no-op unsubscribe function
-      return () => {};
+      return () => { };
     }
   },
 
   // Find couple by login credential (coupleId, userId, phone, or email)
   async findByCredential(credential: string): Promise<{ couple: any; gender: 'male' | 'female' | 'both' } | null> {
     const couplesRef = collection(db, COLLECTIONS.COUPLES);
-    
+
     // First check if credential is a Couple ID (e.g., C_001)
     if (credential.match(/^C_\d+$/i)) {
       const coupleDoc = await getDoc(doc(db, COLLECTIONS.COUPLES, credential.toUpperCase()));
@@ -683,25 +683,25 @@ export const coupleService = {
       }
       return null;
     }
-    
+
     // Otherwise search by user credentials
     const snapshot = await getDocs(couplesRef);
-    
+
     for (const docSnap of snapshot.docs) {
       const couple = { id: docSnap.id, ...docSnap.data() } as any;
-      
+
       // Check if credential matches male
-      const matchesMale = 
+      const matchesMale =
         couple.male.id === credential ||
         couple.male.phone === credential ||
         couple.male.email?.toLowerCase() === credential.toLowerCase();
-      
+
       // Check if credential matches female
-      const matchesFemale = 
+      const matchesFemale =
         couple.female.id === credential ||
         couple.female.phone === credential ||
         couple.female.email?.toLowerCase() === credential.toLowerCase();
-      
+
       if (matchesMale && matchesFemale) {
         // Shared credential - need to show profile picker
         return { couple, gender: 'both' };
@@ -711,22 +711,154 @@ export const coupleService = {
         return { couple, gender: 'female' };
       }
     }
-    
+
     return null;
+  },
+
+  // Check if phone or email is already used by another couple (for enrollment validation)
+  async checkDuplicateCredentials(
+    malePhone?: string,
+    maleEmail?: string,
+    femalePhone?: string,
+    femaleEmail?: string,
+    excludeCoupleId?: string // Optional: exclude this couple when editing
+  ): Promise<{
+    isDuplicate: boolean;
+    conflicts: Array<{
+      field: 'malePhone' | 'maleEmail' | 'femalePhone' | 'femaleEmail';
+      value: string;
+      conflictingCoupleId: string;
+      conflictingUserName: string;
+      conflictingUserGender: 'male' | 'female';
+    }>;
+  }> {
+    const couplesRef = collection(db, COLLECTIONS.COUPLES);
+    const snapshot = await getDocs(couplesRef);
+    const conflicts: Array<{
+      field: 'malePhone' | 'maleEmail' | 'femalePhone' | 'femaleEmail';
+      value: string;
+      conflictingCoupleId: string;
+      conflictingUserName: string;
+      conflictingUserGender: 'male' | 'female';
+    }> = [];
+
+    for (const docSnap of snapshot.docs) {
+      const couple = { id: docSnap.id, ...docSnap.data() } as any;
+
+      // Skip the couple we're editing (if provided)
+      if (excludeCoupleId && couple.coupleId === excludeCoupleId) {
+        continue;
+      }
+
+      // Check male phone
+      if (malePhone && malePhone.trim()) {
+        if (couple.male?.phone === malePhone.trim()) {
+          conflicts.push({
+            field: 'malePhone',
+            value: malePhone.trim(),
+            conflictingCoupleId: couple.coupleId,
+            conflictingUserName: couple.male.name || 'Male',
+            conflictingUserGender: 'male',
+          });
+        }
+        if (couple.female?.phone === malePhone.trim()) {
+          conflicts.push({
+            field: 'malePhone',
+            value: malePhone.trim(),
+            conflictingCoupleId: couple.coupleId,
+            conflictingUserName: couple.female.name || 'Female',
+            conflictingUserGender: 'female',
+          });
+        }
+      }
+
+      // Check male email
+      if (maleEmail && maleEmail.trim()) {
+        const email = maleEmail.trim().toLowerCase();
+        if (couple.male?.email?.toLowerCase() === email) {
+          conflicts.push({
+            field: 'maleEmail',
+            value: maleEmail.trim(),
+            conflictingCoupleId: couple.coupleId,
+            conflictingUserName: couple.male.name || 'Male',
+            conflictingUserGender: 'male',
+          });
+        }
+        if (couple.female?.email?.toLowerCase() === email) {
+          conflicts.push({
+            field: 'maleEmail',
+            value: maleEmail.trim(),
+            conflictingCoupleId: couple.coupleId,
+            conflictingUserName: couple.female.name || 'Female',
+            conflictingUserGender: 'female',
+          });
+        }
+      }
+
+      // Check female phone
+      if (femalePhone && femalePhone.trim()) {
+        if (couple.male?.phone === femalePhone.trim()) {
+          conflicts.push({
+            field: 'femalePhone',
+            value: femalePhone.trim(),
+            conflictingCoupleId: couple.coupleId,
+            conflictingUserName: couple.male.name || 'Male',
+            conflictingUserGender: 'male',
+          });
+        }
+        if (couple.female?.phone === femalePhone.trim()) {
+          conflicts.push({
+            field: 'femalePhone',
+            value: femalePhone.trim(),
+            conflictingCoupleId: couple.coupleId,
+            conflictingUserName: couple.female.name || 'Female',
+            conflictingUserGender: 'female',
+          });
+        }
+      }
+
+      // Check female email
+      if (femaleEmail && femaleEmail.trim()) {
+        const email = femaleEmail.trim().toLowerCase();
+        if (couple.male?.email?.toLowerCase() === email) {
+          conflicts.push({
+            field: 'femaleEmail',
+            value: femaleEmail.trim(),
+            conflictingCoupleId: couple.coupleId,
+            conflictingUserName: couple.male.name || 'Male',
+            conflictingUserGender: 'male',
+          });
+        }
+        if (couple.female?.email?.toLowerCase() === email) {
+          conflicts.push({
+            field: 'femaleEmail',
+            value: femaleEmail.trim(),
+            conflictingCoupleId: couple.coupleId,
+            conflictingUserName: couple.female.name || 'Female',
+            conflictingUserGender: 'female',
+          });
+        }
+      }
+    }
+
+    return {
+      isDuplicate: conflicts.length > 0,
+      conflicts,
+    };
   },
 
   // Verify password (temp or user's own)
   async verifyPassword(coupleId: string, gender: 'male' | 'female', password: string): Promise<boolean> {
     const couple = await this.get(coupleId);
     if (!couple) return false;
-    
+
     const user = couple[gender];
-    
+
     // Check if user has reset password - use their own password
     if (user.isPasswordReset && user.password) {
       return user.password === password;
     }
-    
+
     // Check individual temp password (stored per user)
     return user.tempPassword === password;
   },
@@ -808,26 +940,26 @@ export const coupleService = {
   }): Promise<void> {
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
     const updateData: any = { updatedAt: now() };
-    
+
     Object.entries(data).forEach(([key, value]) => {
       if (value !== undefined) {
         updateData[`${gender}.${key}`] = value;
       }
     });
-    
+
     // Calculate BMI if both weight and height are provided
     if (data.weight && data.height) {
       const heightInMeters = data.height / 100;
       updateData[`${gender}.bmi`] = Math.round((data.weight / (heightInMeters * heightInMeters)) * 10) / 10;
     }
-    
+
     await updateDoc(coupleRef, updateData);
   },
 
   // Update specific user field (for personal info edits)
   async updateUserField(coupleId: string, gender: 'male' | 'female', data: Record<string, any>): Promise<void> {
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
-    
+
     // Handle data - use deleteField() for null values to actually remove from Firestore
     const cleanData: Record<string, any> = { updatedAt: now() };
     Object.entries(data).forEach(([key, value]) => {
@@ -838,7 +970,7 @@ export const coupleService = {
         cleanData[key] = value;
       }
     });
-    
+
     await updateDoc(coupleRef, cleanData);
   },
 
@@ -859,7 +991,7 @@ export const coupleService = {
   }): Promise<void> {
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
     const updateData: Record<string, any> = { updatedAt: now() };
-    
+
     // Only add non-empty values
     if (profileData.email) {
       updateData[`${gender}.email`] = profileData.email;
@@ -885,7 +1017,7 @@ export const coupleService = {
         updateData[`${gender}.address`] = cleanAddress;
       }
     }
-    
+
     await updateDoc(coupleRef, updateData);
   },
 
@@ -903,10 +1035,66 @@ export const coupleService = {
     return newTempPassword;
   },
 
-  // Delete couple
+  // Delete couple and ALL subcollections
+  // IMPORTANT: Firestore does NOT auto-delete subcollections when parent is deleted
   async delete(coupleId: string): Promise<void> {
+    // All subcollections that exist under couples/{coupleId}
+    const COUPLE_SUBCOLLECTIONS = [
+      'weightLogs',
+      'steps',
+      'exerciseLogs',
+      'foodLogs',
+      'testResults',
+      'dietPlan',
+      'devices',
+      COLLECTIONS.DOCTOR_VISITS,   // 'doctorVisits'
+      COLLECTIONS.NURSING_VISITS,  // 'nursingVisits'
+      'questionnaire',
+    ];
+
+    console.log(`🗑️ Deleting couple ${coupleId} and all subcollections...`);
+
+    // Delete all documents from each subcollection first
+    for (const subcollectionName of COUPLE_SUBCOLLECTIONS) {
+      try {
+        const subcollectionRef = collection(db, COLLECTIONS.COUPLES, coupleId, subcollectionName);
+        const snapshot = await getDocs(subcollectionRef);
+
+        if (!snapshot.empty) {
+          // Use batch delete for efficiency (max 500 operations per batch)
+          const batchSize = 500;
+          let batch = writeBatch(db);
+          let count = 0;
+
+          for (const docSnap of snapshot.docs) {
+            batch.delete(docSnap.ref);
+            count++;
+
+            if (count >= batchSize) {
+              await batch.commit();
+              batch = writeBatch(db);
+              count = 0;
+            }
+          }
+
+          // Commit remaining deletes
+          if (count > 0) {
+            await batch.commit();
+          }
+
+          console.log(`  ✓ Deleted ${snapshot.size} documents from ${subcollectionName}`);
+        }
+      } catch (error) {
+        console.error(`  ✗ Error deleting ${subcollectionName}:`, error);
+        // Continue with other subcollections even if one fails
+      }
+    }
+
+    // Finally delete the main couple document
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
     await deleteDoc(coupleRef);
+
+    console.log(`✅ Couple ${coupleId} and all subcollections deleted successfully`);
   },
 
   // ============================================
@@ -1060,7 +1248,7 @@ export const coupleService = {
       }
 
       const user = couple[gender];
-      
+
       // Calculate days active from enrollment date
       let daysActive = 0;
       if (couple.enrollmentDate) {
@@ -1165,14 +1353,14 @@ export const coupleWeightLogService = {
       // First verify the couple exists
       const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
       const coupleSnapshot = await getDoc(coupleRef);
-      
+
       if (!coupleSnapshot.exists()) {
         throw new Error(`Couple ${coupleId} not found`);
       }
 
       const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'weightLogs');
       const date = data.date || formatDateString(new Date());
-      
+
       // Calculate BMI if height is provided and not already provided
       let bmi = data.bmi;
       if (!bmi && data.height && data.height > 0) {
@@ -1185,7 +1373,7 @@ export const coupleWeightLogService = {
       if (!whtr && data.waist && data.height && data.height > 0) {
         whtr = Math.round((data.waist / data.height) * 100) / 100;
       }
-      
+
       // Add the weight log to subcollection
       const docRef = await addDoc(logsRef, {
         coupleId,
@@ -1200,7 +1388,7 @@ export const coupleWeightLogService = {
         loggedAt: now(),
         createdAt: now(),
       });
-      
+
       // Also update the current weight in the couple document
       const updateData: Record<string, any> = {
         [`${gender}.weight`]: data.weight,
@@ -1213,7 +1401,7 @@ export const coupleWeightLogService = {
         updateData[`${gender}.bmi`] = bmi;
       }
       await updateDoc(coupleRef, updateData);
-      
+
       return docRef.id;
     } catch (error) {
       console.error('Error adding weight log:', error);
@@ -1285,7 +1473,7 @@ export const coupleWeightLogService = {
       const logsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'weightLogs');
       // Simple query - filter by gender client-side to avoid composite index requirement
       const q = query(logsRef, orderBy('date', 'desc'), limit(60));
-      return onSnapshot(q, 
+      return onSnapshot(q,
         (snapshot) => {
           const allLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CoupleWeightLog));
           const filteredLogs = allLogs.filter(log => log.gender === gender).slice(0, 30);
@@ -1299,7 +1487,7 @@ export const coupleWeightLogService = {
     } catch (error) {
       console.error('Failed to setup weight logs subscription:', error);
       callback([]);
-      return () => {};
+      return () => { };
     }
   },
 };
@@ -1364,7 +1552,7 @@ export const lipidTestService = {
       const testsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'testResults');
       const q = query(testsRef, where('gender', '==', gender), orderBy('testNumber', 'asc'));
       const snapshot = await getDocs(q);
-      
+
       return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -1374,7 +1562,7 @@ export const lipidTestService = {
       return [];
     }
   },
-  
+
   // Get test count for a user (to check if they can add more tests)
   async getTestCount(coupleId: string, gender: 'male' | 'female'): Promise<number> {
     try {
@@ -1387,11 +1575,11 @@ export const lipidTestService = {
       return 0;
     }
   },
-  
+
   // Add a new test result (max 2 per user)
   async addTestResult(
-    coupleId: string, 
-    gender: 'male' | 'female', 
+    coupleId: string,
+    gender: 'male' | 'female',
     data: LipidTestData,
     adminUid: string,
     adminName?: string
@@ -1399,15 +1587,15 @@ export const lipidTestService = {
     try {
       // Check current test count
       const currentCount = await this.getTestCount(coupleId, gender);
-      
+
       if (currentCount >= 2) {
         return { success: false, error: 'Maximum 2 tests allowed per user' };
       }
-      
+
       const testNumber = (currentCount + 1) as 1 | 2;
       const userId = `${coupleId}_${gender === 'male' ? 'M' : 'F'}`;
       const testId = `${userId}_test${testNumber}`;
-      
+
       const testDoc = {
         odAaByuserId: userId,
         gender,
@@ -1423,19 +1611,19 @@ export const lipidTestService = {
         notes: data.notes || '',
         createdAt: Timestamp.now(),
       };
-      
+
       console.log('Creating test document at:', `couples/${coupleId}/testResults/${testId}`);
       console.log('Test document data:', testDoc);
-      
+
       await setDoc(doc(db, COLLECTIONS.COUPLES, coupleId, 'testResults', testId), testDoc);
-      
+
       console.log('Test document created successfully');
       return { success: true, testId };
     } catch (error: any) {
       console.error('Error adding test result - Code:', error.code);
       console.error('Error adding test result - Message:', error.message);
       console.error('Error adding test result - Full:', error);
-      
+
       // Check for permission error
       if (error.code === 'permission-denied') {
         return { success: false, error: 'Permission denied. Firestore rules need to allow testResults subcollection.' };
@@ -1443,7 +1631,7 @@ export const lipidTestService = {
       return { success: false, error: error.message || 'Failed to add test result' };
     }
   },
-  
+
   // Update an existing test result
   async updateTestResult(
     coupleId: string,
@@ -1462,7 +1650,7 @@ export const lipidTestService = {
       return false;
     }
   },
-  
+
   // Delete a test result
   async deleteTestResult(coupleId: string, testId: string): Promise<boolean> {
     try {
@@ -1491,14 +1679,14 @@ export const coupleStepsService = {
       // Verify the couple exists
       const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
       const coupleSnapshot = await getDoc(coupleRef);
-      
+
       if (!coupleSnapshot.exists()) {
         throw new Error(`Couple ${coupleId} not found`);
       }
 
       const stepsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'steps');
       const date = data.date || formatDateString(new Date());
-      
+
       const docRef = await addDoc(stepsRef, {
         coupleId,
         gender,
@@ -1513,7 +1701,7 @@ export const coupleStepsService = {
         loggedAt: now(),
         createdAt: now(),
       });
-      
+
       return docRef.id;
     } catch (error) {
       console.error('Error adding step entry:', error);
@@ -1585,8 +1773,8 @@ export const coupleStepsService = {
       const today = formatDateString(new Date());
       const stepsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'steps');
       const q = query(stepsRef, where('date', '==', today), orderBy('loggedAt', 'desc'));
-      
-      return onSnapshot(q, 
+
+      return onSnapshot(q,
         (snapshot) => {
           const entries = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as CoupleStepEntry))
@@ -1601,7 +1789,7 @@ export const coupleStepsService = {
     } catch (error) {
       console.error('Failed to setup steps subscription:', error);
       callback([]);
-      return () => {};
+      return () => { };
     }
   },
 };
@@ -1650,14 +1838,14 @@ export const coupleExerciseService = {
       // Verify the couple exists
       const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
       const coupleSnapshot = await getDoc(coupleRef);
-      
+
       if (!coupleSnapshot.exists()) {
         throw new Error(`Couple ${coupleId} not found`);
       }
 
       const exerciseRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'exerciseLogs');
       const date = data.date || formatDateString(new Date());
-      
+
       const docRef = await addDoc(exerciseRef, {
         coupleId,
         gender,
@@ -1676,7 +1864,7 @@ export const coupleExerciseService = {
         loggedAt: now(),
         createdAt: now(),
       });
-      
+
       return docRef.id;
     } catch (error) {
       console.error('Error adding exercise log:', error);
@@ -1825,14 +2013,14 @@ export const coupleFoodLogService = {
       // Verify the couple exists
       const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
       const coupleSnapshot = await getDoc(coupleRef);
-      
+
       if (!coupleSnapshot.exists()) {
         throw new Error(`Couple ${coupleId} not found`);
       }
 
       const foodLogsRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'foodLogs');
       const date = data.date || formatDateString(new Date());
-      
+
       const docRef = await addDoc(foodLogsRef, {
         coupleId,
         gender,
@@ -1848,7 +2036,7 @@ export const coupleFoodLogService = {
         loggedAt: now(),
         createdAt: now(),
       });
-      
+
       return docRef.id;
     } catch (error) {
       console.error('Error adding food log:', error);
@@ -1909,10 +2097,10 @@ export const coupleFoodLogService = {
   },
 
   // Get totals for a date
-  async getTotalsForDate(coupleId: string, gender: 'male' | 'female', date: string): Promise<{ 
-    calories: number; 
-    protein: number; 
-    carbs: number; 
+  async getTotalsForDate(coupleId: string, gender: 'male' | 'female', date: string): Promise<{
+    calories: number;
+    protein: number;
+    carbs: number;
     fat: number;
     grams: number;
     mealCount: number;
@@ -1986,7 +2174,7 @@ export const dietPlanService = {
   }): Promise<void> {
     try {
       const dietPlanRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'dietPlan', 'current');
-      
+
       await setDoc(dietPlanRef, {
         coupleId,
         breakfast: data.breakfast,
@@ -1998,7 +2186,7 @@ export const dietPlanService = {
         createdByName: data.createdByName || '',
         updatedAt: now(),
       }, { merge: true });
-      
+
       // Set createdAt only if it's a new document
       const docSnap = await getDoc(dietPlanRef);
       if (docSnap.exists() && !docSnap.data().createdAt) {
@@ -2015,7 +2203,7 @@ export const dietPlanService = {
     try {
       const dietPlanRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'dietPlan', 'current');
       const docSnap = await getDoc(dietPlanRef);
-      
+
       if (docSnap.exists()) {
         return { id: docSnap.id, ...docSnap.data() } as DietPlan;
       }
@@ -2029,7 +2217,7 @@ export const dietPlanService = {
   // Subscribe to diet plan changes (real-time)
   subscribe(coupleId: string, callback: (dietPlan: DietPlan | null) => void): Unsubscribe {
     const dietPlanRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'dietPlan', 'current');
-    return onSnapshot(dietPlanRef, 
+    return onSnapshot(dietPlanRef,
       (docSnap) => {
         if (docSnap.exists()) {
           callback({ id: docSnap.id, ...docSnap.data() } as DietPlan);
@@ -2174,7 +2362,7 @@ export const supportRequestService = {
     if (assignedTo) updateData.assignedTo = assignedTo;
     if (assignedName) updateData.assignedName = assignedName;
     if (status === 'completed') updateData.resolvedAt = now();
-    
+
     await updateDoc(requestRef, updateData);
   },
 
@@ -2278,14 +2466,14 @@ export const notificationService = {
   async markAllAsRead(userId: string): Promise<void> {
     const notifications = await this.getByUser(userId);
     const batch = writeBatch(db);
-    
+
     notifications
       .filter(n => !n.isRead)
       .forEach(n => {
         const ref = doc(db, COLLECTIONS.NOTIFICATIONS, n.id);
         batch.update(ref, { isRead: true, readAt: now() });
       });
-    
+
     await batch.commit();
   },
 
@@ -2339,11 +2527,11 @@ export const globalSettingsService = {
     try {
       const settingsRef = doc(db, COLLECTIONS.SETTINGS, 'globalSettings');
       const snapshot = await getDoc(settingsRef);
-      
+
       if (snapshot.exists()) {
         return snapshot.data() as GlobalSettings;
       }
-      
+
       // Return default settings if document doesn't exist
       return {
         ...DEFAULT_GLOBAL_SETTINGS,
@@ -2361,17 +2549,17 @@ export const globalSettingsService = {
   // Update global settings
   async update(data: Partial<GlobalSettings>, adminId?: string): Promise<void> {
     const settingsRef = doc(db, COLLECTIONS.SETTINGS, 'globalSettings');
-    
+
     // Calculate weekly goals if daily goals are updated
     const updateData: Partial<GlobalSettings> = {
       ...data,
       updatedAt: now(),
     };
-    
+
     if (adminId) {
       updateData.updatedBy = adminId;
     }
-    
+
     // Auto-calculate weekly goals
     if (data.dailySteps !== undefined) {
       updateData.weeklySteps = data.dailySteps * 7;
@@ -2382,7 +2570,7 @@ export const globalSettingsService = {
     if (data.highKneesMinutes !== undefined) {
       updateData.weeklyHighKneesMinutes = data.highKneesMinutes * 7;
     }
-    
+
     await setDoc(settingsRef, updateData, { merge: true });
   },
 
@@ -2394,7 +2582,7 @@ export const globalSettingsService = {
     dailyCaloriesBurnt: number;
   }, adminId?: string): Promise<void> {
     const settingsRef = doc(db, COLLECTIONS.SETTINGS, 'globalSettings');
-    
+
     const updateData: Partial<GlobalSettings> = {
       dailySteps: goals.dailySteps,
       coupleWalkingMinutes: goals.coupleWalkingMinutes,
@@ -2405,18 +2593,18 @@ export const globalSettingsService = {
       weeklyHighKneesMinutes: goals.highKneesMinutes * 7,
       updatedAt: now(),
     };
-    
+
     if (adminId) {
       updateData.updatedBy = adminId;
     }
-    
+
     await setDoc(settingsRef, updateData, { merge: true });
   },
 
   // Subscribe to settings changes (real-time)
   subscribe(callback: (settings: GlobalSettings) => void): Unsubscribe {
     const settingsRef = doc(db, COLLECTIONS.SETTINGS, 'globalSettings');
-    return onSnapshot(settingsRef, 
+    return onSnapshot(settingsRef,
       (snapshot) => {
         if (snapshot.exists()) {
           callback(snapshot.data() as GlobalSettings);
@@ -2682,15 +2870,15 @@ export const nursingVisitService = {
       // Get all active couples first
       const couplesRef = collection(db, COLLECTIONS.COUPLES);
       const couplesSnapshot = await getDocs(query(couplesRef, where('status', '==', 'active'), limit(limitCount)));
-      
+
       const allVisits: (NursingDepartmentVisit & { coupleId: string })[] = [];
-      
+
       // Fetch nursing visits for each couple
       for (const coupleDoc of couplesSnapshot.docs) {
         const coupleId = coupleDoc.id;
         const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.NURSING_VISITS);
         const visitsSnapshot = await getDocs(visitsRef);
-        
+
         visitsSnapshot.docs.forEach(visitDoc => {
           allVisits.push({
             id: visitDoc.id,
@@ -2699,7 +2887,7 @@ export const nursingVisitService = {
           } as NursingDepartmentVisit & { coupleId: string });
         });
       }
-      
+
       // Sort by date descending
       return allVisits.sort((a, b) => b.date.localeCompare(a.date));
     } catch (error) {
@@ -2714,15 +2902,15 @@ export const nursingVisitService = {
       // Get all active couples first
       const couplesRef = collection(db, COLLECTIONS.COUPLES);
       const couplesSnapshot = await getDocs(query(couplesRef, where('status', '==', 'active'), limit(limitCount)));
-      
+
       const allVisits: (DoctorVisit & { coupleId: string })[] = [];
-      
+
       // Fetch doctor visits for each couple
       for (const coupleDoc of couplesSnapshot.docs) {
         const coupleId = coupleDoc.id;
         const visitsRef = collection(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS);
         const visitsSnapshot = await getDocs(visitsRef);
-        
+
         visitsSnapshot.docs.forEach(visitDoc => {
           allVisits.push({
             id: visitDoc.id,
@@ -2731,7 +2919,7 @@ export const nursingVisitService = {
           } as DoctorVisit & { coupleId: string });
         });
       }
-      
+
       // Sort by date descending
       return allVisits.sort((a, b) => b.date.localeCompare(a.date));
     } catch (error) {
@@ -2786,7 +2974,7 @@ export const broadcastService = {
       const broadcastRef = collection(db, COLLECTIONS.BROADCASTS);
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
-      
+
       // Simple query - filter by status only, then filter by date client-side
       const q = query(
         broadcastRef,
@@ -2798,7 +2986,7 @@ export const broadcastService = {
         id: doc.id,
         ...doc.data(),
       })) as Broadcast[];
-      
+
       // Filter client-side for sent status and recent date
       return broadcasts.filter(b => {
         if (b.status !== 'sent') return false;
@@ -2856,12 +3044,12 @@ export const broadcastService = {
     try {
       const broadcastRef = collection(db, COLLECTIONS.BROADCASTS);
       const snapshot = await getDocs(broadcastRef);
-      
+
       const batch = writeBatch(db);
       snapshot.docs.forEach(docSnapshot => {
         batch.delete(docSnapshot.ref);
       });
-      
+
       await batch.commit();
     } catch (error) {
       console.error('Error clearing all broadcasts:', error);
@@ -2883,7 +3071,7 @@ export const broadcastService = {
         id: doc.id,
         ...doc.data(),
       })) as Broadcast[];
-      
+
       // Filter out expired broadcasts client-side
       const now = new Date();
       return broadcasts.filter(b => {
@@ -2905,22 +3093,22 @@ export const broadcastService = {
   // Uses simple query to avoid composite index requirement
   subscribeToRecent(days: number = 7, callback: (broadcasts: Broadcast[]) => void): Unsubscribe {
     const broadcastRef = collection(db, COLLECTIONS.BROADCASTS);
-    
+
     const q = query(
       broadcastRef,
       orderBy('createdAt', 'desc'),
       limit(50)
     );
-    
+
     return onSnapshot(q, (snapshot) => {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
-      
+
       const broadcasts = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
       })) as Broadcast[];
-      
+
       // Filter client-side
       const filtered = broadcasts.filter(b => {
         if (b.status !== 'sent') return false;
@@ -2930,7 +3118,7 @@ export const broadcastService = {
         const sentAt = timestamp.toDate ? timestamp.toDate() : new Date(timestamp as any);
         return sentAt >= cutoffDate;
       }).slice(0, 20);
-      
+
       callback(filtered);
     });
   },
@@ -2947,11 +3135,11 @@ export const chatService = {
     try {
       const chatRef = doc(db, COLLECTIONS.CHATS, userId);
       const chatSnapshot = await getDoc(chatRef);
-      
+
       if (chatSnapshot.exists()) {
         return { id: chatSnapshot.id, ...chatSnapshot.data() } as Chat;
       }
-      
+
       // Create new chat
       const newChat: Omit<Chat, 'id'> = {
         odAaByuserId: userId,
@@ -2971,7 +3159,7 @@ export const chatService = {
         createdAt: now(),
         updatedAt: now(),
       };
-      
+
       await setDoc(chatRef, newChat);
       return { id: userId, ...newChat };
     } catch (error) {
@@ -3063,13 +3251,13 @@ export const chatService = {
         [field]: 0,
         updatedAt: now(),
       });
-      
+
       // Also mark individual messages as read
       const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
       const otherType = readerType === 'user' ? 'admin' : 'user';
       const q = query(messagesRef, where('senderType', '==', otherType), where('readAt', '==', null));
       const snapshot = await getDocs(q);
-      
+
       const batch = writeBatch(db);
       snapshot.docs.forEach(doc => {
         batch.update(doc.ref, { readAt: now() });
@@ -3086,13 +3274,13 @@ export const chatService = {
       // First delete all messages in the subcollection
       const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
       const snapshot = await getDocs(messagesRef);
-      
+
       const batch = writeBatch(db);
       snapshot.docs.forEach(doc => {
         batch.delete(doc.ref);
       });
       await batch.commit();
-      
+
       // Then delete the chat document
       const chatRef = doc(db, COLLECTIONS.CHATS, userId);
       await deleteDoc(chatRef);
@@ -3137,11 +3325,11 @@ export const chatService = {
         deletedByUser: false,
         deletedByAdmin: false,
       });
-      
+
       // Update chat document with last message info
       const chatRef = doc(db, COLLECTIONS.CHATS, userId);
       const unreadField = data.senderType === 'user' ? 'unreadByAdmin' : 'unreadByUser';
-      
+
       // Use atomic increment for unread count
       await updateDoc(chatRef, {
         lastMessage: data.message.substring(0, 100),
@@ -3150,7 +3338,7 @@ export const chatService = {
         [unreadField]: increment(1),
         updatedAt: now(),
       });
-      
+
       return docRef.id;
     } catch (error) {
       console.error('Error sending message:', error);
@@ -3164,14 +3352,14 @@ export const chatService = {
       const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
+
       const q = query(
         messagesRef,
         orderBy('createdAt', 'asc'),
         limit(limitCount)
       );
       const snapshot = await getDocs(q);
-      
+
       // Filter for messages within last 7 days
       const messages = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage))
@@ -3179,7 +3367,7 @@ export const chatService = {
           const createdAt = msg.createdAt?.toDate ? msg.createdAt.toDate() : new Date(msg.createdAt as any);
           return createdAt >= sevenDaysAgo;
         });
-      
+
       return messages;
     } catch (error) {
       console.error('Error getting messages:', error);
@@ -3191,10 +3379,10 @@ export const chatService = {
   subscribeToMessages(userId: string, callback: (messages: ChatMessage[]) => void): Unsubscribe {
     const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
     const q = query(messagesRef, orderBy('createdAt', 'asc'), limit(200));
-    
+
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
+
     return onSnapshot(q, (snapshot) => {
       const messages = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage))
@@ -3241,12 +3429,12 @@ export const chatService = {
       const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
+
       const snapshot = await getDocs(messagesRef);
-      
+
       let deletedCount = 0;
       const batch = writeBatch(db);
-      
+
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
@@ -3255,11 +3443,11 @@ export const chatService = {
           deletedCount++;
         }
       });
-      
+
       if (deletedCount > 0) {
         await batch.commit();
       }
-      
+
       return deletedCount;
     } catch (error) {
       console.error('Error cleaning up old messages:', error);
@@ -3272,15 +3460,15 @@ export const chatService = {
     try {
       const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
       const snapshot = await getDocs(messagesRef);
-      
+
       if (snapshot.docs.length === 0) return;
-      
+
       const batch = writeBatch(db);
       snapshot.docs.forEach(doc => {
         batch.delete(doc.ref);
       });
       await batch.commit();
-      
+
       // Reset the chat's last message info
       const chatRef = doc(db, COLLECTIONS.CHATS, userId);
       await updateDoc(chatRef, {
@@ -3524,7 +3712,7 @@ export const questionnaireService = {
     } catch (error) {
       console.error('Failed to setup questionnaire subscription:', error);
       callback(null);
-      return () => {};
+      return () => { };
     }
   },
 
@@ -3708,10 +3896,10 @@ export const feedbackService = {
       createdAt: now(),
       updatedAt: now(),
     });
-    
+
     // Update the document with its ID
     await updateDoc(docRef, { id: docRef.id });
-    
+
     return docRef.id;
   },
 
@@ -3735,7 +3923,7 @@ export const feedbackService = {
   async getByStatus(status: FeedbackStatus): Promise<Feedback[]> {
     const feedbackRef = collection(db, COLLECTIONS.FEEDBACKS);
     const q = query(
-      feedbackRef, 
+      feedbackRef,
       where('status', '==', status),
       orderBy('createdAt', 'desc')
     );
@@ -3745,8 +3933,8 @@ export const feedbackService = {
 
   // Update feedback status (admin)
   async updateStatus(
-    feedbackId: string, 
-    status: FeedbackStatus, 
+    feedbackId: string,
+    status: FeedbackStatus,
     adminNotes?: string,
     resolvedBy?: string
   ): Promise<void> {
@@ -3755,16 +3943,16 @@ export const feedbackService = {
       status,
       updatedAt: now(),
     };
-    
+
     if (adminNotes) {
       updateData.adminNotes = adminNotes;
     }
-    
+
     if (status === 'resolved' && resolvedBy) {
       updateData.resolvedBy = resolvedBy;
       updateData.resolvedAt = now();
     }
-    
+
     await updateDoc(feedbackRef, updateData);
   },
 
@@ -3775,7 +3963,7 @@ export const feedbackService = {
   ): Unsubscribe {
     const feedbackRef = collection(db, COLLECTIONS.FEEDBACKS);
     let q;
-    
+
     if (statusFilter) {
       q = query(
         feedbackRef,
@@ -3785,7 +3973,7 @@ export const feedbackService = {
     } else {
       q = query(feedbackRef, orderBy('createdAt', 'desc'));
     }
-    
+
     return onSnapshot(q, (snapshot) => {
       const feedbacks = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as Feedback);
       callback(feedbacks);
@@ -3812,18 +4000,18 @@ export const deviceService = {
 
   // Register or update device when user logs in
   async registerDevice(
-    coupleId: string, 
+    coupleId: string,
     gender: 'male' | 'female',
     deviceInfo: Omit<UserDevice, 'id' | 'firstLoginAt' | 'lastActiveAt' | 'status' | 'isCurrentDevice' | 'coupleId' | 'userGender'>
   ): Promise<{ deviceId: string; sessionToken: string }> {
     const devicesRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'devices');
     const sessionToken = this.generateSessionToken();
-    
+
     try {
       // Get all devices for this user and find if this device exists
       const userDevicesQuery = query(devicesRef, where('userGender', '==', gender));
       const userDevices = await getDocs(userDevicesQuery);
-      
+
       // Find existing device by matching device name and os
       let existingDevice: any = null;
       userDevices.docs.forEach(deviceDoc => {
@@ -3832,7 +4020,7 @@ export const deviceService = {
           existingDevice = { id: deviceDoc.id, ref: deviceDoc.ref, data };
         }
       });
-      
+
       if (existingDevice) {
         // Update existing device
         await updateDoc(existingDevice.ref, {
@@ -3842,7 +4030,7 @@ export const deviceService = {
           isCurrentDevice: true,
           lastActiveAt: now(),
         });
-        
+
         // Mark other devices of this user as not current
         const batch = writeBatch(db);
         userDevices.docs.forEach(deviceDoc => {
@@ -3853,7 +4041,7 @@ export const deviceService = {
         if (userDevices.docs.length > 1) {
           await batch.commit();
         }
-        
+
         return { deviceId: existingDevice.id, sessionToken };
       } else {
         // Create new device entry
@@ -3867,9 +4055,9 @@ export const deviceService = {
           coupleId,
           userGender: gender,
         };
-        
+
         const docRef = await addDoc(devicesRef, newDevice);
-        
+
         // Mark other devices of this user as not current
         const batch = writeBatch(db);
         userDevices.docs.forEach(deviceDoc => {
@@ -3878,7 +4066,7 @@ export const deviceService = {
         if (userDevices.docs.length > 0) {
           await batch.commit();
         }
-        
+
         return { deviceId: docRef.id, sessionToken };
       }
     } catch (error) {
@@ -3894,7 +4082,7 @@ export const deviceService = {
         coupleId,
         userGender: gender,
       };
-      
+
       const docRef = await addDoc(devicesRef, newDevice);
       return { deviceId: docRef.id, sessionToken };
     }
@@ -3939,10 +4127,10 @@ export const deviceService = {
     const devicesRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'devices');
     const q = query(devicesRef, where('userGender', '==', gender));
     const snapshot = await getDocs(q);
-    
+
     let count = 0;
     const batch = writeBatch(db);
-    
+
     snapshot.docs.forEach(deviceDoc => {
       if (deviceDoc.id !== currentDeviceId && deviceDoc.data().status === 'active') {
         batch.update(deviceDoc.ref, {
@@ -3954,7 +4142,7 @@ export const deviceService = {
         count++;
       }
     });
-    
+
     await batch.commit();
     return count;
   },
@@ -3967,13 +4155,13 @@ export const deviceService = {
 
   // Subscribe to devices for real-time updates
   subscribeToDevices(
-    coupleId: string, 
-    gender: 'male' | 'female', 
+    coupleId: string,
+    gender: 'male' | 'female',
     callback: (devices: UserDevice[]) => void
   ): Unsubscribe {
     const devicesRef = collection(db, COLLECTIONS.COUPLES, coupleId, 'devices');
     const q = query(devicesRef, where('userGender', '==', gender));
-    
+
     return onSnapshot(q, (snapshot) => {
       const devices = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as UserDevice);
       // Sort by lastActiveAt descending
@@ -3988,16 +4176,16 @@ export const deviceService = {
 
   // Check if session is still valid (for auth guard)
   async validateSession(
-    coupleId: string, 
-    gender: 'male' | 'female', 
-    deviceId: string, 
+    coupleId: string,
+    gender: 'male' | 'female',
+    deviceId: string,
     sessionToken: string
   ): Promise<boolean> {
     const deviceRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'devices', deviceId);
     const deviceDoc = await getDoc(deviceRef);
-    
+
     if (!deviceDoc.exists()) return false;
-    
+
     const device = deviceDoc.data() as UserDevice;
     return device.sessionToken === sessionToken && device.status === 'active';
   },
@@ -4012,7 +4200,7 @@ export const deviceService = {
     const deviceRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'devices', deviceId);
     let isFirstSnapshot = true;
     let previousStatus: string | null = null;
-    
+
     return onSnapshot(deviceRef, (snapshot) => {
       if (!snapshot.exists()) {
         // Device was deleted - only trigger if not first snapshot
@@ -4022,15 +4210,15 @@ export const deviceService = {
         isFirstSnapshot = false;
         return;
       }
-      
+
       const device = snapshot.data() as UserDevice;
       const currentStatus = device.status;
-      
+
       // Only trigger if status CHANGED to logged_out (not on initial load)
       if (!isFirstSnapshot && previousStatus === 'active' && currentStatus === 'logged_out') {
         onLoggedOut();
       }
-      
+
       previousStatus = currentStatus;
       isFirstSnapshot = false;
     });
