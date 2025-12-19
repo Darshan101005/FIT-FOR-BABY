@@ -8,16 +8,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Animated,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -118,19 +118,19 @@ export default function LoginScreen() {
 
     try {
       const coupleResult = await coupleService.findByCredential(credential);
-      
+
       if (!coupleResult) {
         showToast('Couple not found. Check your Couple ID or shared credential.', 'error');
         setLoginState('idle');
         return;
       }
-      
+
       const { couple } = coupleResult;
-      
+
       // Check setup status for both users
       const maleSetupComplete = couple.male.isPasswordReset && couple.male.isPinSet;
       const femaleSetupComplete = couple.female.isPasswordReset && couple.female.isPinSet;
-      
+
       if (!maleSetupComplete || !femaleSetupComplete) {
         // Get the name of the user who needs to complete setup
         const incompleteUser = !maleSetupComplete ? couple.male.name : couple.female.name;
@@ -138,28 +138,28 @@ export default function LoginScreen() {
         setLoginState('idle');
         return;
       }
-      
+
       if (couple.male.status === 'inactive' && couple.female.status === 'inactive') {
         showToast('Both accounts are paused. Contact admin.', 'error');
         setLoginState('idle');
         return;
       }
-      
+
       await AsyncStorage.setItem('userRole', 'user');
       await AsyncStorage.setItem('coupleId', couple.id);
       await AsyncStorage.setItem('quickAccessMode', 'true');
-      
+
       // Refresh auth state so AuthContext knows about partial auth
       await refreshAuthState();
-      
+
       setLoginState('success');
       showToast('Select your profile', 'success');
-      
+
       // Go directly to enter-pin with profile selection params
       setTimeout(() => {
         router.replace({
           pathname: '/user/enter-pin',
-          params: { 
+          params: {
             mode: 'quick-access',
             coupleId: couple.id,
             maleName: couple.male.name,
@@ -184,7 +184,7 @@ export default function LoginScreen() {
       return;
     }
     setLoginState('loading');
-    
+
     const credential = email.trim();
     const isEmailCred = credential.includes('@');
 
@@ -193,16 +193,16 @@ export default function LoginScreen() {
       // This avoids permission errors from querying Firestore before authentication
       if (isEmailCred) {
         const normalizedEmail = credential.toLowerCase();
-        
+
         // Try Firebase Auth login
         const result = await loginWithEmail(normalizedEmail, password);
-        
+
         if (result.success) {
           const userUid = result.user!.uid;
 
           // Check if user is an admin
           const adminData = await adminService.get(userUid);
-          
+
           if (adminData) {
             // This is an admin/superadmin/owner
             if (!adminData.isActive) {
@@ -221,34 +221,34 @@ export default function LoginScreen() {
 
             // Update last login
             await adminService.updateLastLogin(adminData.uid);
-            
+
             // Set session expiry based on rememberMe
             await setSessionExpiry(rememberMe);
-            
+
             // Refresh auth context state to sync with AsyncStorage
             await refreshAuthState();
 
             setLoginState('success');
-            const roleLabel = adminData.role === 'owner' ? 'Owner' : 
-                              adminData.role === 'superadmin' ? 'Super Admin' : 'Admin';
+            const roleLabel = adminData.role === 'owner' ? 'Owner' :
+              adminData.role === 'superadmin' ? 'Super Admin' : 'Admin';
             showToast(`Welcome ${roleLabel}!`, 'success');
-            
+
             setTimeout(() => {
               router.replace('/admin/home');
             }, 800);
             return;
           }
-          
+
           // Firebase Auth succeeded but not in admins collection
           // This could be a user with email - check couples collection
           // (Now we're authenticated, so we can query Firestore)
         }
-        
+
         // Firebase Auth failed OR user not in admins - try couples collection
         // For emails, we need to check if this email belongs to a couple user
         try {
           const coupleResult = await coupleService.findByCredential(credential);
-          
+
           if (coupleResult) {
             // Handle couple user login (same as below)
             await handleCoupleLogin(coupleResult);
@@ -258,18 +258,18 @@ export default function LoginScreen() {
           // If couples query fails (e.g., not authenticated), just show auth error
           console.log('Couples query failed, likely not authenticated:', coupleError);
         }
-        
+
         // Neither admin nor couple user found
         showToast(result.success ? 'Account not found. Contact admin.' : (result.error || 'Invalid email or password'), 'error');
         setLoginState('idle');
         return;
       }
-      
+
       // Non-email credential (User ID or Phone) - could be admin with phone OR couple user
       // First try to find admin by phone number
       try {
         const adminByPhone = await adminService.findByCredential(credential);
-        
+
         if (adminByPhone) {
           // Found admin by phone - verify password from stored password
           if (adminByPhone.password !== password) {
@@ -277,13 +277,13 @@ export default function LoginScreen() {
             setLoginState('idle');
             return;
           }
-          
+
           if (!adminByPhone.isActive) {
             showToast('Your account has been paused. Contact the owner.', 'error');
             setLoginState('idle');
             return;
           }
-          
+
           // Store admin info
           const isSuperAdmin = adminByPhone.role === 'superadmin' || adminByPhone.role === 'owner';
           await AsyncStorage.setItem('isSuperAdmin', isSuperAdmin ? 'true' : 'false');
@@ -294,18 +294,18 @@ export default function LoginScreen() {
 
           // Update last login
           await adminService.updateLastLogin(adminByPhone.uid);
-          
+
           // Set session expiry based on rememberMe
           await setSessionExpiry(rememberMe);
-          
+
           // Refresh auth context state to sync with AsyncStorage
           await refreshAuthState();
 
           setLoginState('success');
-          const roleLabel = adminByPhone.role === 'owner' ? 'Owner' : 
-                            adminByPhone.role === 'superadmin' ? 'Super Admin' : 'Admin';
+          const roleLabel = adminByPhone.role === 'owner' ? 'Owner' :
+            adminByPhone.role === 'superadmin' ? 'Super Admin' : 'Admin';
           showToast(`Welcome ${roleLabel}!`, 'success');
-          
+
           setTimeout(() => {
             router.replace('/admin/home');
           }, 800);
@@ -315,16 +315,16 @@ export default function LoginScreen() {
         console.log('Admin phone lookup failed:', adminPhoneError);
         // Continue to check couples
       }
-      
+
       // Not found as admin - try couples collection
       try {
         const coupleResult = await coupleService.findByCredential(credential);
-        
+
         if (coupleResult) {
           await handleCoupleLogin(coupleResult);
           return;
         }
-        
+
         // Not found in couples either
         showToast('User not found. Check your ID/Email/Phone.', 'error');
         setLoginState('idle');
@@ -340,49 +340,49 @@ export default function LoginScreen() {
       setLoginState('idle');
     }
   };
-  
+
   // Helper function to handle couple user login
   const handleCoupleLogin = async (coupleResult: { couple: any; gender: 'male' | 'female' | 'both' }) => {
     const { couple, gender } = coupleResult;
-    
+
     // FIRST-TIME LOGIN CHECK: Block shared credentials if either user hasn't completed setup
     if (gender === 'both') {
       const maleNeedsSetup = !couple.male.isPasswordReset || !couple.male.isPinSet;
       const femaleNeedsSetup = !couple.female.isPasswordReset || !couple.female.isPinSet;
-      
+
       if (maleNeedsSetup || femaleNeedsSetup) {
         // Block shared credential login - require individual login first
         showToast('Please use your personal credentials for first-time login.', 'error');
         setLoginState('idle');
         return;
       }
-      
+
       // Both users have completed setup - allow shared credential with profile picker
       const malePasswordValid = await coupleService.verifyPassword(couple.id, 'male', password);
       const femalePasswordValid = await coupleService.verifyPassword(couple.id, 'female', password);
-      
+
       if (!malePasswordValid && !femalePasswordValid) {
         showToast('Invalid password', 'error');
         setLoginState('idle');
         return;
       }
-      
+
       // Store couple info and navigate to profile selection
       await AsyncStorage.setItem('userRole', 'user');
       await AsyncStorage.setItem('coupleId', couple.id);
       await AsyncStorage.setItem('pendingProfileSelection', 'true');
-      
+
       // Refresh auth state so AuthContext knows about partial auth
       await refreshAuthState();
-      
+
       setLoginState('success');
       showToast('Select your profile', 'success');
-      
+
       // Go directly to enter-pin with profile selection params
       setTimeout(() => {
         router.replace({
           pathname: '/user/enter-pin',
-          params: { 
+          params: {
             mode: 'profile-select',
             coupleId: couple.id,
             maleName: couple.male.name,
@@ -393,32 +393,32 @@ export default function LoginScreen() {
       }, 500);
       return;
     }
-    
+
     // Single user match - verify password
     const passwordValid = await coupleService.verifyPassword(couple.id, gender, password);
-    
+
     if (!passwordValid) {
       showToast('Invalid password', 'error');
       setLoginState('idle');
       return;
     }
-    
+
     const user = couple[gender];
-    
+
     // Check if user is inactive
     if (user.status === 'inactive') {
       showToast('Your account is paused. Contact admin.', 'error');
       setLoginState('idle');
       return;
     }
-    
+
     // Store user info
     await AsyncStorage.setItem('userRole', 'user');
     await AsyncStorage.setItem('coupleId', couple.id);
     await AsyncStorage.setItem('userGender', gender);
     await AsyncStorage.setItem('userId', user.id);
     await AsyncStorage.setItem('userName', user.name);
-    
+
     // Check if password reset is needed
     if (!user.isPasswordReset) {
       // Set flag to indicate user is in setup flow - prevents auth redirects to home
@@ -426,14 +426,14 @@ export default function LoginScreen() {
       // Refresh auth state so user is authenticated (needed to access /user/* routes)
       // The pendingSetup flag will prevent redirect to home
       await refreshAuthState();
-      
+
       setLoginState('success');
       showToast('Please reset your password', 'success');
-      
+
       setTimeout(() => {
         router.push({
           pathname: '/reset-password',
-          params: { 
+          params: {
             mode: 'first-login',
             coupleId: couple.id,
             gender: gender,
@@ -442,7 +442,7 @@ export default function LoginScreen() {
       }, 500);
       return;
     }
-    
+
     // Check if PIN needs to be set
     if (!user.isPinSet) {
       // Set flag to indicate user is in setup flow - prevents auth redirects to home
@@ -450,14 +450,14 @@ export default function LoginScreen() {
       // Refresh auth state so user is authenticated (needed to access /user/* routes)
       // The pendingSetup flag will prevent redirect to home
       await refreshAuthState();
-      
+
       setLoginState('success');
       showToast('Please set your PIN', 'success');
-      
+
       setTimeout(() => {
         router.push({
           pathname: '/user/manage-pin',
-          params: { 
+          params: {
             mode: 'setup',
             coupleId: couple.id,
             gender: gender,
@@ -466,20 +466,20 @@ export default function LoginScreen() {
       }, 500);
       return;
     }
-    
+
     // Update last login
     await coupleService.updateLastLogin(couple.id, gender);
-    
+
     // Register this device
     try {
       const deviceInfo = {
-        deviceName: Platform.OS === 'web' 
+        deviceName: Platform.OS === 'web'
           ? (navigator?.userAgent?.includes('Mobile') ? 'Mobile Browser' : 'Web Browser')
           : `${Platform.OS === 'ios' ? 'iPhone' : 'Android'} Device`,
-        deviceType: (Platform.OS === 'web' 
+        deviceType: (Platform.OS === 'web'
           ? (navigator?.userAgent?.includes('Mobile') ? 'mobile' : 'desktop')
           : 'mobile') as 'mobile' | 'tablet' | 'desktop' | 'web',
-        os: Platform.OS === 'web' 
+        os: Platform.OS === 'web'
           ? (navigator?.platform || 'Web')
           : `${Platform.OS === 'ios' ? 'iOS' : 'Android'}`,
         osVersion: Platform.OS === 'web' ? undefined : String(Platform.Version),
@@ -492,16 +492,16 @@ export default function LoginScreen() {
     } catch (deviceError) {
       console.log('Device registration error (non-critical):', deviceError);
     }
-    
+
     // Set session expiry based on rememberMe
     await setSessionExpiry(rememberMe);
-    
+
     // Refresh auth context state to sync with AsyncStorage
     await refreshAuthState();
-    
+
     setLoginState('success');
     showToast(`Welcome ${user.name}!`, 'success');
-    
+
     setTimeout(() => {
       router.replace('/user/home');
     }, 500);
@@ -564,8 +564,8 @@ export default function LoginScreen() {
                   <View style={styles.inputWrapper}>
                     <TextInput
                       style={styles.input}
-                      placeholder={loginMode === 'individual' 
-                        ? 'Enter User ID, Email or Phone' 
+                      placeholder={loginMode === 'individual'
+                        ? 'Enter User ID, Email or Phone'
                         : 'Couple ID, Phone or Email'}
                       placeholderTextColor="#94a3b8"
                       value={email}
@@ -574,7 +574,7 @@ export default function LoginScreen() {
                       autoCapitalize="none"
                       autoCorrect={false}
                       editable={loginState === 'idle'}
-                      selectionColor="transparent"
+                      selectionColor="#006dab"
                       underlineColorAndroid="transparent"
                       returnKeyType={loginMode === 'individual' ? 'next' : 'go'}
                       onSubmitEditing={() => {
@@ -604,7 +604,7 @@ export default function LoginScreen() {
                         secureTextEntry={!showPassword}
                         autoCapitalize="none"
                         editable={loginState === 'idle'}
-                        selectionColor="transparent"
+                        selectionColor="#006dab"
                         underlineColorAndroid="transparent"
                         returnKeyType="go"
                         onSubmitEditing={handleContinue}
@@ -650,10 +650,10 @@ export default function LoginScreen() {
                   activeOpacity={0.85}
                 >
                   {loginState === 'idle' && (
-                    <LinearGradient 
-                      colors={loginMode === 'individual' ? ['#006dab', '#005a8f'] : ['#98be4e', '#7da33e']} 
-                      start={{ x: 0, y: 0 }} 
-                      end={{ x: 1, y: 0 }} 
+                    <LinearGradient
+                      colors={loginMode === 'individual' ? ['#006dab', '#005a8f'] : ['#98be4e', '#7da33e']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
                       style={styles.gradientButton}
                     >
                       <Text style={styles.continueButtonText}>
@@ -667,10 +667,10 @@ export default function LoginScreen() {
                     </View>
                   )}
                   {loginState === 'success' && (
-                    <LinearGradient 
-                      colors={loginMode === 'individual' ? ['#006dab', '#005a8f'] : ['#98be4e', '#7da33e']} 
-                      start={{ x: 0, y: 0 }} 
-                      end={{ x: 1, y: 0 }} 
+                    <LinearGradient
+                      colors={loginMode === 'individual' ? ['#006dab', '#005a8f'] : ['#98be4e', '#7da33e']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
                       style={styles.gradientButton}
                     >
                       <Ionicons name="checkmark" size={32} color="#ffffff" />
@@ -679,28 +679,28 @@ export default function LoginScreen() {
                 </TouchableOpacity>
 
                 {/* Mode Switch Link */}
-                <TouchableOpacity 
-                  style={styles.modeSwitchContainer} 
-                  onPress={() => setLoginMode(loginMode === 'individual' ? 'shared' : 'individual')} 
+                <TouchableOpacity
+                  style={styles.modeSwitchContainer}
+                  onPress={() => setLoginMode(loginMode === 'individual' ? 'shared' : 'individual')}
                   activeOpacity={0.7}
                 >
-                  <Ionicons 
-                    name={loginMode === 'individual' ? 'people-outline' : 'person-outline'} 
-                    size={18} 
-                    color="#006dab" 
+                  <Ionicons
+                    name={loginMode === 'individual' ? 'people-outline' : 'person-outline'}
+                    size={18}
+                    color="#006dab"
                   />
                   <Text style={styles.modeSwitchText}>
-                    {loginMode === 'individual' 
-                      ? 'Using shared credentials? Click here' 
+                    {loginMode === 'individual'
+                      ? 'Using shared credentials? Click here'
                       : 'First-time or individual login? Click here'}
                   </Text>
                 </TouchableOpacity>
 
                 {/* Forgot Password Button */}
                 {loginMode === 'individual' && (
-                  <TouchableOpacity 
-                    style={styles.forgotPasswordButton} 
-                    onPress={() => router.push('/forgot-password')} 
+                  <TouchableOpacity
+                    style={styles.forgotPasswordButton}
+                    onPress={() => router.push('/forgot-password')}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.forgotPasswordText}>Forgot Password?</Text>

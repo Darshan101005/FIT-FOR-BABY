@@ -476,12 +476,22 @@ export const adminService = {
   },
 
   // Subscribe to admins list (real-time updates)
-  subscribe(callback: (admins: (Admin & { id: string })[]) => void): Unsubscribe {
+  subscribe(callback: (admins: (Admin & { id: string })[]) => void, onError?: (error: Error) => void): Unsubscribe {
     const adminsRef = collection(db, COLLECTIONS.ADMINS);
     const q = query(adminsRef, orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-      callback(snapshot.docs.map(doc => ({ id: doc.id, uid: doc.id, ...doc.data() } as Admin & { id: string })));
-    });
+    return onSnapshot(q,
+      (snapshot) => {
+        callback(snapshot.docs.map(doc => ({ id: doc.id, uid: doc.id, ...doc.data() } as Admin & { id: string })));
+      },
+      (error) => {
+        console.error('Admin subscription error:', error);
+        if (onError) {
+          onError(error);
+        }
+        // Return empty array so UI can still render
+        callback([]);
+      }
+    );
   },
 
   // Update last login

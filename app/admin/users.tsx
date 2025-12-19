@@ -289,6 +289,25 @@ export default function AdminUsersScreen() {
       setActionLoading(true);
 
       try {
+        // Normalize and validate enrollment date format (ensure YYYY-MM-DD)
+        let normalizedDate = enrollForm.enrollmentDate.trim();
+        // Replace dots, slashes, or other separators with hyphens
+        normalizedDate = normalizedDate.replace(/[.\/\s]/g, '-');
+        // Validate the format is YYYY-MM-DD
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(normalizedDate)) {
+          showToast('Invalid enrollment date format. Use YYYY-MM-DD (e.g., 2025-12-19)', 'error');
+          setActionLoading(false);
+          return;
+        }
+        // Verify it's a valid date
+        const parsedDate = new Date(normalizedDate);
+        if (isNaN(parsedDate.getTime())) {
+          showToast('Invalid enrollment date. Please enter a valid date.', 'error');
+          setActionLoading(false);
+          return;
+        }
+
         // Check for duplicate phone numbers and emails
         const duplicateCheck = await coupleService.checkDuplicateCredentials(
           enrollForm.malePhone,
@@ -322,7 +341,7 @@ export default function AdminUsersScreen() {
         // Create couple in Firestore
         const result = await coupleService.create({
           coupleId: enrollForm.coupleId,
-          enrollmentDate: enrollForm.enrollmentDate,
+          enrollmentDate: normalizedDate,
           enrolledBy: currentAdminUid,
           enrolledByName: currentAdminName,
           male: {
@@ -2756,7 +2775,7 @@ export default function AdminUsersScreen() {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Age *</Text>
+                    <Text style={styles.inputLabel}>Age</Text>
                     <TextInput
                       style={styles.input}
                       value={enrollForm.maleAge}
@@ -2768,7 +2787,7 @@ export default function AdminUsersScreen() {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Phone Number *</Text>
+                    <Text style={styles.inputLabel}>Phone Number</Text>
                     <TextInput
                       style={styles.input}
                       value={enrollForm.malePhone}
@@ -2821,7 +2840,7 @@ export default function AdminUsersScreen() {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Age *</Text>
+                    <Text style={styles.inputLabel}>Age</Text>
                     <TextInput
                       style={styles.input}
                       value={enrollForm.femaleAge}
@@ -2833,7 +2852,7 @@ export default function AdminUsersScreen() {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Phone Number *</Text>
+                    <Text style={styles.inputLabel}>Phone Number</Text>
                     <TextInput
                       style={styles.input}
                       value={enrollForm.femalePhone}
@@ -2954,6 +2973,21 @@ export default function AdminUsersScreen() {
               </View>
             </View>
 
+            {/* Female User Credentials - show only if has password (shown first) */}
+            {tempPasswordInfo.femaleTempPassword && (
+              <View style={[styles.credentialBox, { borderLeftColor: COLORS.accent, borderLeftWidth: 3 }]}>
+                <View style={styles.credentialUserHeader}>
+                  <Ionicons name="female" size={16} color={COLORS.accentDark} />
+                  <Text style={[styles.credentialLabel, { color: COLORS.accentDark }]}>
+                    {tempPasswordInfo.femaleName} ({tempPasswordInfo.coupleId}_F)
+                  </Text>
+                </View>
+                <View style={styles.credentialValue}>
+                  <Text style={[styles.credentialText, styles.passwordText]}>{tempPasswordInfo.femaleTempPassword}</Text>
+                </View>
+              </View>
+            )}
+
             {/* Male User Credentials - show only if has password */}
             {tempPasswordInfo.maleTempPassword && (
               <View style={[styles.credentialBox, { borderLeftColor: COLORS.primary, borderLeftWidth: 3 }]}>
@@ -2965,21 +2999,6 @@ export default function AdminUsersScreen() {
                 </View>
                 <View style={styles.credentialValue}>
                   <Text style={[styles.credentialText, styles.passwordText]}>{tempPasswordInfo.maleTempPassword}</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Female User Credentials - show only if has password */}
-            {tempPasswordInfo.femaleTempPassword && (
-              <View style={[styles.credentialBox, { borderLeftColor: COLORS.accent, borderLeftWidth: 3 }]}>
-                <View style={styles.credentialUserHeader}>
-                  <Ionicons name="female" size={16} color={COLORS.accentDark} />
-                  <Text style={[styles.credentialLabel, { color: COLORS.accentDark }]}>
-                    {tempPasswordInfo.femaleName} ({tempPasswordInfo.coupleId}_F)
-                  </Text>
-                </View>
-                <View style={styles.credentialValue}>
-                  <Text style={[styles.credentialText, styles.passwordText]}>{tempPasswordInfo.femaleTempPassword}</Text>
                 </View>
               </View>
             )}

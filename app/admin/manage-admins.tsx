@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 // Added imports for Password Update functionality
 import { getAuth, updatePassword } from 'firebase/auth';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -93,11 +93,18 @@ export default function ManageAdminsScreen() {
     if (isSuperAdmin) {
       // Subscribe to real-time admin updates
       console.log('Setting up admin subscription...');
-      const unsubscribe = adminService.subscribe((adminList) => {
-        console.log('Received admin list update:', adminList.length, 'admins');
-        setAdmins(adminList);
-        setLoading(false);
-      });
+      const unsubscribe = adminService.subscribe(
+        (adminList) => {
+          console.log('Received admin list update:', adminList.length, 'admins');
+          setAdmins(adminList);
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Admin subscription error:', error);
+          setLoading(false);
+          Alert.alert('Error', 'Failed to load admins. Please check your permissions or try again.');
+        }
+      );
 
       return () => {
         console.log('Cleaning up admin subscription');
@@ -162,15 +169,15 @@ export default function ManageAdminsScreen() {
 
   // Filter admins
   const filteredAdmins = admins.filter(admin => {
-    const matchesSearch = 
+    const matchesSearch =
       admin.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       admin.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       admin.uid?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesStatus = filterStatus === 'all' || 
+
+    const matchesStatus = filterStatus === 'all' ||
       (filterStatus === 'active' && admin.isActive) ||
       (filterStatus === 'inactive' && !admin.isActive);
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -191,7 +198,7 @@ export default function ManageAdminsScreen() {
     try {
       // Create Firebase Auth user
       const authResult = await registerWithEmail(formData.email, formData.password);
-      
+
       if (!authResult.success || !authResult.user) {
         setFormError(authResult.error || 'Failed to create admin account');
         setActionLoading(false);
@@ -259,11 +266,11 @@ export default function ManageAdminsScreen() {
 
       // Only attempt to update password if it's the current user AND they provided a new password
       if (isEditingSelf && formData.password && formData.password.trim().length > 0) {
-        
+
         if (formData.password.length < 6) {
-             setFormError('New password must be at least 6 characters');
-             setActionLoading(false);
-             return;
+          setFormError('New password must be at least 6 characters');
+          setActionLoading(false);
+          return;
         }
 
         try {
@@ -275,7 +282,7 @@ export default function ManageAdminsScreen() {
             // If successful, add to Firestore update data to keep sync
             updateData.password = formData.password;
           } else {
-             console.warn("No Auth user found, skipping auth password update");
+            console.warn("No Auth user found, skipping auth password update");
           }
         } catch (authError: any) {
           if (authError.code === 'auth/requires-recent-login') {
@@ -329,21 +336,21 @@ export default function ManageAdminsScreen() {
     try {
       const adminId = selectedAdmin.id || selectedAdmin.uid;
       const deletedName = selectedAdmin.displayName;
-      
+
       console.log('Deleting admin with ID:', adminId);
-      
+
       // Delete from Firestore - user won't be able to login anymore
       await adminService.delete(adminId);
       console.log('✅ Admin deleted from Firestore');
-      
+
       // Close modals and reset state
       setShowDeleteModal(false);
       setShowOwnerPasswordModal(false);
       setOwnerPasswordInput('');
       setSelectedAdmin(null);
-      
+
       Alert.alert(
-        'Admin Deleted', 
+        'Admin Deleted',
         `${deletedName} has been removed and can no longer access the system.`
       );
     } catch (error: any) {
@@ -357,17 +364,17 @@ export default function ManageAdminsScreen() {
   const handleOwnerPasswordConfirm = async () => {
     // Clear previous error
     setPasswordError('');
-    
+
     if (!currentUser || !currentUser.password) {
       setPasswordError('Unable to verify your credentials. Please re-login.');
       return;
     }
-    
+
     if (ownerPasswordInput !== currentUser.password) {
       setPasswordError('Incorrect password. Please try again.');
       return;
     }
-    
+
     // Password correct, proceed with deletion
     await performDelete();
   };
@@ -379,7 +386,7 @@ export default function ManageAdminsScreen() {
 
   const handleToggleStatus = async () => {
     if (!selectedAdmin) return;
-    
+
     setActionLoading(true);
     try {
       if (selectedAdmin.isActive) {
@@ -465,7 +472,7 @@ export default function ManageAdminsScreen() {
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
@@ -477,13 +484,13 @@ export default function ManageAdminsScreen() {
           </View>
         </View>
         <View style={styles.headerButtons}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.refreshButton}
             onPress={refreshAdmins}
           >
             <Ionicons name="refresh" size={20} color={COLORS.primary} />
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.addButton}
             onPress={() => {
               resetForm();
@@ -498,7 +505,7 @@ export default function ManageAdminsScreen() {
 
       {/* Search and Filters */}
       <View style={[styles.filtersContainer, isMobile && styles.filtersContainerMobile]}>
-        <View style={styles.searchContainer}>
+        <View style={[styles.searchContainer, isMobile && { width: '100%', flex: undefined }]}>
           <Ionicons name="search" size={18} color={COLORS.textMuted} />
           <TextInput
             style={styles.searchInput}
@@ -576,7 +583,7 @@ export default function ManageAdminsScreen() {
     const displayName = admin.displayName || admin.email?.split('@')[0] || 'Admin';
     const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     const createdDate = admin.createdAt ? admin.createdAt.toDate().toLocaleDateString() : 'N/A';
-    
+
     // Determine avatar color based on role
     const getAvatarColor = () => {
       switch (admin.role) {
@@ -585,7 +592,7 @@ export default function ManageAdminsScreen() {
         default: return COLORS.primary;
       }
     };
-    
+
     return (
       <View key={admin.id} style={styles.adminCard}>
         <View style={styles.adminCardLeft}>
@@ -639,39 +646,39 @@ export default function ManageAdminsScreen() {
             </Text>
           </TouchableOpacity>
 
-        <View style={styles.actionButtons}>
-          {/* Pause/Play button - not for owner and not for self */}
-          {admin.role !== 'owner' && admin.uid !== currentUser?.uid && (
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: admin.isActive ? COLORS.warning + '20' : COLORS.success + '20' }]}
-              onPress={() => openPauseModal(admin)}
-            >
-              <Ionicons 
-                name={admin.isActive ? 'pause-circle-outline' : 'play-circle-outline'} 
-                size={20} 
-                color={admin.isActive ? COLORS.warning : COLORS.success} 
-              />
-            </TouchableOpacity>
-          )}
-          {/* Edit button */}
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => openEditModal(admin)}
-          >
-            <Ionicons name="create-outline" size={20} color={COLORS.primary} />
-          </TouchableOpacity>
-          {/* Delete button - not for owner, not for self, superadmin needs password confirmation */}
-          {admin.role !== 'owner' && admin.uid !== currentUser?.uid && (
+          <View style={styles.actionButtons}>
+            {/* Pause/Play button - not for owner and not for self */}
+            {admin.role !== 'owner' && admin.uid !== currentUser?.uid && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: admin.isActive ? COLORS.warning + '20' : COLORS.success + '20' }]}
+                onPress={() => openPauseModal(admin)}
+              >
+                <Ionicons
+                  name={admin.isActive ? 'pause-circle-outline' : 'play-circle-outline'}
+                  size={20}
+                  color={admin.isActive ? COLORS.warning : COLORS.success}
+                />
+              </TouchableOpacity>
+            )}
+            {/* Edit button */}
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => openDeleteModal(admin)}
+              onPress={() => openEditModal(admin)}
             >
-              <Ionicons name="trash-outline" size={20} color={COLORS.error} />
+              <Ionicons name="create-outline" size={20} color={COLORS.primary} />
             </TouchableOpacity>
-          )}
+            {/* Delete button - not for owner, not for self, superadmin needs password confirmation */}
+            {admin.role !== 'owner' && admin.uid !== currentUser?.uid && (
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => openDeleteModal(admin)}
+              >
+                <Ionicons name="trash-outline" size={20} color={COLORS.error} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
-    </View>
     );
   };
 
@@ -770,10 +777,10 @@ export default function ManageAdminsScreen() {
                     style={[styles.roleOption, formData.role === 'admin' && styles.roleOptionActive]}
                     onPress={() => setFormData({ ...formData, role: 'admin' })}
                   >
-                    <Ionicons 
-                      name="person" 
-                      size={18} 
-                      color={formData.role === 'admin' ? COLORS.primary : COLORS.textMuted} 
+                    <Ionicons
+                      name="person"
+                      size={18}
+                      color={formData.role === 'admin' ? COLORS.primary : COLORS.textMuted}
                     />
                     <Text style={[styles.roleOptionText, formData.role === 'admin' && styles.roleOptionTextActive]}>
                       Admin
@@ -783,10 +790,10 @@ export default function ManageAdminsScreen() {
                     style={[styles.roleOption, formData.role === 'superadmin' && styles.roleOptionActive]}
                     onPress={() => setFormData({ ...formData, role: 'superadmin' })}
                   >
-                    <Ionicons 
-                      name="shield-checkmark" 
-                      size={18} 
-                      color={formData.role === 'superadmin' ? COLORS.accent : COLORS.textMuted} 
+                    <Ionicons
+                      name="shield-checkmark"
+                      size={18}
+                      color={formData.role === 'superadmin' ? COLORS.accent : COLORS.textMuted}
                     />
                     <Text style={[styles.roleOptionText, formData.role === 'superadmin' && styles.roleOptionTextActive]}>
                       Super Admin
@@ -843,17 +850,17 @@ export default function ManageAdminsScreen() {
       <View style={styles.modalOverlay}>
         <View style={[styles.deleteModalContent, isMobile && styles.modalContentMobile]}>
           <View style={[styles.deleteIconContainer, { backgroundColor: selectedAdmin?.isActive ? COLORS.warning + '15' : COLORS.success + '15' }]}>
-            <Ionicons 
-              name={selectedAdmin?.isActive ? 'pause-circle' : 'play-circle'} 
-              size={48} 
-              color={selectedAdmin?.isActive ? COLORS.warning : COLORS.success} 
+            <Ionicons
+              name={selectedAdmin?.isActive ? 'pause-circle' : 'play-circle'}
+              size={48}
+              color={selectedAdmin?.isActive ? COLORS.warning : COLORS.success}
             />
           </View>
           <Text style={styles.deleteModalTitle}>
             {selectedAdmin?.isActive ? 'Pause Admin' : 'Activate Admin'}
           </Text>
           <Text style={styles.deleteModalText}>
-            {selectedAdmin?.isActive 
+            {selectedAdmin?.isActive
               ? `Are you sure you want to pause ${selectedAdmin?.displayName}? They won't be able to log in until activated again.`
               : `Are you sure you want to activate ${selectedAdmin?.displayName}? They will be able to log in again.`
             }
@@ -871,7 +878,7 @@ export default function ManageAdminsScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[
-                styles.deleteModalConfirmButton, 
+                styles.deleteModalConfirmButton,
                 { backgroundColor: selectedAdmin?.isActive ? COLORS.warning : COLORS.success },
                 actionLoading && { opacity: 0.6 }
               ]}
@@ -882,10 +889,10 @@ export default function ManageAdminsScreen() {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Ionicons 
-                    name={selectedAdmin?.isActive ? 'pause' : 'play'} 
-                    size={18} 
-                    color="#fff" 
+                  <Ionicons
+                    name={selectedAdmin?.isActive ? 'pause' : 'play'}
+                    size={18}
+                    color="#fff"
                   />
                   <Text style={styles.deleteModalConfirmText}>
                     {selectedAdmin?.isActive ? 'Pause' : 'Activate'}
@@ -1175,6 +1182,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 8,
     minWidth: 200,
+    minHeight: 44,
   },
   searchInput: {
     flex: 1,
