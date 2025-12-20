@@ -2318,11 +2318,11 @@ export default function AdminUsersScreen() {
           activeOpacity={0.7}
         >
           <View style={styles.coupleAvatars}>
-            <View style={[styles.avatar, { backgroundColor: COLORS.primary }]}>
-              <Ionicons name="male" size={16} color="#fff" />
-            </View>
-            <View style={[styles.avatar, { backgroundColor: COLORS.accent, marginLeft: -12 }]}>
+            <View style={[styles.avatar, { backgroundColor: COLORS.accent }]}>
               <Ionicons name="female" size={16} color="#fff" />
+            </View>
+            <View style={[styles.avatar, { backgroundColor: COLORS.primary, marginLeft: -12 }]}>
+              <Ionicons name="male" size={16} color="#fff" />
             </View>
           </View>
 
@@ -2355,7 +2355,7 @@ export default function AdminUsersScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.coupleNames}>
-              {couple.male.name} & {couple.female.name}
+              {couple.female.name} & {couple.male.name}
             </Text>
             <Text style={styles.enrollmentDate}>
               Enrolled: {couple.enrollmentDate}
@@ -2377,155 +2377,6 @@ export default function AdminUsersScreen() {
         {/* Expanded User Details */}
         {isExpanded && (
           <View style={styles.expandedContent}>
-            {/* Male User */}
-            <View style={styles.userCard}>
-              <View style={styles.userCardHeader}>
-                <View style={[styles.genderIcon, { backgroundColor: COLORS.primary + '15' }]}>
-                  <Ionicons name="male" size={18} color={COLORS.primary} />
-                </View>
-                <View style={styles.userIdContainer}>
-                  <Text style={styles.userId}>{couple.male.id}</Text>
-                  <View style={[styles.miniStatusBadge, { backgroundColor: getStatusColor(couple.male.status) }]} />
-                </View>
-              </View>
-
-              <View style={styles.userDetails}>
-                <View style={styles.userDetailRow}>
-                  <Ionicons name="person" size={14} color={COLORS.textMuted} />
-                  <Text style={styles.userDetailText}>{couple.male.name}</Text>
-                </View>
-                {couple.male.age ? (
-                  <View style={styles.userDetailRow}>
-                    <Ionicons name="calendar" size={14} color={COLORS.textMuted} />
-                    <Text style={styles.userDetailText}>Age: {couple.male.age} years</Text>
-                  </View>
-                ) : null}
-                {couple.male.dateOfBirth ? (
-                  <View style={styles.userDetailRow}>
-                    <Ionicons name="gift" size={14} color={COLORS.textMuted} />
-                    <Text style={styles.userDetailText}>DOB: {new Date(couple.male.dateOfBirth).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
-                  </View>
-                ) : null}
-                {couple.male.phone ? (
-                  <View style={styles.userDetailRow}>
-                    <Ionicons name="call" size={14} color={COLORS.textMuted} />
-                    <Text style={styles.userDetailText}>{couple.male.phone}</Text>
-                  </View>
-                ) : null}
-                {couple.male.email ? (
-                  <View style={styles.userDetailRow}>
-                    <Ionicons name="mail" size={14} color={COLORS.textMuted} />
-                    <Text style={styles.userDetailText}>{couple.male.email}</Text>
-                  </View>
-                ) : null}
-                {couple.male.address && (couple.male.address.addressLine1 || couple.male.address.city || couple.male.address.state) ? (
-                  <View style={styles.userDetailRow}>
-                    <Ionicons name="location" size={14} color={COLORS.textMuted} />
-                    <Text style={[styles.userDetailText, { flex: 1 }]} numberOfLines={2}>
-                      {[couple.male.address.addressLine1, couple.male.address.addressLine2, couple.male.address.city, couple.male.address.state, couple.male.address.pincode].filter(Boolean).join(', ')}
-                    </Text>
-                  </View>
-                ) : null}
-                {/* Health Metrics - only show if at least one value exists */}
-                {(couple.male.weight || couple.male.height || couple.male.bmi) && (
-                  <View style={styles.healthMetricsRow}>
-                    {couple.male.weight ? (
-                      <View style={styles.healthMetric}>
-                        <Ionicons name="fitness" size={14} color={COLORS.primary} />
-                        <Text style={styles.healthMetricLabel}>Weight</Text>
-                        <Text style={styles.healthMetricValue}>{couple.male.weight} kg</Text>
-                      </View>
-                    ) : null}
-                    {couple.male.height ? (
-                      <View style={styles.healthMetric}>
-                        <Ionicons name="resize-outline" size={14} color={COLORS.accent} />
-                        <Text style={styles.healthMetricLabel}>Height</Text>
-                        <Text style={styles.healthMetricValue}>{couple.male.height} cm</Text>
-                      </View>
-                    ) : null}
-                    {couple.male.bmi ? (
-                      <View style={styles.healthMetric}>
-                        <Ionicons name="body" size={14} color={COLORS.info} />
-                        <Text style={styles.healthMetricLabel}>BMI</Text>
-                        <Text style={styles.healthMetricValue}>{couple.male.bmi}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                )}
-                {couple.male.lastActive ? (
-                  <View style={styles.userDetailRow}>
-                    <Ionicons name="time" size={14} color={COLORS.textMuted} />
-                    <Text style={styles.userDetailText}>Last Login: {couple.male.lastActive}</Text>
-                  </View>
-                ) : null}
-
-                {/* Setup Status & Temp Password */}
-                <View style={styles.setupStatusRow}>
-                  <View style={[styles.setupBadge, { backgroundColor: couple.male.isPasswordReset ? COLORS.success + '20' : COLORS.warning + '20' }]}>
-                    <Ionicons name={couple.male.isPasswordReset ? 'checkmark-circle' : 'alert-circle'} size={12} color={couple.male.isPasswordReset ? COLORS.success : COLORS.warning} />
-                    <Text style={[styles.setupBadgeText, { color: couple.male.isPasswordReset ? COLORS.success : COLORS.warning }]}>
-                      {couple.male.isPasswordReset ? 'Password Set' : 'Needs Reset'}
-                    </Text>
-                  </View>
-                  <View style={[styles.setupBadge, { backgroundColor: couple.male.isPinSet ? COLORS.success + '20' : COLORS.warning + '20' }]}>
-                    <Ionicons name={couple.male.isPinSet ? 'checkmark-circle' : 'alert-circle'} size={12} color={couple.male.isPinSet ? COLORS.success : COLORS.warning} />
-                    <Text style={[styles.setupBadgeText, { color: couple.male.isPinSet ? COLORS.success : COLORS.warning }]}>
-                      {couple.male.isPinSet ? 'PIN Set' : 'Needs PIN'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Show temp password if not yet reset */}
-                {!couple.male.isPasswordReset && couple.male.tempPassword && (
-                  <View style={styles.tempPasswordRow}>
-                    <Ionicons name="key" size={14} color={COLORS.warning} />
-                    <Text style={styles.tempPasswordLabel}>Temp Password:</Text>
-                    <Text style={styles.tempPasswordValue}>{couple.male.tempPassword}</Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.userActions}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleUserAction('edit', couple.coupleId, 'male')}
-                >
-                  <Ionicons name="create-outline" size={16} color={COLORS.primary} />
-                  <Text style={[styles.actionButtonText, { color: COLORS.primary }]}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleUserAction('reset', couple.coupleId, 'male')}
-                >
-                  <Ionicons name="key-outline" size={16} color={COLORS.warning} />
-                  <Text style={[styles.actionButtonText, { color: COLORS.warning }]}>Reset Password</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleUserAction('resetPin', couple.coupleId, 'male')}
-                >
-                  <Ionicons name="keypad-outline" size={16} color={COLORS.info} />
-                  <Text style={[styles.actionButtonText, { color: COLORS.info }]}>Reset PIN</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleUserAction('toggle', couple.coupleId, 'male')}
-                >
-                  <Ionicons name={couple.male.status === 'active' ? 'pause-circle-outline' : 'play-circle-outline'} size={16} color={couple.male.status === 'active' ? COLORS.error : COLORS.success} />
-                  <Text style={[styles.actionButtonText, { color: couple.male.status === 'active' ? COLORS.error : COLORS.success }]}>
-                    {couple.male.status === 'active' ? 'Pause' : 'Activate'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.testButton]}
-                  onPress={() => handleOpenTestModal(couple.coupleId, 'male', couple.male.name)}
-                >
-                  <Ionicons name="flask" size={16} color="#fff" />
-                  <Text style={[styles.actionButtonText, { color: '#fff' }]}>Test</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
             {/* Female User */}
             <View style={styles.userCard}>
               <View style={styles.userCardHeader}>
@@ -2675,6 +2526,155 @@ export default function AdminUsersScreen() {
               </View>
             </View>
 
+            {/* Male User */}
+            <View style={styles.userCard}>
+              <View style={styles.userCardHeader}>
+                <View style={[styles.genderIcon, { backgroundColor: COLORS.primary + '15' }]}>
+                  <Ionicons name="male" size={18} color={COLORS.primary} />
+                </View>
+                <View style={styles.userIdContainer}>
+                  <Text style={styles.userId}>{couple.male.id}</Text>
+                  <View style={[styles.miniStatusBadge, { backgroundColor: getStatusColor(couple.male.status) }]} />
+                </View>
+              </View>
+
+              <View style={styles.userDetails}>
+                <View style={styles.userDetailRow}>
+                  <Ionicons name="person" size={14} color={COLORS.textMuted} />
+                  <Text style={styles.userDetailText}>{couple.male.name}</Text>
+                </View>
+                {couple.male.age ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="calendar" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>Age: {couple.male.age} years</Text>
+                  </View>
+                ) : null}
+                {couple.male.dateOfBirth ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="gift" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>DOB: {new Date(couple.male.dateOfBirth).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+                  </View>
+                ) : null}
+                {couple.male.phone ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="call" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>{couple.male.phone}</Text>
+                  </View>
+                ) : null}
+                {couple.male.email ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="mail" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>{couple.male.email}</Text>
+                  </View>
+                ) : null}
+                {couple.male.address && (couple.male.address.addressLine1 || couple.male.address.city || couple.male.address.state) ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="location" size={14} color={COLORS.textMuted} />
+                    <Text style={[styles.userDetailText, { flex: 1 }]} numberOfLines={2}>
+                      {[couple.male.address.addressLine1, couple.male.address.addressLine2, couple.male.address.city, couple.male.address.state, couple.male.address.pincode].filter(Boolean).join(', ')}
+                    </Text>
+                  </View>
+                ) : null}
+                {/* Health Metrics - only show if at least one value exists */}
+                {(couple.male.weight || couple.male.height || couple.male.bmi) && (
+                  <View style={styles.healthMetricsRow}>
+                    {couple.male.weight ? (
+                      <View style={styles.healthMetric}>
+                        <Ionicons name="fitness" size={14} color={COLORS.primary} />
+                        <Text style={styles.healthMetricLabel}>Weight</Text>
+                        <Text style={styles.healthMetricValue}>{couple.male.weight} kg</Text>
+                      </View>
+                    ) : null}
+                    {couple.male.height ? (
+                      <View style={styles.healthMetric}>
+                        <Ionicons name="resize-outline" size={14} color={COLORS.accent} />
+                        <Text style={styles.healthMetricLabel}>Height</Text>
+                        <Text style={styles.healthMetricValue}>{couple.male.height} cm</Text>
+                      </View>
+                    ) : null}
+                    {couple.male.bmi ? (
+                      <View style={styles.healthMetric}>
+                        <Ionicons name="body" size={14} color={COLORS.info} />
+                        <Text style={styles.healthMetricLabel}>BMI</Text>
+                        <Text style={styles.healthMetricValue}>{couple.male.bmi}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                )}
+                {couple.male.lastActive ? (
+                  <View style={styles.userDetailRow}>
+                    <Ionicons name="time" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.userDetailText}>Last Login: {couple.male.lastActive}</Text>
+                  </View>
+                ) : null}
+
+                {/* Setup Status & Temp Password */}
+                <View style={styles.setupStatusRow}>
+                  <View style={[styles.setupBadge, { backgroundColor: couple.male.isPasswordReset ? COLORS.success + '20' : COLORS.warning + '20' }]}>
+                    <Ionicons name={couple.male.isPasswordReset ? 'checkmark-circle' : 'alert-circle'} size={12} color={couple.male.isPasswordReset ? COLORS.success : COLORS.warning} />
+                    <Text style={[styles.setupBadgeText, { color: couple.male.isPasswordReset ? COLORS.success : COLORS.warning }]}>
+                      {couple.male.isPasswordReset ? 'Password Set' : 'Needs Reset'}
+                    </Text>
+                  </View>
+                  <View style={[styles.setupBadge, { backgroundColor: couple.male.isPinSet ? COLORS.success + '20' : COLORS.warning + '20' }]}>
+                    <Ionicons name={couple.male.isPinSet ? 'checkmark-circle' : 'alert-circle'} size={12} color={couple.male.isPinSet ? COLORS.success : COLORS.warning} />
+                    <Text style={[styles.setupBadgeText, { color: couple.male.isPinSet ? COLORS.success : COLORS.warning }]}>
+                      {couple.male.isPinSet ? 'PIN Set' : 'Needs PIN'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Show temp password if not yet reset */}
+                {!couple.male.isPasswordReset && couple.male.tempPassword && (
+                  <View style={styles.tempPasswordRow}>
+                    <Ionicons name="key" size={14} color={COLORS.warning} />
+                    <Text style={styles.tempPasswordLabel}>Temp Password:</Text>
+                    <Text style={styles.tempPasswordValue}>{couple.male.tempPassword}</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.userActions}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUserAction('edit', couple.coupleId, 'male')}
+                >
+                  <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.primary }]}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUserAction('reset', couple.coupleId, 'male')}
+                >
+                  <Ionicons name="key-outline" size={16} color={COLORS.warning} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.warning }]}>Reset Password</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUserAction('resetPin', couple.coupleId, 'male')}
+                >
+                  <Ionicons name="keypad-outline" size={16} color={COLORS.info} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.info }]}>Reset PIN</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUserAction('toggle', couple.coupleId, 'male')}
+                >
+                  <Ionicons name={couple.male.status === 'active' ? 'pause-circle-outline' : 'play-circle-outline'} size={16} color={couple.male.status === 'active' ? COLORS.error : COLORS.success} />
+                  <Text style={[styles.actionButtonText, { color: couple.male.status === 'active' ? COLORS.error : COLORS.success }]}>
+                    {couple.male.status === 'active' ? 'Pause' : 'Activate'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.testButton]}
+                  onPress={() => handleOpenTestModal(couple.coupleId, 'male', couple.male.name)}
+                >
+                  <Ionicons name="flask" size={16} color="#fff" />
+                  <Text style={[styles.actionButtonText, { color: '#fff' }]}>Test</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             {/* Couple Actions - Delete button */}
             <View style={styles.coupleActionsRow}>
               <TouchableOpacity
@@ -2751,71 +2751,6 @@ export default function AdminUsersScreen() {
             ) : (
               // Step 2: Individual Accounts
               <View style={styles.formSection}>
-                {/* Male Account */}
-                <View style={styles.accountSection}>
-                  <View style={styles.accountHeader}>
-                    <View style={[styles.genderIcon, { backgroundColor: COLORS.primary + '15' }]}>
-                      <Ionicons name="male" size={18} color={COLORS.primary} />
-                    </View>
-                    <View>
-                      <Text style={styles.accountTitle}>Male Account</Text>
-                      <Text style={styles.accountId}>{enrollForm.coupleId}_M</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Full Name *</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={enrollForm.maleName}
-                      onChangeText={(text) => setEnrollForm({ ...enrollForm, maleName: text })}
-                      placeholder="Enter full name"
-                      placeholderTextColor={COLORS.textMuted}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Age</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={enrollForm.maleAge}
-                      onChangeText={(text) => setEnrollForm({ ...enrollForm, maleAge: text })}
-                      placeholder="Enter age"
-                      placeholderTextColor={COLORS.textMuted}
-                      keyboardType="numeric"
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Phone Number</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={enrollForm.malePhone}
-                      onChangeText={(text) => setEnrollForm({ ...enrollForm, malePhone: text })}
-                      placeholder="Enter phone number"
-                      placeholderTextColor={COLORS.textMuted}
-                      keyboardType="phone-pad"
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Email</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={enrollForm.maleEmail}
-                      onChangeText={(text) => setEnrollForm({ ...enrollForm, maleEmail: text })}
-                      placeholder="Enter email address"
-                      placeholderTextColor={COLORS.textMuted}
-                      keyboardType="email-address"
-                    />
-                  </View>
-
-                  <View style={styles.passwordNote}>
-                    <Ionicons name="information-circle" size={16} color={COLORS.info} />
-                    <Text style={styles.passwordNoteText}>Temporary password will be auto-generated with Force Reset enabled</Text>
-                  </View>
-                </View>
-
                 {/* Female Account */}
                 <View style={styles.accountSection}>
                   <View style={styles.accountHeader}>
@@ -2869,6 +2804,71 @@ export default function AdminUsersScreen() {
                       style={styles.input}
                       value={enrollForm.femaleEmail}
                       onChangeText={(text) => setEnrollForm({ ...enrollForm, femaleEmail: text })}
+                      placeholder="Enter email address"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="email-address"
+                    />
+                  </View>
+
+                  <View style={styles.passwordNote}>
+                    <Ionicons name="information-circle" size={16} color={COLORS.info} />
+                    <Text style={styles.passwordNoteText}>Temporary password will be auto-generated with Force Reset enabled</Text>
+                  </View>
+                </View>
+
+                {/* Male Account */}
+                <View style={styles.accountSection}>
+                  <View style={styles.accountHeader}>
+                    <View style={[styles.genderIcon, { backgroundColor: COLORS.primary + '15' }]}>
+                      <Ionicons name="male" size={18} color={COLORS.primary} />
+                    </View>
+                    <View>
+                      <Text style={styles.accountTitle}>Male Account</Text>
+                      <Text style={styles.accountId}>{enrollForm.coupleId}_M</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Full Name *</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.maleName}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, maleName: text })}
+                      placeholder="Enter full name"
+                      placeholderTextColor={COLORS.textMuted}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Age</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.maleAge}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, maleAge: text })}
+                      placeholder="Enter age"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Phone Number</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.malePhone}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, malePhone: text })}
+                      placeholder="Enter phone number"
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Email</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={enrollForm.maleEmail}
+                      onChangeText={(text) => setEnrollForm({ ...enrollForm, maleEmail: text })}
                       placeholder="Enter email address"
                       placeholderTextColor={COLORS.textMuted}
                       keyboardType="email-address"

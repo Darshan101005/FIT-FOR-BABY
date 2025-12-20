@@ -149,12 +149,8 @@ export default function AdminMonitoringScreen() {
         // Build couple details
         details[coupleId] = {
           coupleId,
-          maleName: couple.male?.firstName && couple.male?.lastName
-            ? `${couple.male.firstName} ${couple.male.lastName}`
-            : couple.male?.displayName || 'Male Partner',
-          femaleName: couple.female?.firstName && couple.female?.lastName
-            ? `${couple.female.firstName} ${couple.female.lastName}`
-            : couple.female?.displayName || 'Female Partner',
+          maleName: couple.male?.name || '',
+          femaleName: couple.female?.name || '',
           maleEmail: couple.male?.email || '',
           femaleEmail: couple.female?.email || '',
           malePhone: couple.male?.phone || '',
@@ -338,7 +334,13 @@ export default function AdminMonitoringScreen() {
 
   // Filter logs based on search and filters
   const filteredLogs = logs.filter(log => {
-    const matchesSearch = log.coupleId.toLowerCase().includes(searchQuery.toLowerCase());
+    const details = coupleDetails[log.coupleId];
+    const maleName = details?.maleName?.toLowerCase() || '';
+    const femaleName = details?.femaleName?.toLowerCase() || '';
+    const query = searchQuery.toLowerCase();
+    const matchesSearch = log.coupleId.toLowerCase().includes(query) ||
+      maleName.includes(query) ||
+      femaleName.includes(query);
 
     if (selectedStatus === 'all') return matchesSearch;
 
@@ -1436,7 +1438,7 @@ export default function AdminMonitoringScreen() {
           <Ionicons name="search" size={18} color={COLORS.textMuted} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search couple ID..."
+            placeholder="Search by ID or name..."
             placeholderTextColor={COLORS.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -1799,6 +1801,9 @@ export default function AdminMonitoringScreen() {
                 <Text style={[styles.statusBadgeText, log.femaleStatus === 'Active' && styles.statusBadgeTextActive]}>F</Text>
               </View>
             </View>
+            <Text style={styles.coupleNames}>
+              {coupleDetails[log.coupleId]?.femaleName || ''} & {coupleDetails[log.coupleId]?.maleName || ''}
+            </Text>
           </View>
         </View>
         <View style={styles.logRowMetrics}>
@@ -2880,7 +2885,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   gridHeaderLeft: {
-    width: 100,
+    width: 160,
     paddingLeft: 12,
     justifyContent: 'center',
   },
@@ -2912,7 +2917,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   logRowLeft: {
-    width: 100,
+    width: 160,
     paddingLeft: 12,
     justifyContent: 'center',
   },
@@ -2922,6 +2927,11 @@ const styles = StyleSheet.create({
   coupleId: {
     fontSize: 13,
     fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  coupleNames: {
+    fontSize: 11,
+    fontWeight: '500',
     color: COLORS.textPrimary,
   },
   statusBadges: {
