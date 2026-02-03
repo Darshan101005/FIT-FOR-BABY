@@ -1,21 +1,21 @@
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTheme } from '@/context/ThemeContext';
-import { coupleService, deviceService } from '@/services/firestore.service';
+import { activityLogService, coupleService, deviceService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  Platform,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  Vibration,
-  View,
+    Animated,
+    Platform,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    useWindowDimensions,
+    Vibration,
+    View,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -346,6 +346,36 @@ export default function EnterPinScreen() {
         await AsyncStorage.setItem('userGender', selectedGender);
         await AsyncStorage.setItem('userId', profileData.userId);
         await AsyncStorage.setItem('userName', profileData.name);
+
+        // Log profile switch activity
+        try {
+          const previousGender = initialGender;
+          const switchType = previousGender && previousGender !== selectedGender 
+            ? 'profile_switch' 
+            : 'profile_login';
+          
+          const description = previousGender && previousGender !== selectedGender
+            ? `User switched profile from ${previousGender} to ${selectedGender}`
+            : `User ${profileData.name} logged in via PIN`;
+          
+          await activityLogService.log({
+            category: 'user',
+            userId: profileData.userId,
+            coupleId: coupleId,
+            userRole: 'user',
+            type: 'auth',
+            action: 'login',
+            description: description,
+            metadata: {
+              switchType,
+              previousGender: previousGender || null,
+              newGender: selectedGender,
+              userName: profileData.name,
+            },
+          });
+        } catch (logError) {
+          console.log('Activity log error (non-critical):', logError);
+        }
 
         // Clear intermediate auth state flags
         await AsyncStorage.removeItem('pendingProfileSelection');

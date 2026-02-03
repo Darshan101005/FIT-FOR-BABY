@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
-    Image,  
+    Image,
     Platform,
     Pressable,
     ScrollView,
@@ -105,6 +105,13 @@ const navItems: NavItem[] = [
     icon: 'call-outline',
     iconFamily: 'Ionicons',
     route: '/admin/requested-calls',
+  },
+  {
+    id: 'activity-logs',
+    label: 'Activity Logs',
+    icon: 'pulse-outline',
+    iconFamily: 'Ionicons',
+    route: '/admin/activity-logs',
   },
 ];
 

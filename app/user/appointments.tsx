@@ -11,17 +11,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Animated,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -308,7 +308,7 @@ export default function AppointmentsScreen() {
     if (!coupleId) return;
     
     try {
-      await doctorVisitService.delete(coupleId, id);
+      await doctorVisitService.delete(coupleId, id, userGender);
       setDoctorVisits(doctorVisits.filter(apt => apt.id !== id));
       showToast(t('appointments.appointmentRemoved'), 'success');
       

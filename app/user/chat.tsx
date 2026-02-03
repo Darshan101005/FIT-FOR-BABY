@@ -8,18 +8,18 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    Alert,
+    Animated,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -294,7 +294,7 @@ export default function ChatScreen() {
     if (!userId) return;
     setIsClearing(true);
     try {
-      await chatService.clearAllMessages(userId);
+      await chatService.clearAllMessages(userId, coupleId, gender);
       setShowClearModal(false);
     } catch (error) {
       console.error('Error clearing chat:', error);
@@ -637,6 +637,9 @@ export default function ChatScreen() {
                 placeholderTextColor="#94a3b8"
                 multiline
                 maxLength={1000}
+                onSubmitEditing={isWeb && !messageText.trim() ? undefined : handleSendMessage}
+                blurOnSubmit={false}
+                returnKeyType="send"
               />
             </View>
             <TouchableOpacity

@@ -306,8 +306,8 @@ export default function AdminHomeScreen() {
         exerciseCompliance,
       });
 
-      // Sort by most missing logs and take top 4
-      setLogsNotCompletedCouples(couplesWithMissingLogs.slice(0, 4));
+      // Set all couples with missing logs (no limit)
+      setLogsNotCompletedCouples(couplesWithMissingLogs);
 
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -900,7 +900,13 @@ export default function AdminHomeScreen() {
         </View>
       ) : (
         <>
-          <View style={styles.alertsContainer}>
+          <ScrollView 
+            style={styles.alertsContainer} 
+            nestedScrollEnabled={true}
+            showsVerticalScrollIndicator={true}
+            bounces={false}
+            contentContainerStyle={{ flexGrow: 0 }}
+          >
             {logsNotCompletedCouples.length === 0 ? (
               <View style={styles.emptyAlertContainer}>
                 <Ionicons name="checkmark-circle" size={32} color={COLORS.success} />
@@ -965,7 +971,7 @@ export default function AdminHomeScreen() {
                 );
               })
             )}
-          </View>
+          </ScrollView>
 
           {logsNotCompletedCouples.length > 0 && (
             <TouchableOpacity
@@ -1773,13 +1779,13 @@ const styles = StyleSheet.create({
   alertsContainer: {
     backgroundColor: COLORS.surface,
     borderRadius: 16,
-    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 1,
     minHeight: 80,
+    maxHeight: 350,
   },
   emptyAlertContainer: {
     alignItems: 'center',

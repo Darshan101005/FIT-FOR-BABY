@@ -547,7 +547,7 @@ export default function AdminCommunicationScreen() {
     if (!selectedChat) return;
     setIsClearingChat(true);
     try {
-      await chatService.clearAllMessages(selectedChat.id);
+      await chatService.clearAllMessages(selectedChat.id, selectedChat.coupleId, selectedChat.gender);
       setShowClearChatModal(false);
       showToast('Chat cleared successfully', 'success');
     } catch (error) {

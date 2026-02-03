@@ -1,6 +1,6 @@
 import { useAuth } from '@/context/AuthContext';
 import { loginWithEmail } from '@/services/firebase';
-import { adminService, coupleService, deviceService } from '@/services/firestore.service';
+import { activityLogService, adminService, coupleService, deviceService } from '@/services/firestore.service';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -8,16 +8,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    Animated,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -120,6 +120,12 @@ export default function LoginScreen() {
       const coupleResult = await coupleService.findByCredential(credential);
 
       if (!coupleResult) {
+        // Log failed attempt - couple not found
+        try {
+          await activityLogService.logFailedLogin('login_user_not_found', credential, credential.includes('@'), 'Couple not found in quick access mode');
+        } catch (logError) {
+          console.log('Failed login log error (non-critical):', logError);
+        }
         showToast('Couple not found. Check your Couple ID or shared credential.', 'error');
         setLoginState('idle');
         return;
@@ -134,12 +140,22 @@ export default function LoginScreen() {
       if (!maleSetupComplete || !femaleSetupComplete) {
         // Get the name of the user who needs to complete setup
         const incompleteUser = !maleSetupComplete ? couple.male.name : couple.female.name;
+        try {
+          await activityLogService.logFailedLogin('login_failed', phoneNumber, false, `Quick access failed: ${incompleteUser} has not completed first-time setup`);
+        } catch (logError) {
+          console.log('Failed login log error (non-critical):', logError);
+        }
         showToast(`${incompleteUser} needs to complete first-time setup. Use Individual Login.`, 'error');
         setLoginState('idle');
         return;
       }
 
       if (couple.male.status === 'inactive' && couple.female.status === 'inactive') {
+        try {
+          await activityLogService.logFailedLogin('login_failed', phoneNumber, false, 'Quick access failed: Both accounts in couple are paused/inactive');
+        } catch (logError) {
+          console.log('Failed login log error (non-critical):', logError);
+        }
         showToast('Both accounts are paused. Contact admin.', 'error');
         setLoginState('idle');
         return;
@@ -151,6 +167,26 @@ export default function LoginScreen() {
 
       // Refresh auth state so AuthContext knows about partial auth
       await refreshAuthState();
+
+      // Log quick access attempt
+      try {
+        await activityLogService.log({
+          category: 'user',
+          userId: couple.id, // Using coupleId as userId for quick access
+          coupleId: couple.id,
+          userRole: 'user',
+          type: 'auth',
+          action: 'login',
+          description: `Quick access login initiated for couple`,
+          metadata: {
+            loginMethod: 'quick-access',
+          },
+          platform: Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android',
+          deviceInfo: Platform.OS === 'web' ? navigator?.userAgent : `${Platform.OS} ${Platform.Version}`,
+        });
+      } catch (logError) {
+        console.log('Activity log error (non-critical):', logError);
+      }
 
       setLoginState('success');
       showToast('Select your profile', 'success');
@@ -172,6 +208,12 @@ export default function LoginScreen() {
       }, 500);
     } catch (error: any) {
       console.error('Quick access error:', error);
+      // Log failed quick access attempt
+      try {
+        await activityLogService.logFailedLogin('login_failed', email.trim() || 'unknown', email.includes('@'), `Quick access error: ${error.message || 'Unknown error'}`);
+      } catch (logError) {
+        console.log('Failed login log error (non-critical):', logError);
+      }
       showToast('Login failed. Please try again.', 'error');
       setLoginState('idle');
     }
@@ -180,6 +222,12 @@ export default function LoginScreen() {
   // MODE 1: Individual Login (with password)
   const handleIndividualLogin = async () => {
     if (!email || !password) {
+      // Log attempt with empty credentials
+      try {
+        await activityLogService.logFailedLogin('login_failed', email.trim() || 'empty', email.includes('@'), 'Empty credentials submitted');
+      } catch (logError) {
+        console.log('Failed login log error (non-critical):', logError);
+      }
       showToast('Enter User ID/Email/Phone and password', 'error');
       return;
     }
@@ -206,6 +254,12 @@ export default function LoginScreen() {
           if (adminData) {
             // This is an admin/superadmin/owner
             if (!adminData.isActive) {
+              // Log failed login - account paused
+              try {
+                await activityLogService.logFailedLogin('login_failed', normalizedEmail, true, 'Admin account is paused');
+              } catch (logError) {
+                console.log('Failed login log error (non-critical):', logError);
+              }
               showToast('Your account has been paused. Contact the owner.', 'error');
               setLoginState('idle');
               return;
@@ -227,6 +281,22 @@ export default function LoginScreen() {
 
             // Refresh auth context state to sync with AsyncStorage
             await refreshAuthState();
+
+            // Log admin login activity
+            try {
+              await activityLogService.log({
+                category: 'user',
+                userId: adminData.uid,
+                userRole: adminData.role,
+                type: 'auth',
+                action: 'login',
+                description: `Admin ${adminData.displayName} logged in`,
+                platform: Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android',
+                deviceInfo: Platform.OS === 'web' ? navigator?.userAgent : `${Platform.OS} ${Platform.Version}`,
+              });
+            } catch (logError) {
+              console.log('Activity log error (non-critical):', logError);
+            }
 
             setLoginState('success');
             const roleLabel = adminData.role === 'owner' ? 'Owner' :
@@ -259,7 +329,17 @@ export default function LoginScreen() {
           console.log('Couples query failed, likely not authenticated:', coupleError);
         }
 
-        // Neither admin nor couple user found
+        // Neither admin nor couple user found - log failed attempt
+        try {
+          await activityLogService.logFailedLogin(
+            result.success ? 'login_user_not_found' : 'login_invalid_password',
+            normalizedEmail,
+            true,
+            result.error || 'Account not found or invalid password'
+          );
+        } catch (logError) {
+          console.log('Failed login log error (non-critical):', logError);
+        }
         showToast(result.success ? 'Account not found. Contact admin.' : (result.error || 'Invalid email or password'), 'error');
         setLoginState('idle');
         return;
@@ -273,12 +353,23 @@ export default function LoginScreen() {
         if (adminByPhone) {
           // Found admin by phone - verify password from stored password
           if (adminByPhone.password !== password) {
+            // Log failed admin login attempt
+            try {
+              await activityLogService.logFailedLogin('login_invalid_password', credential, false, 'Invalid admin password');
+            } catch (logError) {
+              console.log('Failed login log error (non-critical):', logError);
+            }
             showToast('Invalid password', 'error');
             setLoginState('idle');
             return;
           }
 
           if (!adminByPhone.isActive) {
+            try {
+              await activityLogService.logFailedLogin('login_failed', credential, false, 'Admin account paused (phone login)');
+            } catch (logError) {
+              console.log('Failed login log error (non-critical):', logError);
+            }
             showToast('Your account has been paused. Contact the owner.', 'error');
             setLoginState('idle');
             return;
@@ -300,6 +391,22 @@ export default function LoginScreen() {
 
           // Refresh auth context state to sync with AsyncStorage
           await refreshAuthState();
+
+          // Log admin login activity
+          try {
+            await activityLogService.log({
+              category: 'user',
+              userId: adminByPhone.uid,
+              userRole: adminByPhone.role,
+              type: 'auth',
+              action: 'login',
+              description: `Admin ${adminByPhone.displayName} logged in via phone`,
+              platform: Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android',
+              deviceInfo: Platform.OS === 'web' ? navigator?.userAgent : `${Platform.OS} ${Platform.Version}`,
+            });
+          } catch (logError) {
+            console.log('Activity log error (non-critical):', logError);
+          }
 
           setLoginState('success');
           const roleLabel = adminByPhone.role === 'owner' ? 'Owner' :
@@ -325,17 +432,33 @@ export default function LoginScreen() {
           return;
         }
 
-        // Not found in couples either
+        // Not found in couples either - log failed attempt
+        try {
+          await activityLogService.logFailedLogin('login_user_not_found', credential, false, 'User not found');
+        } catch (logError) {
+          console.log('Failed login log error (non-critical):', logError);
+        }
         showToast('User not found. Check your ID/Email/Phone.', 'error');
         setLoginState('idle');
       } catch (coupleError: any) {
         console.error('Couples query error:', coupleError);
+        // Log failed attempt
+        try {
+          await activityLogService.logFailedLogin('login_user_not_found', credential, false, 'Couples query error');
+        } catch (logError) {
+          console.log('Failed login log error (non-critical):', logError);
+        }
         // If it's a permission error, the user likely doesn't exist
         showToast('User not found. Check your ID/Email/Phone.', 'error');
         setLoginState('idle');
       }
     } catch (error: any) {
       console.error('Login error:', error);
+      try {
+        await activityLogService.logFailedLogin('login_failed', credential, credential.includes('@'), `Login error: ${error.message || 'Unknown error'}`);
+      } catch (logError) {
+        console.log('Failed login log error (non-critical):', logError);
+      }
       showToast(error.message || 'Login failed. Please try again.', 'error');
       setLoginState('idle');
     }
@@ -352,6 +475,11 @@ export default function LoginScreen() {
 
       if (maleNeedsSetup || femaleNeedsSetup) {
         // Block shared credential login - require individual login first
+        try {
+          await activityLogService.logFailedLogin('login_failed', email.trim(), email.includes('@'), 'Shared credential login blocked: first-time setup required');
+        } catch (logError) {
+          console.log('Failed login log error (non-critical):', logError);
+        }
         showToast('Please use your personal credentials for first-time login.', 'error');
         setLoginState('idle');
         return;
@@ -362,6 +490,12 @@ export default function LoginScreen() {
       const femalePasswordValid = await coupleService.verifyPassword(couple.id, 'female', password);
 
       if (!malePasswordValid && !femalePasswordValid) {
+        // Log failed login attempt
+        try {
+          await activityLogService.logFailedLogin('login_invalid_password', email.trim(), email.includes('@'), 'Invalid shared credential password');
+        } catch (logError) {
+          console.log('Failed login log error (non-critical):', logError);
+        }
         showToast('Invalid password', 'error');
         setLoginState('idle');
         return;
@@ -398,6 +532,12 @@ export default function LoginScreen() {
     const passwordValid = await coupleService.verifyPassword(couple.id, gender, password);
 
     if (!passwordValid) {
+      // Log failed login attempt
+      try {
+        await activityLogService.logFailedLogin('login_invalid_password', email.trim(), email.includes('@'), `Invalid ${gender} user password`);
+      } catch (logError) {
+        console.log('Failed login log error (non-critical):', logError);
+      }
       showToast('Invalid password', 'error');
       setLoginState('idle');
       return;
@@ -407,6 +547,11 @@ export default function LoginScreen() {
 
     // Check if user is inactive
     if (user.status === 'inactive') {
+      try {
+        await activityLogService.logFailedLogin('login_failed', email.trim(), email.includes('@'), `User account paused: ${gender} user`);
+      } catch (logError) {
+        console.log('Failed login log error (non-critical):', logError);
+      }
       showToast('Your account is paused. Contact admin.', 'error');
       setLoginState('idle');
       return;
@@ -498,6 +643,27 @@ export default function LoginScreen() {
 
     // Refresh auth context state to sync with AsyncStorage
     await refreshAuthState();
+
+    // Log user login activity
+    try {
+      await activityLogService.log({
+        category: 'user',
+        userId: user.id,
+        coupleId: couple.id,
+        userRole: 'user',
+        type: 'auth',
+        action: 'login',
+        description: `User ${user.name} logged in`,
+        metadata: {
+          gender: gender,
+          loginMethod: 'individual',
+        },
+        platform: Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android',
+        deviceInfo: Platform.OS === 'web' ? navigator?.userAgent : `${Platform.OS} ${Platform.Version}`,
+      });
+    } catch (logError) {
+      console.log('Activity log error (non-critical):', logError);
+    }
 
     setLoginState('success');
     showToast(`Welcome ${user.name}!`, 'success');

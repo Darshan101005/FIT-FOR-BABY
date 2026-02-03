@@ -3,7 +3,7 @@
 // ============================================
 
 import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
-import { Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DeviceStatus, DoctorVisit, DoctorVisitStatus, ExerciseLog, Feedback, FeedbackCategory, FeedbackStatus, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, UserDevice, WeightLog } from '@/types/firebase.types';
+import { ActivityAction, ActivityCategory, ActivityLog, ActivityLogFilter, ActivityLogMetadata, ActivityType, Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DeviceStatus, DoctorVisit, DoctorVisitStatus, ExerciseLog, Feedback, FeedbackCategory, FeedbackStatus, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, UserDevice, UserRole, WeightLog } from '@/types/firebase.types';
 import {
   addDoc,
   collection,
@@ -134,6 +134,8 @@ export const stepsService = {
       createdAt: now(),
       updatedAt: now(),
     });
+    // Log activity
+    silentLog('steps', 'create', docRef.id, `Logged ${data.stepCount} steps`, userId, undefined, { steps: data.stepCount, source: data.source });
     return docRef.id;
   },
 
@@ -168,6 +170,8 @@ export const stepsService = {
   async delete(userId: string, stepId: string): Promise<void> {
     const stepRef = doc(db, COLLECTIONS.USERS, userId, COLLECTIONS.STEPS, stepId);
     await deleteDoc(stepRef);
+    // Log activity
+    silentLog('steps', 'delete', stepId, `Deleted step entry`, userId);
   },
 
   // Listen to steps for today
@@ -195,6 +199,8 @@ export const foodLogService = {
       createdAt: now(),
       updatedAt: now(),
     });
+    // Log activity
+    silentLog('foodLogs', 'create', docRef.id, `Logged ${data.mealType} food (${data.totalCalories} cal)`, userId, undefined, { mealType: data.mealType, calories: data.totalCalories });
     return docRef.id;
   },
 
@@ -219,12 +225,16 @@ export const foodLogService = {
       ...data,
       updatedAt: now(),
     });
+    // Log activity
+    silentLog('foodLogs', 'update', logId, `Updated food log`, userId);
   },
 
   // Delete food log
   async delete(userId: string, logId: string): Promise<void> {
     const logRef = doc(db, COLLECTIONS.USERS, userId, COLLECTIONS.FOOD_LOGS, logId);
     await deleteDoc(logRef);
+    // Log activity
+    silentLog('foodLogs', 'delete', logId, `Deleted food log`, userId);
   },
 };
 
@@ -241,6 +251,8 @@ export const weightLogService = {
       userId,
       createdAt: now(),
     });
+    // Log activity
+    silentLog('weightLogs', 'create', docRef.id, `Logged weight: ${data.weight}kg`, userId, undefined, { weight: data.weight });
     return docRef.id;
   },
 
@@ -262,6 +274,8 @@ export const weightLogService = {
   async delete(userId: string, logId: string): Promise<void> {
     const logRef = doc(db, COLLECTIONS.USERS, userId, COLLECTIONS.WEIGHT_LOGS, logId);
     await deleteDoc(logRef);
+    // Log activity
+    silentLog('weightLogs', 'delete', logId, `Deleted weight log`, userId);
   },
 };
 
@@ -278,6 +292,8 @@ export const exerciseLogService = {
       userId,
       createdAt: now(),
     });
+    // Log activity
+    silentLog('exerciseLogs', 'create', docRef.id, `Logged exercise: ${data.exerciseType || 'workout'}`, userId, undefined, { type: data.exerciseType, duration: data.duration });
     return docRef.id;
   },
 
@@ -293,6 +309,8 @@ export const exerciseLogService = {
   async delete(userId: string, logId: string): Promise<void> {
     const logRef = doc(db, COLLECTIONS.USERS, userId, COLLECTIONS.EXERCISE_LOGS, logId);
     await deleteDoc(logRef);
+    // Log activity
+    silentLog('exerciseLogs', 'delete', logId, `Deleted exercise log`, userId);
   },
 };
 
@@ -313,6 +331,8 @@ export const appointmentService = {
       createdAt: now(),
       updatedAt: now(),
     });
+    // Log activity
+    silentLog('appointments', 'create', docRef.id, `Created ${data.type} appointment`, userId);
     return docRef.id;
   },
 
@@ -339,12 +359,16 @@ export const appointmentService = {
       updatedAt: now(),
       ...(status === 'completed' ? { completedAt: now() } : {}),
     });
+    // Log activity
+    silentLog('appointments', 'update', appointmentId, `Updated appointment status to ${status}`, userId);
   },
 
   // Delete appointment
   async delete(userId: string, appointmentId: string): Promise<void> {
     const aptRef = doc(db, COLLECTIONS.USERS, userId, COLLECTIONS.APPOINTMENTS, appointmentId);
     await deleteDoc(aptRef);
+    // Log activity
+    silentLog('appointments', 'delete', appointmentId, `Deleted appointment`, userId);
   },
 
   // Subscribe to appointments
@@ -392,6 +416,8 @@ export const adminService = {
       createdAt: now(),
       updatedAt: now(),
     });
+    // Log activity
+    silentLog('admins', 'create', adminId, `Created admin: ${data.displayName}`, adminId, undefined, { role: data.role });
   },
 
   // Update admin
@@ -401,6 +427,8 @@ export const adminService = {
       ...data,
       updatedAt: now(),
     });
+    // Log activity
+    silentLog('admins', 'update', adminId, `Updated admin profile`, adminId);
   },
 
   // Deactivate admin
@@ -602,6 +630,9 @@ export const coupleService = {
 
     const coupleRef = doc(db, COLLECTIONS.COUPLES, data.coupleId);
     await setDoc(coupleRef, coupleData);
+
+    // Log activity
+    silentLog('couples', 'create', data.coupleId, `Enrolled new couple: ${data.male.name} & ${data.female.name}`, data.enrolledBy, data.coupleId);
 
     return {
       coupleId: data.coupleId,
@@ -876,6 +907,11 @@ export const coupleService = {
   // Reset password for user (clears temp password)
   async resetPassword(coupleId: string, gender: 'male' | 'female', newPassword: string): Promise<void> {
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    
+    // Check if this is first-time setup or regular password reset
+    const couple = await this.get(coupleId);
+    const isFirstTimeSetup = couple?.[gender]?.isPasswordReset === false;
+    
     await updateDoc(coupleRef, {
       [`${gender}.password`]: newPassword,
       [`${gender}.isPasswordReset`]: true,
@@ -883,16 +919,31 @@ export const coupleService = {
       [`${gender}.status`]: 'active',
       updatedAt: now(),
     });
+    
+    // Log activity
+    const description = isFirstTimeSetup 
+      ? `First-time password setup completed` 
+      : `Password reset successfully`;
+    silentLog('auth', 'update', coupleId, description, undefined, coupleId, { gender, isFirstTimeSetup });
   },
 
   // Set PIN for user
   async setPin(coupleId: string, gender: 'male' | 'female', pin: string): Promise<void> {
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+    
+    // Check if PIN already exists to determine if it's setup or update
+    const couple = await this.get(coupleId);
+    const isNewPin = !couple?.[gender]?.isPinSet;
+    
     await updateDoc(coupleRef, {
       [`${gender}.pin`]: pin,
       [`${gender}.isPinSet`]: true,
       updatedAt: now(),
     });
+    
+    // Log activity
+    const action = isNewPin ? 'Session PIN set up successfully' : 'Session PIN updated successfully';
+    silentLog('settings', 'update', coupleId, action, undefined, coupleId, { gender, action: isNewPin ? 'pin_setup' : 'pin_update' });
   },
 
   // Verify PIN
@@ -910,6 +961,9 @@ export const coupleService = {
       [`${gender}.isPinSet`]: false,
       updatedAt: now(),
     });
+    
+    // Log activity
+    silentLog('admin', 'update', coupleId, `Session PIN force reset by admin for ${gender} user`, undefined, coupleId, { gender, action: 'pin_force_reset' });
   },
 
   // Update last login
@@ -964,6 +1018,8 @@ export const coupleService = {
     }
 
     await updateDoc(coupleRef, updateData);
+    // Log activity
+    silentLog('couples', 'update', coupleId, `Updated ${gender} user details`, undefined, coupleId, { gender, fields: Object.keys(data) });
   },
 
   // Update specific user field (for personal info edits)
@@ -982,6 +1038,9 @@ export const coupleService = {
     });
 
     await updateDoc(coupleRef, cleanData);
+    // Log activity - extract field names from data keys
+    const fieldNames = Object.keys(data).map(key => key.replace(`${gender}.`, ''));
+    silentLog('couples', 'update', coupleId, `Updated ${gender} user field(s): ${fieldNames.join(', ')}`, undefined, coupleId, { gender, fields: fieldNames });
   },
 
   // Update user profile with Firestore-safe data (no null values)
@@ -1029,9 +1088,9 @@ export const coupleService = {
     }
 
     await updateDoc(coupleRef, updateData);
+    // Log activity
+    silentLog('couples', 'update', coupleId, `Updated ${gender} user profile`, undefined, coupleId, { gender, fields: Object.keys(profileData) });
   },
-
-  // Force password reset for user
   async forcePasswordReset(coupleId: string, gender: 'male' | 'female'): Promise<string> {
     const newTempPassword = generateTempPassword();
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
@@ -1042,6 +1101,10 @@ export const coupleService = {
       [`${gender}.status`]: 'pending', // Reset status to pending
       updatedAt: now(),
     });
+    
+    // Log activity
+    silentLog('admin', 'update', coupleId, `Force password reset initiated for ${gender} user`, undefined, coupleId, { gender, action: 'force_password_reset' });
+    
     return newTempPassword;
   },
 
@@ -1103,6 +1166,8 @@ export const coupleService = {
     // Finally delete the main couple document
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
     await deleteDoc(coupleRef);
+    // Log activity
+    silentLog('couples', 'delete', coupleId, `Deleted couple ${coupleId} and all data`);
 
     console.log(`✅ Couple ${coupleId} and all subcollections deleted successfully`);
   },
@@ -1412,6 +1477,9 @@ export const coupleWeightLogService = {
       }
       await updateDoc(coupleRef, updateData);
 
+      // Log activity
+      silentLog('coupleWeightLogs', 'create', docRef.id, `Logged weight: ${data.weight}kg${bmi ? ` (BMI: ${bmi})` : ''}`, undefined, coupleId, { gender, weight: data.weight, bmi, height: data.height });
+
       return docRef.id;
     } catch (error) {
       console.error('Error adding weight log:', error);
@@ -1475,6 +1543,8 @@ export const coupleWeightLogService = {
   async delete(coupleId: string, logId: string): Promise<void> {
     const logRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'weightLogs', logId);
     await deleteDoc(logRef);
+    // Log activity
+    silentLog('coupleWeightLogs', 'delete', logId, `Deleted weight log`, undefined, coupleId);
   },
 
   // Subscribe to weight logs (real-time)
@@ -1712,6 +1782,9 @@ export const coupleStepsService = {
         createdAt: now(),
       });
 
+      // Log activity
+      silentLog('coupleSteps', 'create', docRef.id, `Logged ${data.stepCount} steps`, undefined, coupleId, { gender, stepCount: data.stepCount, source: data.source || 'manual' });
+
       return docRef.id;
     } catch (error) {
       console.error('Error adding step entry:', error);
@@ -1767,10 +1840,12 @@ export const coupleStepsService = {
   },
 
   // Delete step entry
-  async delete(coupleId: string, stepId: string): Promise<void> {
+  async delete(coupleId: string, stepId: string, gender?: 'male' | 'female'): Promise<void> {
     try {
       const stepRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'steps', stepId);
       await deleteDoc(stepRef);
+      // Log activity
+      silentLog('coupleSteps', 'delete', stepId, `Deleted step entry`, undefined, coupleId, gender ? { gender } : undefined);
     } catch (error) {
       console.error('Error deleting step entry:', error);
       throw error;
@@ -1875,6 +1950,9 @@ export const coupleExerciseService = {
         createdAt: now(),
       });
 
+      // Log activity
+      silentLog('coupleExerciseLogs', 'create', docRef.id, `Logged exercise: ${data.exerciseName} (${data.duration} mins, ${data.caloriesBurned} cal)`, undefined, coupleId, { gender, exerciseType: data.exerciseType, duration: data.duration, caloriesBurned: data.caloriesBurned });
+
       return docRef.id;
     } catch (error) {
       console.error('Error adding exercise log:', error);
@@ -1965,6 +2043,8 @@ export const coupleExerciseService = {
     try {
       const logRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'exerciseLogs', logId);
       await deleteDoc(logRef);
+      // Log activity
+      silentLog('coupleExerciseLogs', 'delete', logId, `Deleted exercise log`, undefined, coupleId);
     } catch (error) {
       console.error('Error deleting exercise log:', error);
       throw error;
@@ -2046,6 +2126,9 @@ export const coupleFoodLogService = {
         loggedAt: now(),
         createdAt: now(),
       });
+
+      // Log activity
+      silentLog('coupleFoodLogs', 'create', docRef.id, `Logged ${data.mealLabel} food (${data.totalCalories} cal)`, undefined, coupleId, { gender, mealType: data.mealType, calories: data.totalCalories, foodCount: data.foods.length });
 
       return docRef.id;
     } catch (error) {
@@ -2131,6 +2214,8 @@ export const coupleFoodLogService = {
     try {
       const logRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'foodLogs', logId);
       await deleteDoc(logRef);
+      // Log activity
+      silentLog('coupleFoodLogs', 'delete', logId, `Deleted food log`, undefined, coupleId);
     } catch (error) {
       console.error('Error deleting food log:', error);
       throw error;
@@ -2321,6 +2406,10 @@ export const supportRequestService = {
       createdAt: now(),
       updatedAt: now(),
     });
+    // Log activity with detailed info
+    const requestType = data.type === 'video' ? 'video call' : 'callback';
+    const reasonInfo = data.reason ? `: ${data.reason}` : '';
+    silentLog('supportRequests', 'create', docRef.id, `Requested ${requestType}${reasonInfo}`, data.userId, data.coupleId, { type: data.type, reason: data.reason || 'Not specified', userName: data.userName, userPhone: data.userPhone, gender: data.userGender });
     return docRef.id;
   },
 
@@ -2374,6 +2463,8 @@ export const supportRequestService = {
     if (status === 'completed') updateData.resolvedAt = now();
 
     await updateDoc(requestRef, updateData);
+    // Log activity
+    silentLog('supportRequests', 'update', requestId, `Call request status updated to ${status}`, assignedTo, undefined, { status, assignedName });
   },
 
   // Send video URL to user
@@ -2403,7 +2494,7 @@ export const supportRequestService = {
   },
 
   // Cancel request (by user or admin)
-  async cancelRequest(requestId: string, cancelledBy: 'user' | 'admin', cancelReason?: string): Promise<void> {
+  async cancelRequest(requestId: string, cancelledBy: 'user' | 'admin', cancelReason?: string, coupleId?: string, gender?: 'male' | 'female'): Promise<void> {
     const requestRef = doc(db, COLLECTIONS.SUPPORT_REQUESTS, requestId);
     const updateData: any = {
       status: 'cancelled',
@@ -2412,12 +2503,17 @@ export const supportRequestService = {
     };
     if (cancelReason) updateData.cancelReason = cancelReason;
     await updateDoc(requestRef, updateData);
+    // Log activity - use 'cancel' as action for proper icon display
+    const reasonInfo = cancelReason ? ` - Reason: ${cancelReason}` : '';
+    silentLog('supportRequests', 'cancel', requestId, `Support request cancelled by ${cancelledBy}${reasonInfo}`, undefined, coupleId, { gender, cancelledBy, cancelReason, status: 'cancelled' });
   },
 
   // Delete request permanently (for completed/cancelled requests)
-  async delete(requestId: string): Promise<void> {
+  async delete(requestId: string, coupleId?: string, gender?: 'male' | 'female'): Promise<void> {
     const requestRef = doc(db, COLLECTIONS.SUPPORT_REQUESTS, requestId);
     await deleteDoc(requestRef);
+    // Log activity
+    silentLog('supportRequests', 'delete', requestId, `Deleted support request`, undefined, coupleId, { gender, action: 'permanent_delete' });
   },
 };
 
@@ -2669,6 +2765,10 @@ export const doctorVisitService = {
         createdAt: now(),
         updatedAt: now(),
       });
+      // Log activity - include doctor name and purpose even if not provided
+      const doctorInfo = data.doctorName ? `with Dr. ${data.doctorName}` : '(Doctor not specified)';
+      const purposeInfo = data.purpose ? ` - ${data.purpose}` : '';
+      silentLog('doctorVisits', 'create', docRef.id, `Scheduled doctor visit on ${data.date} ${doctorInfo}${purposeInfo}`, data.loggedBy, coupleId, { date: data.date, time: data.time, doctorName: data.doctorName || 'Not specified', purpose: data.purpose || 'Not specified', gender });
       return docRef.id;
     } catch (error) {
       console.error('Error adding doctor visit:', error);
@@ -2716,13 +2816,15 @@ export const doctorVisitService = {
   },
 
   // Update doctor visit status
-  async updateStatus(coupleId: string, visitId: string, status: DoctorVisitStatus): Promise<void> {
+  async updateStatus(coupleId: string, visitId: string, status: DoctorVisitStatus, gender?: 'male' | 'female'): Promise<void> {
     try {
       const visitRef = doc(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS, visitId);
       await updateDoc(visitRef, {
         status,
         updatedAt: now(),
       });
+      // Log activity
+      silentLog('doctorVisits', 'update', visitId, `Doctor visit status updated to ${status}`, undefined, coupleId, { status, gender });
     } catch (error) {
       console.error('Error updating doctor visit status:', error);
       throw error;
@@ -2730,10 +2832,12 @@ export const doctorVisitService = {
   },
 
   // Delete doctor visit
-  async delete(coupleId: string, visitId: string): Promise<void> {
+  async delete(coupleId: string, visitId: string, gender?: 'male' | 'female'): Promise<void> {
     try {
       const visitRef = doc(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.DOCTOR_VISITS, visitId);
       await deleteDoc(visitRef);
+      // Log activity
+      silentLog('doctorVisits', 'delete', visitId, `Deleted doctor visit`, undefined, coupleId, { gender });
     } catch (error) {
       console.error('Error deleting doctor visit:', error);
       throw error;
@@ -2784,6 +2888,8 @@ export const nursingVisitService = {
         createdAt: now(),
         updatedAt: now(),
       });
+      // Log activity
+      silentLog('nursingVisits', 'create', docRef.id, `Scheduled nursing visit for ${data.coupleName} on ${data.date}`, data.scheduledBy, coupleId, { date: data.date, time: data.time });
       return docRef.id;
     } catch (error) {
       console.error('Error scheduling nursing visit:', error);
@@ -2843,6 +2949,8 @@ export const nursingVisitService = {
         }
       }
       await updateDoc(visitRef, updateData);
+      // Log activity
+      silentLog('nursingVisits', 'update', visitId, `Nursing visit status updated to ${status}`, undefined, coupleId, { status });
     } catch (error) {
       console.error('Error updating nursing visit status:', error);
       throw error;
@@ -2857,6 +2965,8 @@ export const nursingVisitService = {
         ...data,
         updatedAt: now(),
       });
+      // Log activity
+      silentLog('nursingVisits', 'update', visitId, `Updated nursing visit details`, undefined, coupleId);
     } catch (error) {
       console.error('Error updating nursing visit:', error);
       throw error;
@@ -2868,6 +2978,8 @@ export const nursingVisitService = {
     try {
       const visitRef = doc(db, COLLECTIONS.COUPLES, coupleId, COLLECTIONS.NURSING_VISITS, visitId);
       await deleteDoc(visitRef);
+      // Log activity
+      silentLog('nursingVisits', 'delete', visitId, `Deleted nursing visit`, undefined, coupleId);
     } catch (error) {
       console.error('Error deleting nursing visit:', error);
       throw error;
@@ -3349,6 +3461,9 @@ export const chatService = {
         updatedAt: now(),
       });
 
+      // Log activity
+      silentLog('chatMessages', 'create', docRef.id, `Sent chat message`, data.senderId, undefined, { senderType: data.senderType });
+
       return docRef.id;
     } catch (error) {
       console.error('Error sending message:', error);
@@ -3415,6 +3530,8 @@ export const chatService = {
       await updateDoc(messageRef, {
         [field]: true,
       });
+      // Log activity
+      silentLog('chatMessages', 'delete', messageId, `Deleted chat message`, userId, undefined, { deletedBy });
     } catch (error) {
       console.error('Error deleting message:', error);
       throw error;
@@ -3426,6 +3543,8 @@ export const chatService = {
     try {
       const messageRef = doc(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES, messageId);
       await deleteDoc(messageRef);
+      // Log activity
+      silentLog('chatMessages', 'delete', messageId, `Permanently deleted chat message`, userId);
     } catch (error) {
       console.error('Error hard deleting message:', error);
       throw error;
@@ -3466,12 +3585,13 @@ export const chatService = {
   },
 
   // Clear all messages in a chat (for both user and admin)
-  async clearAllMessages(userId: string): Promise<void> {
+  async clearAllMessages(userId: string, coupleId?: string, gender?: 'male' | 'female'): Promise<void> {
     try {
       const messagesRef = collection(db, COLLECTIONS.CHATS, userId, COLLECTIONS.CHAT_MESSAGES);
       const snapshot = await getDocs(messagesRef);
 
-      if (snapshot.docs.length === 0) return;
+      const messageCount = snapshot.docs.length;
+      if (messageCount === 0) return;
 
       const batch = writeBatch(db);
       snapshot.docs.forEach(doc => {
@@ -3488,6 +3608,9 @@ export const chatService = {
         unreadByAdmin: 0,
         updatedAt: now(),
       });
+
+      // Log activity
+      silentLog('chat', 'delete', userId, `Cleared chat history (${messageCount} messages)`, userId, coupleId, gender ? { gender, messageCount } : { messageCount });
     } catch (error) {
       console.error('Error clearing all messages:', error);
       throw error;
@@ -3572,6 +3695,9 @@ export const questionnaireService = {
         [`${gender}.questionnaireLanguage`]: language,
         updatedAt: now(),
       });
+
+      // Log activity
+      silentLog('questionnaire', 'create', `${coupleId}-${gender}`, `Started questionnaire in ${language}`, undefined, coupleId, { gender, language });
     } catch (error) {
       console.error('Error starting questionnaire:', error);
       throw error;
@@ -3614,6 +3740,9 @@ export const questionnaireService = {
         progress: newProgress,
         lastUpdatedAt: now(),
       });
+
+      // Log activity
+      silentLog('questionnaire', 'update', answer.questionId, `Saved answer to question ${answer.questionId}`, undefined, coupleId, { gender, questionId: answer.questionId, progressPercent: newProgress.percentComplete });
     } catch (error) {
       console.error('Error saving questionnaire answer:', error);
       throw error;
@@ -3663,6 +3792,9 @@ export const questionnaireService = {
         [`${gender}.questionnaireCompletedAt`]: now(),
         updatedAt: now(),
       });
+
+      // Log activity
+      silentLog('questionnaire', 'update', `${coupleId}-${gender}`, `Completed questionnaire`, undefined, coupleId, { gender, status: 'completed' });
     } catch (error) {
       console.error('Error completing questionnaire:', error);
       throw error;
@@ -3689,6 +3821,9 @@ export const questionnaireService = {
         [`${gender}.questionnaireCompletedAt`]: null,
         updatedAt: now(),
       });
+
+      // Log activity
+      silentLog('questionnaire', 'delete', `${coupleId}-${gender}`, `Reset questionnaire`, undefined, coupleId, { gender });
     } catch (error) {
       console.error('Error resetting questionnaire:', error);
       throw error;
@@ -3910,6 +4045,9 @@ export const feedbackService = {
     // Update the document with its ID
     await updateDoc(docRef, { id: docRef.id });
 
+    // Log activity
+    silentLog('feedbacks', 'create', docRef.id, `Submitted feedback: ${data.category} (${data.rating} stars)`, data.userId, data.coupleId, { category: data.category, rating: data.rating });
+
     return docRef.id;
   },
 
@@ -3964,6 +4102,8 @@ export const feedbackService = {
     }
 
     await updateDoc(feedbackRef, updateData);
+    // Log activity
+    silentLog('feedbacks', 'update', feedbackId, `Feedback status updated to ${status}`, resolvedBy, undefined, { status, adminNotes });
   },
 
   // Subscribe to feedbacks (real-time)
@@ -3994,6 +4134,8 @@ export const feedbackService = {
   async delete(feedbackId: string): Promise<void> {
     const feedbackRef = doc(db, COLLECTIONS.FEEDBACKS, feedbackId);
     await deleteDoc(feedbackRef);
+    // Log activity
+    silentLog('feedbacks', 'delete', feedbackId, `Deleted feedback`);
   },
 };
 
@@ -4123,13 +4265,21 @@ export const deviceService = {
 
   // Logout a specific device (remote logout)
   async logoutDevice(coupleId: string, gender: 'male' | 'female', deviceId: string): Promise<void> {
+    // Get device info before logout for logging
     const deviceRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'devices', deviceId);
+    const deviceSnap = await getDoc(deviceRef);
+    const deviceData = deviceSnap.exists() ? deviceSnap.data() : null;
+    const deviceName = deviceData?.deviceName || 'Unknown device';
+    
     await updateDoc(deviceRef, {
       status: 'logged_out' as DeviceStatus,
       isCurrentDevice: false,
       sessionToken: null,
       loggedOutAt: now(),
     });
+    
+    // Log activity
+    silentLog('devices', 'update', deviceId, `Logged out device: ${deviceName}`, undefined, coupleId, { gender, deviceName, deviceId, action: 'device_logout' });
   },
 
   // Logout all other devices (keep only current)
@@ -4154,6 +4304,12 @@ export const deviceService = {
     });
 
     await batch.commit();
+    
+    // Log activity if any devices were logged out
+    if (count > 0) {
+      silentLog('devices', 'update', currentDeviceId, `Logged out ${count} other device(s)`, undefined, coupleId, { gender, count, action: 'logout_all_other_devices' });
+    }
+    
     return count;
   },
 
@@ -4236,6 +4392,605 @@ export const deviceService = {
 };
 
 // ============================================
+// ACTIVITY LOG OPERATIONS
+// ============================================
+
+// Helper to detect platform
+const detectPlatform = (): 'ios' | 'android' | 'web' => {
+  if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+    return 'web';
+  }
+  // For React Native, we'll default to 'ios' but handle it gracefully
+  try {
+    const { Platform } = require('react-native');
+    return Platform?.OS === 'ios' ? 'ios' : 'android';
+  } catch {
+    return 'web';
+  }
+};
+
+// Helper to get device info
+const getDeviceInfo = (): string => {
+  if (typeof navigator !== 'undefined') {
+    return navigator.userAgent || 'Unknown Browser';
+  }
+  try {
+    const { Platform } = require('react-native');
+    return `${Platform?.OS || 'unknown'} ${Platform?.Version || ''}`;
+  } catch {
+    return 'Unknown Device';
+  }
+};
+
+// Silent log helper - logs activity without blocking the main operation
+// Map collection names to specific ActivityTypes for better filtering
+const getActivityTypeForCollection = (collectionName: string, operation: 'create' | 'update' | 'delete' | 'cancel'): string => {
+  // Map specific collections to their activity types
+  // Note: supportRequests, doctorVisits, nursingVisits, appointments use default data_* types for consistency
+  const collectionTypeMap: Record<string, string> = {
+    'feedback': 'feedback',
+    'chats': 'chat',
+    'devices': 'device',
+    'questionnaire': 'questionnaire',
+    'notifications': 'notification',
+    'admins': 'admin',
+  };
+  
+  // Return specific type if mapped, otherwise use generic data operation types
+  if (collectionTypeMap[collectionName]) {
+    return collectionTypeMap[collectionName];
+  }
+  
+  // Default to generic operation types
+  if (operation === 'create') return 'data_create';
+  if (operation === 'update') return 'data_update';
+  if (operation === 'delete') return 'data_delete';
+  if (operation === 'cancel') return 'data_update'; // cancel is a type of update
+  return 'data_update';
+};
+
+const silentLog = async (
+  collectionName: string,
+  operation: 'create' | 'update' | 'delete' | 'cancel',
+  documentId: string,
+  description: string,
+  userId?: string,
+  coupleId?: string,
+  metadata?: Record<string, any>
+): Promise<void> => {
+  try {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    
+    // Build log data without undefined values (Firebase doesn't allow undefined)
+    // If userId OR coupleId is provided, treat as user activity (not general/anonymous)
+    const isUserActivity = !!(userId || coupleId);
+    
+    // Generate a formatted userId like "C_027_M" or "C_027_F" when gender is available in metadata
+    let formattedUserId = userId;
+    if (!formattedUserId && coupleId && metadata?.gender) {
+      const genderInitial = metadata.gender === 'male' ? 'M' : 'F';
+      formattedUserId = `${coupleId}_${genderInitial}`;
+    }
+    
+    const logData: Record<string, any> = {
+      category: isUserActivity ? 'user' : 'general',
+      userRole: isUserActivity ? 'user' : 'unknown',
+      type: getActivityTypeForCollection(collectionName, operation),
+      action: operation,
+      description,
+      collection: collectionName,
+      documentId,
+      platform: detectPlatform(),
+      deviceInfo: getDeviceInfo(),
+      timestamp: now(),
+      createdAt: now(),
+    };
+    
+    // Only add optional fields if they have values
+    if (formattedUserId) logData.userId = formattedUserId;
+    if (coupleId) logData.coupleId = coupleId;
+    if (metadata) logData.metadata = metadata;
+    
+    await addDoc(logsRef, logData);
+  } catch (error) {
+    // Silent fail - don't let logging errors affect main operations
+    console.log('Activity log error (non-critical):', error);
+  }
+};
+
+export const activityLogService = {
+  // Create a new activity log entry (full version)
+  async log(data: {
+    category?: ActivityCategory;
+    userId?: string;
+    coupleId?: string;
+    userRole?: UserRole | 'admin' | 'superadmin' | 'unknown';
+    attemptedEmail?: string;
+    attemptedPhone?: string;
+    type: ActivityType;
+    action: ActivityAction;
+    description: string;
+    collection?: string;
+    documentId?: string;
+    metadata?: ActivityLogMetadata;
+    platform?: 'ios' | 'android' | 'web';
+    appVersion?: string;
+    deviceInfo?: string;
+    ipAddress?: string;
+    location?: {
+      latitude?: number;
+      longitude?: number;
+      city?: string;
+      country?: string;
+    };
+  }): Promise<string> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    
+    // Filter out undefined values (Firebase doesn't allow undefined)
+    const logData: Record<string, any> = {
+      category: data.category || (data.userId ? 'user' : 'general'),
+      type: data.type,
+      action: data.action,
+      description: data.description,
+      platform: data.platform || detectPlatform(),
+      deviceInfo: data.deviceInfo || getDeviceInfo(),
+      timestamp: now(),
+      createdAt: now(),
+    };
+    
+    // Only add optional fields if they have values
+    if (data.userId) logData.userId = data.userId;
+    if (data.coupleId) logData.coupleId = data.coupleId;
+    if (data.userRole) logData.userRole = data.userRole;
+    if (data.attemptedEmail) logData.attemptedEmail = data.attemptedEmail;
+    if (data.attemptedPhone) logData.attemptedPhone = data.attemptedPhone;
+    if (data.collection) logData.collection = data.collection;
+    if (data.documentId) logData.documentId = data.documentId;
+    if (data.metadata) logData.metadata = data.metadata;
+    if (data.appVersion) logData.appVersion = data.appVersion;
+    if (data.ipAddress) logData.ipAddress = data.ipAddress;
+    if (data.location) logData.location = data.location;
+    
+    const docRef = await addDoc(logsRef, logData);
+    return docRef.id;
+  },
+
+  // Log user activity (for known users)
+  async logUserActivity(
+    userId: string,
+    type: ActivityType,
+    action: ActivityAction,
+    description: string,
+    options?: {
+      coupleId?: string;
+      userRole?: UserRole | 'admin' | 'superadmin';
+      collection?: string;
+      documentId?: string;
+      metadata?: ActivityLogMetadata;
+    }
+  ): Promise<string> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    
+    // Build log data without undefined values
+    const logData: Record<string, any> = {
+      category: 'user' as ActivityCategory,
+      userId,
+      userRole: options?.userRole || 'user',
+      type,
+      action,
+      description,
+      platform: detectPlatform(),
+      deviceInfo: getDeviceInfo(),
+      timestamp: now(),
+      createdAt: now(),
+    };
+    
+    // Only add optional fields if they have values
+    if (options?.coupleId) logData.coupleId = options.coupleId;
+    if (options?.collection) logData.collection = options.collection;
+    if (options?.documentId) logData.documentId = options.documentId;
+    if (options?.metadata) logData.metadata = options.metadata;
+    
+    const docRef = await addDoc(logsRef, logData);
+    return docRef.id;
+  },
+
+  // Log general/anonymous activity (for unknown users, failed logins, etc.)
+  async logGeneralActivity(
+    type: ActivityType,
+    action: ActivityAction,
+    description: string,
+    options?: {
+      attemptedEmail?: string;
+      attemptedPhone?: string;
+      metadata?: ActivityLogMetadata;
+    }
+  ): Promise<string> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    
+    // Build log data without undefined values
+    const logData: Record<string, any> = {
+      category: 'general' as ActivityCategory,
+      userRole: 'unknown',
+      type,
+      action,
+      description,
+      platform: detectPlatform(),
+      deviceInfo: getDeviceInfo(),
+      timestamp: now(),
+      createdAt: now(),
+    };
+    
+    // Only add optional fields if they have values
+    if (options?.attemptedEmail) logData.attemptedEmail = options.attemptedEmail;
+    if (options?.attemptedPhone) logData.attemptedPhone = options.attemptedPhone;
+    if (options?.metadata) logData.metadata = options.metadata;
+    
+    const docRef = await addDoc(logsRef, logData);
+    return docRef.id;
+  },
+
+  // Log CRUD operation on any collection
+  async logCrudOperation(
+    operation: 'create' | 'read' | 'update' | 'delete',
+    collectionName: string,
+    documentId: string,
+    description: string,
+    options?: {
+      userId?: string;
+      coupleId?: string;
+      userRole?: UserRole | 'admin' | 'superadmin';
+      metadata?: ActivityLogMetadata;
+    }
+  ): Promise<string> {
+    const typeMap: Record<string, ActivityType> = {
+      create: 'data_create',
+      read: 'navigation',
+      update: 'data_update',
+      delete: 'data_delete',
+    };
+
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    
+    // Build log data without undefined values
+    const logData: Record<string, any> = {
+      category: options?.userId ? 'user' : 'general',
+      userRole: options?.userRole || (options?.userId ? 'user' : 'unknown'),
+      type: typeMap[operation] as ActivityType,
+      action: operation as ActivityAction,
+      description,
+      collection: collectionName,
+      documentId,
+      platform: detectPlatform(),
+      deviceInfo: getDeviceInfo(),
+      timestamp: now(),
+      createdAt: now(),
+    };
+    
+    // Only add optional fields if they have values
+    if (options?.userId) logData.userId = options.userId;
+    if (options?.coupleId) logData.coupleId = options.coupleId;
+    if (options?.metadata) logData.metadata = options.metadata;
+    
+    const docRef = await addDoc(logsRef, logData);
+    return docRef.id;
+  },
+
+  // Log failed login attempt
+  async logFailedLogin(
+    reason: 'login_failed' | 'login_invalid_email' | 'login_invalid_password' | 'login_user_not_found',
+    attemptedCredential: string,
+    isEmail: boolean = true,
+    errorMessage?: string
+  ): Promise<string> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    
+    // Build the log data - Firebase doesn't allow undefined values
+    const logData: Record<string, any> = {
+      category: 'general' as ActivityCategory,
+      userRole: 'unknown',
+      type: 'auth' as ActivityType,
+      action: reason,
+      description: `Failed login attempt: ${reason.replace(/_/g, ' ')}`,
+      metadata: {
+        errorMessage: errorMessage || null,
+        attemptType: isEmail ? 'email' : 'phone',
+        attemptedCredential, // Store the actual credential for reference
+      },
+      platform: detectPlatform(),
+      deviceInfo: getDeviceInfo(),
+      timestamp: now(),
+      createdAt: now(),
+    };
+    
+    // Only add the appropriate field based on credential type
+    if (isEmail) {
+      logData.attemptedEmail = attemptedCredential;
+    } else {
+      logData.attemptedPhone = attemptedCredential;
+    }
+    
+    const docRef = await addDoc(logsRef, logData);
+    return docRef.id;
+  },
+
+  // Quick log method for common use cases
+  async quickLog(
+    userId: string,
+    type: ActivityType,
+    action: ActivityAction,
+    description: string,
+    metadata?: ActivityLogMetadata
+  ): Promise<string> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const docRef = await addDoc(logsRef, {
+      category: 'user' as ActivityCategory,
+      userId,
+      userRole: 'user',
+      type,
+      action,
+      description,
+      metadata,
+      platform: detectPlatform(),
+      deviceInfo: getDeviceInfo(),
+      timestamp: now(),
+      createdAt: now(),
+    });
+    return docRef.id;
+  },
+
+  // Get activity logs by category
+  async getByCategory(category: ActivityCategory, limitCount: number = 100): Promise<ActivityLog[]> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('category', '==', category),
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+  },
+
+  // Get activity logs for a specific user
+  async getByUser(userId: string, limitCount: number = 50): Promise<ActivityLog[]> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('userId', '==', userId),
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+  },
+
+  // Get activity logs for a couple
+  async getByCouple(coupleId: string, limitCount: number = 100): Promise<ActivityLog[]> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('coupleId', '==', coupleId),
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+  },
+
+  // Get activity logs by type
+  async getByType(type: ActivityType, limitCount: number = 100): Promise<ActivityLog[]> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('type', '==', type),
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+  },
+
+  // Get activity logs by action
+  async getByAction(action: ActivityAction, limitCount: number = 100): Promise<ActivityLog[]> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('action', '==', action),
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+  },
+
+  // Get activity logs by collection
+  async getByCollection(collectionName: string, limitCount: number = 100): Promise<ActivityLog[]> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('collection', '==', collectionName),
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+  },
+
+  // Get activity logs with filters
+  async getWithFilters(filters: ActivityLogFilter, limitCount: number = 100): Promise<ActivityLog[]> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    let constraints: any[] = [orderBy('timestamp', 'desc'), limit(limitCount)];
+
+    if (filters.category) {
+      constraints.unshift(where('category', '==', filters.category));
+    }
+    if (filters.userId) {
+      constraints.unshift(where('userId', '==', filters.userId));
+    }
+    if (filters.coupleId) {
+      constraints.unshift(where('coupleId', '==', filters.coupleId));
+    }
+    if (filters.type) {
+      constraints.unshift(where('type', '==', filters.type));
+    }
+    if (filters.action) {
+      constraints.unshift(where('action', '==', filters.action));
+    }
+    if (filters.platform) {
+      constraints.unshift(where('platform', '==', filters.platform));
+    }
+    if (filters.collection) {
+      constraints.unshift(where('collection', '==', filters.collection));
+    }
+    if (filters.startDate) {
+      constraints.unshift(where('timestamp', '>=', toTimestamp(filters.startDate)));
+    }
+    if (filters.endDate) {
+      constraints.unshift(where('timestamp', '<=', toTimestamp(filters.endDate)));
+    }
+
+    const q = query(logsRef, ...constraints);
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+  },
+
+  // Get recent activities for a user (last 24 hours)
+  async getRecentActivities(userId: string): Promise<ActivityLog[]> {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('userId', '==', userId),
+      where('timestamp', '>=', toTimestamp(yesterday)),
+      orderBy('timestamp', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+  },
+
+  // Get all activities (for admin dashboard)
+  async getAll(limitCount: number = 200): Promise<ActivityLog[]> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+  },
+
+  // Subscribe to user's activity logs in real-time
+  subscribeToUserActivities(
+    userId: string,
+    callback: (logs: ActivityLog[]) => void,
+    limitCount: number = 20
+  ): Unsubscribe {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('userId', '==', userId),
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
+    );
+    return onSnapshot(q, (snapshot) => {
+      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog)));
+    });
+  },
+
+  // Subscribe to activities by category
+  subscribeToCategoryActivities(
+    category: ActivityCategory,
+    callback: (logs: ActivityLog[]) => void,
+    limitCount: number = 50
+  ): Unsubscribe {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('category', '==', category),
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
+    );
+    return onSnapshot(q, (snapshot) => {
+      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog)));
+    });
+  },
+
+  // Subscribe to all activities (for admin dashboard)
+  subscribeToAllActivities(
+    callback: (logs: ActivityLog[]) => void,
+    limitCount: number = 50
+  ): Unsubscribe {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
+    );
+    return onSnapshot(q, (snapshot) => {
+      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog)));
+    });
+  },
+
+  // Delete old activity logs (cleanup - older than X days)
+  async cleanupOldLogs(daysOld: number = 90): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+    
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('timestamp', '<', toTimestamp(cutoffDate)),
+      limit(500) // Batch delete limit
+    );
+    
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    
+    snapshot.docs.forEach(docSnapshot => {
+      batch.delete(docSnapshot.ref);
+    });
+    
+    await batch.commit();
+    return snapshot.docs.length;
+  },
+
+  // Get activity count by date range (for analytics)
+  async getActivityCountByDateRange(
+    userId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<number> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('userId', '==', userId),
+      where('timestamp', '>=', toTimestamp(startDate)),
+      where('timestamp', '<=', toTimestamp(endDate))
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.size;
+  },
+
+  // Get failed login attempts (for security monitoring)
+  async getFailedLoginAttempts(limitCount: number = 100): Promise<ActivityLog[]> {
+    const logsRef = collection(db, COLLECTIONS.ACTIVITY_LOGS);
+    const q = query(
+      logsRef,
+      where('category', '==', 'general'),
+      where('type', '==', 'auth'),
+      orderBy('timestamp', 'desc'),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+  },
+};
+
+// ============================================
 // EXPORT ALL SERVICES
 // ============================================
 
@@ -4262,6 +5017,7 @@ export const firestoreServices = {
   questionnaire: questionnaireService,
   feedback: feedbackService,
   device: deviceService,
+  activityLog: activityLogService,
 };
 
 export default firestoreServices;

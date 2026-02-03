@@ -843,6 +843,7 @@ export const COLLECTIONS = {
   BROADCASTS: 'broadcasts',
   CHATS: 'chats',
   FEEDBACKS: 'feedbacks',
+  ACTIVITY_LOGS: 'activityLogs',
   
   // Subcollections (under users)
   STEPS: 'steps',
@@ -1166,4 +1167,228 @@ export interface ChatMessage {
   // Soft delete (either party can delete)
   deletedByUser?: boolean;
   deletedByAdmin?: boolean;
+}
+
+// ============================================
+// USER ACTIVITY LOGS
+// Path: /activityLogs/{logId}
+// ============================================
+
+// Category to distinguish known user activities from anonymous/general activities
+export type ActivityCategory = 
+  | 'user'     // Activities by a known/authenticated user
+  | 'general'; // Anonymous activities (failed logins, unknown user actions)
+
+export type ActivityType = 
+  | 'auth'           // Login, logout, password changes
+  | 'navigation'     // Page views, screen visits
+  | 'data_create'    // Creating data (log food, steps, etc.)
+  | 'data_update'    // Updating existing data
+  | 'data_delete'    // Deleting data
+  | 'settings'       // Profile updates, preference changes
+  | 'interaction'    // Button clicks, feature usage
+  | 'appointment'    // Appointment related actions
+  | 'questionnaire'  // Questionnaire submissions
+  | 'chat'           // Chat interactions
+  | 'notification'   // Notification interactions
+  | 'admin'          // Admin-specific actions
+  | 'device'         // Device registration/updates
+  | 'feedback'       // User feedback submissions
+  | 'support'        // Support requests
+  | 'error';         // Error events
+
+export type ActivityAction = 
+  // Auth actions
+  | 'login'
+  | 'login_failed'        // Failed login attempt
+  | 'login_invalid_email' // Invalid email format
+  | 'login_invalid_password' // Wrong password
+  | 'login_user_not_found'   // User doesn't exist
+  | 'logout'
+  | 'password_change'
+  | 'password_reset_request'
+  | 'pin_setup'
+  | 'pin_change'
+  | 'pin_verify_failed'   // Wrong PIN entered
+  | 'biometric_enable'
+  | 'biometric_disable'
+  | 'otp_verify'
+  | 'otp_verify_failed'   // Wrong OTP
+  // Navigation actions
+  | 'page_view'
+  | 'screen_enter'
+  | 'screen_exit'
+  | 'tab_switch'
+  // Data actions - Create
+  | 'log_steps'
+  | 'log_food'
+  | 'log_exercise'
+  | 'log_weight'
+  | 'log_water'
+  | 'log_sleep'
+  // Data actions - Update
+  | 'update_steps'
+  | 'update_food'
+  | 'update_exercise'
+  | 'update_weight'
+  | 'update_water'
+  | 'update_sleep'
+  // Data actions - Delete
+  | 'delete_steps'
+  | 'delete_food'
+  | 'delete_exercise'
+  | 'delete_weight'
+  | 'delete_water'
+  | 'delete_sleep'
+  // Settings actions
+  | 'profile_update'
+  | 'profile_create'
+  | 'goal_update'
+  | 'notification_toggle'
+  | 'dark_mode_toggle'
+  | 'language_change'
+  // Couple actions
+  | 'couple_create'
+  | 'couple_update'
+  | 'couple_link'
+  // Appointment actions
+  | 'appointment_create'
+  | 'appointment_update'
+  | 'appointment_cancel'
+  | 'appointment_complete'
+  | 'appointment_delete'
+  | 'support_request_create'
+  | 'support_request_update'
+  | 'call_request_create'
+  | 'call_request_update'
+  // Questionnaire actions
+  | 'questionnaire_start'
+  | 'questionnaire_answer'
+  | 'questionnaire_complete'
+  // Chat actions
+  | 'chat_open'
+  | 'chat_send_message'
+  | 'chat_read_message'
+  // Notification actions
+  | 'notification_create'
+  | 'notification_receive'
+  | 'notification_read'
+  | 'notification_dismiss'
+  // Admin actions
+  | 'admin_create'
+  | 'admin_update'
+  | 'admin_delete'
+  | 'admin_broadcast'
+  | 'task_create'
+  | 'task_update'
+  | 'task_delete'
+  // Device actions
+  | 'device_register'
+  | 'device_update'
+  | 'device_remove'
+  // Feedback actions
+  | 'feedback_submit'
+  | 'feedback_update'
+  // Error actions
+  | 'error_occurred'
+  | 'crash_report'
+  // Generic
+  | 'create'
+  | 'read'
+  | 'update'
+  | 'delete'
+  | 'button_click'
+  | 'feature_use'
+  | 'custom';
+
+export interface ActivityLogMetadata {
+  // Screen/Page info
+  screenName?: string;
+  previousScreen?: string;
+  
+  // Data identifiers
+  entityId?: string;       // ID of the affected entity (stepId, foodLogId, etc.)
+  entityType?: string;     // Type of entity (steps, foodLog, etc.)
+  
+  // Additional data
+  oldValue?: string | number | boolean;
+  newValue?: string | number | boolean;
+  
+  // Error info
+  errorMessage?: string;
+  errorStack?: string;
+  
+  // Device/Session info
+  sessionId?: string;
+  
+  // Custom data (for flexible logging)
+  [key: string]: string | number | boolean | undefined;
+}
+
+export interface ActivityLog {
+  id: string;
+  
+  // Category - distinguishes known user vs anonymous activities
+  category: ActivityCategory;  // 'user' or 'general'
+  
+  // User identification (optional for 'general' category)
+  userId?: string;             // User ID if known
+  coupleId?: string;
+  userRole?: UserRole | 'admin' | 'superadmin' | 'unknown';
+  
+  // For failed login attempts (when user is unknown)
+  attemptedEmail?: string;     // Email that was attempted
+  attemptedPhone?: string;     // Phone that was attempted
+  
+  // Activity details
+  type: ActivityType;
+  action: ActivityAction;
+  description: string;    // Human-readable description
+  
+  // Which collection was affected (for CRUD operations)
+  collection?: string;    // e.g., 'users', 'couples', 'appointments'
+  documentId?: string;    // ID of the affected document
+  
+  // Context
+  metadata?: ActivityLogMetadata;
+  
+  // Device information
+  platform: 'ios' | 'android' | 'web';
+  appVersion?: string;
+  deviceInfo?: string;    // Device model/browser info
+  ipAddress?: string;     // For web/security purposes
+  
+  // Geolocation (optional)
+  location?: {
+    latitude?: number;
+    longitude?: number;
+    city?: string;
+    country?: string;
+  };
+  
+  // Timestamps
+  timestamp: Timestamp;   // When the activity occurred
+  createdAt: Timestamp;   // When the log was created
+}
+
+// Activity Log Query Filters
+export interface ActivityLogFilter {
+  category?: ActivityCategory;
+  userId?: string;
+  coupleId?: string;
+  type?: ActivityType;
+  action?: ActivityAction;
+  startDate?: Date;
+  endDate?: Date;
+  platform?: 'ios' | 'android' | 'web';
+  collection?: string;
+}
+
+// Activity summary for analytics
+export interface ActivitySummary {
+  userId: string;
+  date: string;          // YYYY-MM-DD
+  totalActivities: number;
+  byType: Record<ActivityType, number>;
+  lastActivity: Timestamp;
 }

@@ -11,16 +11,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
+    Animated,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -208,6 +208,8 @@ export default function LogStepsScreen() {
         source: 'manual',
       });
 
+      // Activity is already logged in coupleStepsService.add - no need for duplicate logging
+
       // Update streak for logging activity
       await coupleService.updateStreak(coupleId, userGender);
 
@@ -257,7 +259,7 @@ export default function LogStepsScreen() {
 
     try {
       // Delete from Firestore
-      await coupleStepsService.delete(coupleId, id);
+      await coupleStepsService.delete(coupleId, id, userGender);
 
       // Remove from local state
       const updatedEntries = stepEntries.filter(entry => entry.id !== id);

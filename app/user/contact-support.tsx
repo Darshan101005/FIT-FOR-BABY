@@ -9,19 +9,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Linking,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Animated,
+    Linking,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -312,15 +312,15 @@ export default function ContactSupportScreen() {
 
   // Confirm action (cancel or delete)
   const handleConfirmAction = async () => {
-    if (!confirmModal.requestId) return;
+    if (!confirmModal.requestId || !userData) return;
 
     setConfirmModal(prev => ({ ...prev, isLoading: true }));
 
     try {
       if (confirmModal.type === 'cancel') {
-        await supportRequestService.cancelRequest(confirmModal.requestId, 'user');
+        await supportRequestService.cancelRequest(confirmModal.requestId, 'user', undefined, userData.coupleId, userData.userGender);
       } else {
-        await supportRequestService.delete(confirmModal.requestId);
+        await supportRequestService.delete(confirmModal.requestId, userData.coupleId, userData.userGender);
       }
       await loadData();
       setConfirmModal({ visible: false, type: 'cancel', requestId: null, isLoading: false });

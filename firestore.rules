@@ -225,5 +225,12 @@ service cloud.firestore {
         allow read, write: if true; // Users can manage their devices
       }
     }
+    
+    // Activity Logs collection (user activity tracking)
+    match /activityLogs/{logId} {
+      allow read: if true; // Allow admins to read (app validates permissions internally)
+      allow create: if true; // Allow any client to create logs (app handles user validation)
+      allow update, delete: if true; // Allow admin modifications
+    }
   }
 }

@@ -278,6 +278,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Logout function - clears all auth data
   const logout = async () => {
     try {
+      // Log logout activity before clearing auth data
+      const userId = authState.userId || authState.adminUid;
+      const userRole = authState.userRole;
+      if (userId && userRole) {
+        try {
+          const { activityLogService } = await import('@/services/firestore.service');
+          const { Platform } = await import('react-native');
+          await activityLogService.log({
+            userId,
+            userRole: userRole as any,
+            type: 'auth',
+            action: 'logout',
+            description: `User logged out`,
+            platform: Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android',
+          });
+        } catch (logError) {
+          console.log('Activity log error (non-critical):', logError);
+        }
+      }
+
       // Clear all auth-related keys including session
       await AsyncStorage.multiRemove([
         AUTH_KEYS.USER_ROLE,
