@@ -449,7 +449,6 @@ export async function sendMissingLogsReminder(
       return {
         success: true,
         sentCount: coupleIdsWithMissingLogs.length,
-        error: 'Reminder saved! Deploy Cloud Functions for better push notification support.',
       };
     }
   } catch (error: any) {

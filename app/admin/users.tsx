@@ -7,20 +7,22 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
+const APP_BASE_URL = 'https://fitforbaby.site';
 
 // Fit for Baby Color Palette
 const COLORS = {
@@ -71,8 +73,10 @@ export default function AdminUsersScreen() {
     coupleId: '',
     maleName: '',
     maleTempPassword: '',
+    maleResetToken: '',
     femaleName: '',
-    femaleTempPassword: ''
+    femaleTempPassword: '',
+    femaleResetToken: ''
   });
   const [currentAdminUid, setCurrentAdminUid] = useState('');
 
@@ -227,6 +231,62 @@ export default function AdminUsersScreen() {
     }, 2500);
   };
 
+  // Share reset link for a user from the user list
+  const handleShareUserResetLink = async (couple: Couple, gender: 'male' | 'female') => {
+    const user = couple[gender];
+    let tempPassword = user?.tempPassword;
+    const name = user?.name || 'User';
+    const userId = `${couple.coupleId}_${gender === 'male' ? 'M' : 'F'}`;
+    
+    // If no temp password exists (older couples or already reset), auto-generate one via force reset
+    if (!tempPassword || user?.isPasswordReset) {
+      try {
+        showToast('Generating reset link...', 'success');
+        const resetResult = await coupleService.forcePasswordReset(couple.coupleId, gender);
+        tempPassword = resetResult.tempPassword;
+      } catch (error) {
+        console.error('Error generating reset link:', error);
+        showToast('Failed to generate reset link. Please try again.', 'error');
+        return;
+      }
+    }
+
+    const resetLink = `${APP_BASE_URL}/redirect?username=${encodeURIComponent(userId)}&password=${encodeURIComponent(tempPassword)}&app=com.fitforbaby.app`;
+    const message = `Hello ${name},\n\nYour Fit for Baby account has been created.\n\nUser ID: ${userId}\nTemporary Password: ${tempPassword}\n\nClick this link to set your password:\n${resetLink}\n\nNote: This link can only be used once.`;
+
+    try {
+      if (isWeb) {
+        if (navigator.share) {
+          await navigator.share({
+            title: 'Fit for Baby - Set Your Password',
+            text: message,
+            url: resetLink,
+          });
+        } else {
+          await navigator.clipboard.writeText(message);
+          showToast('Link copied to clipboard!', 'success');
+        }
+      } else {
+        await Share.share({
+          message: message,
+          title: 'Fit for Baby - Set Your Password',
+        });
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Share error:', error);
+        if (isWeb) {
+          try {
+            await navigator.clipboard.writeText(message);
+            showToast('Link copied to clipboard!', 'success');
+          } catch {
+            showToast('Failed to share link', 'error');
+          }
+        }
+      }
+    }
+  };
+
   const toggleCoupleExpand = (coupleId: string) => {
     setExpandedCouples(prev =>
       prev.includes(coupleId)
@@ -363,8 +423,10 @@ export default function AdminUsersScreen() {
           coupleId: result.coupleId,
           maleName: enrollForm.maleName.trim(),
           maleTempPassword: result.maleTempPassword,
+          maleResetToken: result.maleResetToken,
           femaleName: enrollForm.femaleName.trim(),
           femaleTempPassword: result.femaleTempPassword,
+          femaleResetToken: result.femaleResetToken,
         });
         setShowEnrollModal(false);
         setShowTempPasswordModal(true);
@@ -432,14 +494,16 @@ export default function AdminUsersScreen() {
           break;
         case 'reset':
           setActionLoading(true);
-          const newPassword = await coupleService.forcePasswordReset(coupleId, gender);
+          const resetResult = await coupleService.forcePasswordReset(coupleId, gender);
           // Show single user password reset modal
           setTempPasswordInfo({
             coupleId: coupleId,
             maleName: gender === 'male' ? userName : '',
-            maleTempPassword: gender === 'male' ? newPassword : '',
+            maleTempPassword: gender === 'male' ? resetResult.tempPassword : '',
+            maleResetToken: gender === 'male' ? resetResult.resetToken : '',
             femaleName: gender === 'female' ? userName : '',
-            femaleTempPassword: gender === 'female' ? newPassword : '',
+            femaleTempPassword: gender === 'female' ? resetResult.tempPassword : '',
+            femaleResetToken: gender === 'female' ? resetResult.resetToken : '',
           });
           setShowTempPasswordModal(true);
           showToast(`Password reset for ${userId}`, 'success');
@@ -2481,6 +2545,12 @@ export default function AdminUsersScreen() {
                     <Ionicons name="key" size={14} color={COLORS.warning} />
                     <Text style={styles.tempPasswordLabel}>Temp Password:</Text>
                     <Text style={styles.tempPasswordValue}>{couple.female.tempPassword}</Text>
+                    <TouchableOpacity
+                      style={styles.shareIconButton}
+                      onPress={() => handleShareUserResetLink(couple, 'female')}
+                    >
+                      <Ionicons name="share-social" size={16} color={COLORS.accent} />
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -2630,6 +2700,12 @@ export default function AdminUsersScreen() {
                     <Ionicons name="key" size={14} color={COLORS.warning} />
                     <Text style={styles.tempPasswordLabel}>Temp Password:</Text>
                     <Text style={styles.tempPasswordValue}>{couple.male.tempPassword}</Text>
+                    <TouchableOpacity
+                      style={styles.shareIconButton}
+                      onPress={() => handleShareUserResetLink(couple, 'male')}
+                    >
+                      <Ionicons name="share-social" size={16} color={COLORS.primary} />
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -2800,6 +2876,13 @@ export default function AdminUsersScreen() {
 
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Email</Text>
+                    <TouchableOpacity
+                      style={styles.emailSuggestionBtn}
+                      onPress={() => setEnrollForm({ ...enrollForm, femaleEmail: `${enrollForm.coupleId}_F@fitforbaby.site` })}
+                    >
+                      <Ionicons name="sparkles-outline" size={14} color={COLORS.primary} />
+                      <Text style={styles.emailSuggestionText}>Use {enrollForm.coupleId}_F@fitforbaby.site</Text>
+                    </TouchableOpacity>
                     <TextInput
                       style={styles.input}
                       value={enrollForm.femaleEmail}
@@ -2865,6 +2948,13 @@ export default function AdminUsersScreen() {
 
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Email</Text>
+                    <TouchableOpacity
+                      style={styles.emailSuggestionBtn}
+                      onPress={() => setEnrollForm({ ...enrollForm, maleEmail: `${enrollForm.coupleId}_M@fitforbaby.site` })}
+                    >
+                      <Ionicons name="sparkles-outline" size={14} color={COLORS.primary} />
+                      <Text style={styles.emailSuggestionText}>Use {enrollForm.coupleId}_M@fitforbaby.site</Text>
+                    </TouchableOpacity>
                     <TextInput
                       style={styles.input}
                       value={enrollForm.maleEmail}
@@ -2943,6 +3033,56 @@ export default function AdminUsersScreen() {
     // Determine if this is a single user reset or enrollment (both users)
     const isSingleUserReset = !tempPasswordInfo.maleTempPassword || !tempPasswordInfo.femaleTempPassword;
 
+    // Generate reset link for a user
+    const getResetLink = (userId: string, tempPwd: string) => `${APP_BASE_URL}/redirect?username=${encodeURIComponent(userId)}&password=${encodeURIComponent(tempPwd)}&app=com.fitforbaby.app`;
+
+    // Share reset link function
+    const handleShareResetLink = async (gender: 'male' | 'female') => {
+      const tempPwd = gender === 'male' ? tempPasswordInfo.maleTempPassword : tempPasswordInfo.femaleTempPassword;
+      const name = gender === 'male' ? tempPasswordInfo.maleName : tempPasswordInfo.femaleName;
+      const userId = `${tempPasswordInfo.coupleId}_${gender === 'male' ? 'M' : 'F'}`;
+      
+      if (!tempPwd) {
+        showToast('Reset link not available', 'error');
+        return;
+      }
+
+      const resetLink = getResetLink(userId, tempPwd);
+      const message = `Hello ${name},\n\nYour Fit for Baby account has been created.\n\nUser ID: ${userId}\nTemporary Password: ${tempPwd}\n\nClick this link to set your password:\n${resetLink}\n\nNote: This link can only be used once.`;
+
+      try {
+        if (isWeb) {
+          if (navigator.share) {
+            await navigator.share({
+              title: 'Fit for Baby - Set Your Password',
+              text: message,
+              url: resetLink,
+            });
+          } else {
+            await navigator.clipboard.writeText(message);
+            showToast('Link copied to clipboard!', 'success');
+          }
+        } else {
+          await Share.share({
+            message: message,
+            title: 'Fit for Baby - Set Your Password',
+          });
+        }
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          console.error('Share error:', error);
+          if (isWeb) {
+            try {
+              await navigator.clipboard.writeText(message);
+              showToast('Link copied to clipboard!', 'success');
+            } catch {
+              showToast('Failed to share link', 'error');
+            }
+          }
+        }
+      }
+    };
+
     return (
       <Modal
         visible={showTempPasswordModal}
@@ -2985,6 +3125,15 @@ export default function AdminUsersScreen() {
                 <View style={styles.credentialValue}>
                   <Text style={[styles.credentialText, styles.passwordText]}>{tempPasswordInfo.femaleTempPassword}</Text>
                 </View>
+                {tempPasswordInfo.femaleResetToken && (
+                  <TouchableOpacity
+                    style={[styles.shareResetLinkButton, { backgroundColor: COLORS.accent }]}
+                    onPress={() => handleShareResetLink('female')}
+                  >
+                    <Ionicons name="share-social" size={18} color="#fff" />
+                    <Text style={styles.shareResetLinkText}>Share Reset Link</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
@@ -3000,15 +3149,22 @@ export default function AdminUsersScreen() {
                 <View style={styles.credentialValue}>
                   <Text style={[styles.credentialText, styles.passwordText]}>{tempPasswordInfo.maleTempPassword}</Text>
                 </View>
+                {tempPasswordInfo.maleResetToken && (
+                  <TouchableOpacity
+                    style={[styles.shareResetLinkButton, { backgroundColor: COLORS.primary }]}
+                    onPress={() => handleShareResetLink('male')}
+                  >
+                    <Ionicons name="share-social" size={18} color="#fff" />
+                    <Text style={styles.shareResetLinkText}>Share Reset Link</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
             <View style={styles.tempPasswordNote}>
               <Ionicons name="information-circle" size={16} color={COLORS.info} />
               <Text style={styles.tempPasswordNoteText}>
-                {isSingleUserReset
-                  ? 'The user must login with their ID/Phone/Email and reset their password.'
-                  : 'Each user must login with their own ID/Phone/Email and reset their password individually.'}
+                Share the reset link with the user. The link can only be used once to set their password.
               </Text>
             </View>
 
@@ -4223,6 +4379,21 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 14,
   },
+  shareResetLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  shareResetLinkText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   userDetailRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4296,6 +4467,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    flex: 1,
+  },
+  shareIconButton: {
+    padding: 6,
+    marginLeft: 'auto',
   },
   userActions: {
     flexDirection: 'row',
@@ -4587,6 +4763,25 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     gap: 8,
     marginTop: 8,
+  },
+  emailSuggestionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary + '10',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 6,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '25',
+    borderStyle: 'dashed',
+  },
+  emailSuggestionText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '500',
   },
   passwordNoteText: {
     flex: 1,

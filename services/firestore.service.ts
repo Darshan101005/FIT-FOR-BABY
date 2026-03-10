@@ -535,14 +535,70 @@ export const adminService = {
 // COUPLE OPERATIONS (User Onboarding)
 // ============================================
 
-// Generate random 8-character password
+// Generate random 8-character password (unique per user)
 const generateTempPassword = (): string => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   let password = '';
-  for (let i = 0; i < 8; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  // Use crypto for better randomness if available
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const array = new Uint32Array(8);
+    crypto.getRandomValues(array);
+    for (let i = 0; i < 8; i++) {
+      password += chars.charAt(array[i] % chars.length);
+    }
+  } else {
+    for (let i = 0; i < 8; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
   }
   return password;
+};
+
+// Generate a unique password reset token
+// Uses timestamp + random chars to guarantee uniqueness per user
+const generatePasswordResetToken = (coupleId?: string, gender?: string): string => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz0123456789';
+  const timestamp = Date.now().toString(36); // Base36 timestamp for compactness
+  const userPrefix = coupleId && gender ? `${coupleId}_${gender.charAt(0)}_` : '';
+  let randomPart = '';
+  // Use crypto for better randomness if available
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const array = new Uint32Array(32);
+    crypto.getRandomValues(array);
+    for (let i = 0; i < 32; i++) {
+      randomPart += chars.charAt(array[i] % chars.length);
+    }
+  } else {
+    for (let i = 0; i < 32; i++) {
+      randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+  }
+  // Format: userPrefix + timestamp + random = guaranteed unique per user
+  return `${userPrefix}${timestamp}_${randomPart}`;
+};
+
+// Check if a reset token already exists for any user in Firestore
+const isTokenUnique = async (token: string): Promise<boolean> => {
+  const couplesRef = collection(db, COLLECTIONS.COUPLES);
+  const snapshot = await getDocs(couplesRef);
+  for (const docSnapshot of snapshot.docs) {
+    const couple = docSnapshot.data();
+    if (couple.male?.passwordResetToken === token || couple.female?.passwordResetToken === token) {
+      return false;
+    }
+  }
+  return true;
+};
+
+// Generate a guaranteed unique reset token with collision check
+const generateUniqueResetToken = async (coupleId?: string, gender?: string): Promise<string> => {
+  let token = generatePasswordResetToken(coupleId, gender);
+  let attempts = 0;
+  while (!(await isTokenUnique(token)) && attempts < 3) {
+    token = generatePasswordResetToken(coupleId, gender);
+    attempts++;
+  }
+  return token;
 };
 
 export const coupleService = {
@@ -581,9 +637,11 @@ export const coupleService = {
     enrolledByName?: string;
     male: { name: string; email?: string; phone?: string; age?: number };
     female: { name: string; email?: string; phone?: string; age?: number };
-  }): Promise<{ coupleId: string; maleTempPassword: string; femaleTempPassword: string }> {
+  }): Promise<{ coupleId: string; maleTempPassword: string; femaleTempPassword: string; maleResetToken: string; femaleResetToken: string }> {
     const maleTempPassword = generateTempPassword();
     const femaleTempPassword = generateTempPassword();
+    const maleResetToken = await generateUniqueResetToken(data.coupleId, 'male');
+    const femaleResetToken = await generateUniqueResetToken(data.coupleId, 'female');
 
     // Build male user object - only include non-empty values
     const maleData: Record<string, any> = {
@@ -593,6 +651,7 @@ export const coupleService = {
       isPasswordReset: false,
       isPinSet: false,
       tempPassword: maleTempPassword,
+      passwordResetToken: maleResetToken,
     };
     if (data.male.email) maleData.email = data.male.email;
     if (data.male.phone) maleData.phone = data.male.phone;
@@ -606,6 +665,7 @@ export const coupleService = {
       isPasswordReset: false,
       isPinSet: false,
       tempPassword: femaleTempPassword,
+      passwordResetToken: femaleResetToken,
     };
     if (data.female.email) femaleData.email = data.female.email;
     if (data.female.phone) femaleData.phone = data.female.phone;
@@ -637,7 +697,9 @@ export const coupleService = {
     return {
       coupleId: data.coupleId,
       maleTempPassword,
-      femaleTempPassword
+      femaleTempPassword,
+      maleResetToken,
+      femaleResetToken
     };
   },
 
@@ -916,6 +978,7 @@ export const coupleService = {
       [`${gender}.password`]: newPassword,
       [`${gender}.isPasswordReset`]: true,
       [`${gender}.tempPassword`]: null, // Clear temp password after reset
+      [`${gender}.passwordResetToken`]: null, // Invalidate reset token
       [`${gender}.status`]: 'active',
       updatedAt: now(),
     });
@@ -925,6 +988,85 @@ export const coupleService = {
       ? `First-time password setup completed` 
       : `Password reset successfully`;
     silentLog('auth', 'update', coupleId, description, undefined, coupleId, { gender, isFirstTimeSetup });
+  },
+
+  // Validate reset token and return user info
+  // Each token is unique per user - guaranteed by generateUniqueResetToken
+  async validateResetToken(token: string): Promise<{ coupleId: string; gender: 'male' | 'female'; userName: string } | null> {
+    if (!token || token.trim() === '') return null;
+    
+    const couplesRef = collection(db, COLLECTIONS.COUPLES);
+    const snapshot = await getDocs(couplesRef);
+    
+    for (const docSnapshot of snapshot.docs) {
+      const couple = docSnapshot.data();
+      
+      // Check male user - token must match AND password not yet reset
+      if (couple.male?.passwordResetToken && 
+          couple.male.passwordResetToken === token && 
+          !couple.male.isPasswordReset) {
+        return { coupleId: docSnapshot.id, gender: 'male', userName: couple.male.name };
+      }
+      
+      // Check female user - token must match AND password not yet reset
+      if (couple.female?.passwordResetToken && 
+          couple.female.passwordResetToken === token && 
+          !couple.female.isPasswordReset) {
+        return { coupleId: docSnapshot.id, gender: 'female', userName: couple.female.name };
+      }
+    }
+    
+    return null;
+  },
+
+  // Reset password using token (one-time use)
+  async resetPasswordWithToken(token: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+    const tokenInfo = await this.validateResetToken(token);
+    
+    if (!tokenInfo) {
+      return { success: false, error: 'Invalid or expired reset link' };
+    }
+    
+    await this.resetPassword(tokenInfo.coupleId, tokenInfo.gender, newPassword);
+    return { success: true };
+  },
+
+  // Validate user by username (e.g. C_035_M) and temp password
+  async validateByCredentials(username: string, password: string): Promise<{ coupleId: string; gender: 'male' | 'female'; userName: string } | null> {
+    if (!username || !password) return null;
+    
+    // Parse username: C_035_M → coupleId=C_035, gender=male
+    const parts = username.toUpperCase().split('_');
+    if (parts.length < 3) return null;
+    
+    const genderSuffix = parts[parts.length - 1]; // M or F
+    const coupleId = parts.slice(0, -1).join('_'); // e.g. C_035
+    const gender: 'male' | 'female' = genderSuffix === 'M' ? 'male' : 'female';
+    
+    const couple = await this.get(coupleId);
+    if (!couple) return null;
+    
+    const user = couple[gender];
+    if (!user) return null;
+    
+    // Check temp password matches and password not yet reset
+    if (user.tempPassword === password && !user.isPasswordReset) {
+      return { coupleId, gender, userName: user.name };
+    }
+    
+    return null;
+  },
+
+  // Reset password using username + temp password credentials
+  async resetPasswordWithCredentials(username: string, tempPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+    const userInfo = await this.validateByCredentials(username, tempPassword);
+    
+    if (!userInfo) {
+      return { success: false, error: 'Invalid credentials or link has already been used' };
+    }
+    
+    await this.resetPassword(userInfo.coupleId, userInfo.gender, newPassword);
+    return { success: true };
   },
 
   // Set PIN for user
@@ -1091,13 +1233,15 @@ export const coupleService = {
     // Log activity
     silentLog('couples', 'update', coupleId, `Updated ${gender} user profile`, undefined, coupleId, { gender, fields: Object.keys(profileData) });
   },
-  async forcePasswordReset(coupleId: string, gender: 'male' | 'female'): Promise<string> {
+  async forcePasswordReset(coupleId: string, gender: 'male' | 'female'): Promise<{ tempPassword: string; resetToken: string }> {
     const newTempPassword = generateTempPassword();
+    const newResetToken = await generateUniqueResetToken(coupleId, gender);
     const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
     await updateDoc(coupleRef, {
       [`${gender}.password`]: '',
       [`${gender}.isPasswordReset`]: false,
       [`${gender}.tempPassword`]: newTempPassword, // Store at user level, not couple level
+      [`${gender}.passwordResetToken`]: newResetToken, // New reset token
       [`${gender}.status`]: 'pending', // Reset status to pending
       updatedAt: now(),
     });
@@ -1105,7 +1249,7 @@ export const coupleService = {
     // Log activity
     silentLog('admin', 'update', coupleId, `Force password reset initiated for ${gender} user`, undefined, coupleId, { gender, action: 'force_password_reset' });
     
-    return newTempPassword;
+    return { tempPassword: newTempPassword, resetToken: newResetToken };
   },
 
   // Delete couple and ALL subcollections

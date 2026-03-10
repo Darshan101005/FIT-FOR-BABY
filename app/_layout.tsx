@@ -6,11 +6,11 @@ import { LanguageProvider } from '@/context/LanguageContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { initPWA } from '@/services/pwa.service';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import Head from 'expo-router/head';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, StyleSheet, Text, View } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
@@ -28,6 +28,39 @@ function LoadingScreen() {
 function RootNavigator() {
   const { isLoading } = useAuth();
   const { isOfflineModalVisible, setIsOfflineModalVisible } = useNetworkStatus();
+  const router = useRouter();
+
+  // Handle deep links
+  useEffect(() => {
+    const handleDeepLink = (url: string) => {
+      console.log('Deep link received:', url);
+      
+      // Parse the URL
+      if (url.includes('reset-password')) {
+        const urlObj = new URL(url);
+        const token = urlObj.searchParams.get('token');
+        
+        if (token) {
+          // Navigate to reset password with token
+          router.push(`/reset-password?token=${token}`);
+        }
+      }
+    };
+
+    // Listen for initial URL (app opened from link)
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleDeepLink(url);
+      }
+    });
+
+    // Listen for URL changes (app already running)
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url);
+    });
+
+    return () => subscription?.remove();
+  }, [router]);
 
   // Initialize PWA on web
   useEffect(() => {

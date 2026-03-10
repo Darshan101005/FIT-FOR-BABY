@@ -1046,6 +1046,7 @@ export interface CoupleUser {
   tempPassword?: string; // Initial 8-char password, cleared after reset
   password?: string; // User's password after reset
   pin?: string; // 4-digit PIN
+  passwordResetToken?: string; // Unique token for password reset link
   
   // Status flags
   status: CoupleUserStatus;

@@ -4,17 +4,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Animated,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -669,10 +669,21 @@ export default function ActivityLogsScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            style={styles.modalBody} 
+            contentContainerStyle={styles.modalBodyContent} 
+            showsVerticalScrollIndicator={true}
+            persistentScrollbar={true}
+            bounces={true}
+            overScrollMode="always"
+            scrollEventThrottle={16}
+            nestedScrollEnabled={true}
+            removeClippedSubviews={Platform.OS === 'android'}
+            fadingEdgeLength={Platform.OS === 'android' ? 20 : 0}
+          >
             <View style={[styles.detailRow, isMobile && styles.detailRowMobile]}>
               <Text style={[styles.detailLabel, isMobile && styles.detailLabelMobile]}>ID</Text>
-              <Text style={[styles.detailValue, isMobile && styles.detailValueMobile]} numberOfLines={1}>{selectedLog.id}</Text>
+              <Text style={[styles.detailValue, isMobile && styles.detailValueMobile]} selectable>{selectedLog.id}</Text>
             </View>
             <View style={[styles.detailRow, isMobile && styles.detailRowMobile]}>
               <Text style={[styles.detailLabel, isMobile && styles.detailLabelMobile]}>Category</Text>
@@ -690,25 +701,25 @@ export default function ActivityLogsScreen() {
             {selectedLog.userId && (
               <View style={[styles.detailRow, isMobile && styles.detailRowMobile]}>
                 <Text style={[styles.detailLabel, isMobile && styles.detailLabelMobile]}>User ID</Text>
-                <Text style={[styles.detailValue, isMobile && styles.detailValueMobile]}>{selectedLog.userId}</Text>
+                <Text style={[styles.detailValue, isMobile && styles.detailValueMobile]} selectable>{selectedLog.userId}</Text>
               </View>
             )}
             {selectedLog.attemptedEmail && (
               <View style={[styles.detailRow, isMobile && styles.detailRowMobile]}>
                 <Text style={styles.detailLabel}>Attempted Email</Text>
-                <Text style={[styles.detailValue, { color: COLORS.error }]}>{selectedLog.attemptedEmail}</Text>
+                <Text style={[styles.detailValue, { color: COLORS.error }]} selectable>{selectedLog.attemptedEmail}</Text>
               </View>
             )}
             {selectedLog.attemptedPhone && (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Attempted Phone</Text>
-                <Text style={[styles.detailValue, { color: COLORS.error }]}>{selectedLog.attemptedPhone}</Text>
+                <Text style={[styles.detailValue, { color: COLORS.error }]} selectable>{selectedLog.attemptedPhone}</Text>
               </View>
             )}
             {selectedLog.coupleId && (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Couple ID</Text>
-                <Text style={styles.detailValue}>{selectedLog.coupleId}</Text>
+                <Text style={styles.detailValue} selectable>{selectedLog.coupleId}</Text>
               </View>
             )}
             <View style={styles.detailRow}>
@@ -726,13 +737,13 @@ export default function ActivityLogsScreen() {
             {selectedLog.collection && (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Collection</Text>
-                <Text style={styles.detailValue}>{selectedLog.collection}</Text>
+                <Text style={styles.detailValue} selectable>{selectedLog.collection}</Text>
               </View>
             )}
             {selectedLog.documentId && (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Document ID</Text>
-                <Text style={styles.detailValue}>{selectedLog.documentId}</Text>
+                <Text style={styles.detailValue} selectable>{selectedLog.documentId}</Text>
               </View>
             )}
             <View style={styles.detailRow}>
@@ -748,7 +759,7 @@ export default function ActivityLogsScreen() {
             {selectedLog.deviceInfo && (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Device Info</Text>
-                <Text style={styles.detailValue}>{selectedLog.deviceInfo}</Text>
+                <Text style={styles.detailValue} selectable>{selectedLog.deviceInfo}</Text>
               </View>
             )}
             <View style={styles.detailRow}>
@@ -762,7 +773,7 @@ export default function ActivityLogsScreen() {
                   {Object.entries(selectedLog.metadata).map(([key, value]) => (
                     <View key={key} style={styles.metadataItem}>
                       <Text style={styles.metadataKey}>{key}:</Text>
-                      <Text style={styles.metadataValue}>{String(value)}</Text>
+                      <Text style={styles.metadataValue} selectable>{String(value)}</Text>
                     </View>
                   ))}
                 </View>
@@ -931,7 +942,7 @@ export default function ActivityLogsScreen() {
           {/* Quick Type Filters */}
           <View style={styles.mobileQuickFiltersContainer}>
             <Text style={styles.mobileQuickFiltersLabel}>Quick Filters:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mobileQuickFiltersScroll}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mobileQuickFiltersScroll} nestedScrollEnabled={true} scrollEventThrottle={16}>
               <View style={styles.mobileQuickFilters}>
                 <TouchableOpacity
                   style={[styles.mobileQuickFilterChip, typeFilter === 'all' && styles.mobileQuickFilterChipActive]}
@@ -998,6 +1009,8 @@ export default function ActivityLogsScreen() {
         horizontal={isMobile} 
         showsHorizontalScrollIndicator={false}
         style={[styles.categoryTabsScroll, isMobile && styles.categoryTabsScrollMobile]}
+        nestedScrollEnabled={true}
+        scrollEventThrottle={16}
       >
         <View style={[styles.categoryTabsContainer, isMobile && styles.categoryTabsContainerMobile]}>
           {CATEGORY_TABS.map((tab) => {
@@ -1080,7 +1093,7 @@ export default function ActivityLogsScreen() {
               <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
               <Text style={styles.filterLabel}>Date Range</Text>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled={true} scrollEventThrottle={16}>
               <View style={styles.filterChips}>
                 {DATE_FILTERS.map((filter) => (
                   <TouchableOpacity
@@ -1111,7 +1124,7 @@ export default function ActivityLogsScreen() {
               <Ionicons name="time-outline" size={14} color={COLORS.textSecondary} />
               <Text style={styles.filterLabel}>Time of Day</Text>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled={true} scrollEventThrottle={16}>
               <View style={styles.filterChips}>
                 {HOUR_FILTERS.map((filter) => (
                   <TouchableOpacity
@@ -1142,7 +1155,7 @@ export default function ActivityLogsScreen() {
               <Ionicons name="pricetag-outline" size={14} color={COLORS.textSecondary} />
               <Text style={styles.filterLabel}>Activity Type</Text>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled={true} scrollEventThrottle={16}>
               <View style={styles.filterChips}>
                 {TYPE_FILTERS.map((filter) => (
                   <TouchableOpacity
@@ -1273,6 +1286,13 @@ export default function ActivityLogsScreen() {
       <ScrollView 
         style={styles.logsContainer} 
         contentContainerStyle={[styles.logsContent, isMobile && styles.logsContentMobile]}
+        showsVerticalScrollIndicator={true}
+        persistentScrollbar={true}
+        scrollEventThrottle={16}
+        overScrollMode="always"
+        nestedScrollEnabled={true}
+        removeClippedSubviews={Platform.OS === 'android'}
+        fadingEdgeLength={Platform.OS === 'android' ? 20 : 0}
       >
         {loading ? (
           renderSkeleton()
@@ -1737,6 +1757,7 @@ const styles = StyleSheet.create({
     width: '90%',
     maxWidth: 600,
     maxHeight: '80%',
+    overflow: 'hidden',
     ...(isWeb && {
       boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
     }),
@@ -1755,7 +1776,12 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   modalBody: {
+    flexGrow: 1,
+    flexShrink: 1,
     padding: 20,
+  },
+  modalBodyContent: {
+    paddingBottom: 30,
   },
   detailRow: {
     flexDirection: 'row',
@@ -1769,11 +1795,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.textSecondary,
+    flexShrink: 0,
   },
   detailValue: {
     flex: 1,
     fontSize: 13,
     color: COLORS.textPrimary,
+    flexWrap: 'wrap',
   },
   metadataContainer: {
     flex: 1,
@@ -1782,15 +1810,19 @@ const styles = StyleSheet.create({
   metadataItem: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
   },
   metadataKey: {
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.textSecondary,
+    flexShrink: 0,
   },
   metadataValue: {
+    flex: 1,
     fontSize: 12,
     color: COLORS.textPrimary,
+    flexWrap: 'wrap',
   },
   // Category tabs styles
   categoryTabsContainer: {

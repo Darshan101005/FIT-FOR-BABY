@@ -21,15 +21,68 @@ export default function ResetPasswordScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: '' });
   const toastAnim = useRef(new Animated.Value(-100)).current;
+  const [isValidatingToken, setIsValidatingToken] = useState(false);
+  const [tokenInfo, setTokenInfo] = useState<{ coupleId: string; gender: 'male' | 'female'; userName: string } | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(null);
   
-  // Mode from params: 'first-login' = password reset after enrollment
+  // Mode from params: 'first-login' = password reset after enrollment, 'token' = reset via link
   const mode = params.mode as string;
   const coupleId = params.coupleId as string;
   const gender = params.gender as 'male' | 'female';
+  const token = params.token as string;
+  const linkUsername = params.username as string; // e.g. C_035_M
+  const linkPassword = params.password as string; // temp password from link
 
-  // SECURITY: Validate coupleId on mount
+  // Validate credentials on mount (supports both token-based and username+password links)
+  useEffect(() => {
+    const validateCredentials = async () => {
+      // New flow: username + password based link
+      if (linkUsername && linkPassword) {
+        setIsValidatingToken(true);
+        try {
+          const result = await coupleService.validateByCredentials(linkUsername, linkPassword);
+          if (result) {
+            setTokenInfo(result);
+          } else {
+            setTokenError('This reset link is invalid or has already been used.');
+          }
+        } catch (error) {
+          console.error('Credential validation error:', error);
+          setTokenError('Failed to validate reset link. Please try again.');
+        } finally {
+          setIsValidatingToken(false);
+        }
+        return;
+      }
+      
+      // Old flow: token-based link (backward compatible)
+      if (token) {
+        setIsValidatingToken(true);
+        try {
+          const result = await coupleService.validateResetToken(token);
+          if (result) {
+            setTokenInfo(result);
+          } else {
+            setTokenError('This reset link is invalid or has already been used.');
+          }
+        } catch (error) {
+          console.error('Token validation error:', error);
+          setTokenError('Failed to validate reset link. Please try again.');
+        } finally {
+          setIsValidatingToken(false);
+        }
+      }
+    };
+    
+    validateCredentials();
+  }, [token, linkUsername, linkPassword]);
+
+  // SECURITY: Validate coupleId on mount (for non-token mode)
   useEffect(() => {
     const validateAccess = async () => {
+      // Skip validation if we're in token or credential-link mode
+      if (token || linkUsername) return;
+      
       if (coupleId) {
         const storedCoupleId = await AsyncStorage.getItem('coupleId');
         const userRole = await AsyncStorage.getItem('userRole');
@@ -44,7 +97,7 @@ export default function ResetPasswordScreen() {
     };
     
     validateAccess();
-  }, [coupleId]);
+  }, [coupleId, token]);
 
   const isMobileWeb = useMemo(() => {
     if (!isWeb) return false;
@@ -136,7 +189,37 @@ export default function ResetPasswordScreen() {
     setIsSubmitting(true);
     
     try {
-      if (mode === 'first-login' && coupleId && gender) {
+      // Credential-based password reset (from new shared link with username+password)
+      if (linkUsername && linkPassword && tokenInfo) {
+        const result = await coupleService.resetPasswordWithCredentials(linkUsername, linkPassword, newPassword);
+        
+        if (!result.success) {
+          showToast(result.error || 'Failed to reset password', 'error');
+          setIsSubmitting(false);
+          return;
+        }
+        
+        showToast('Password set successfully! Please login to continue.', 'success');
+        
+        setTimeout(() => {
+          router.replace('/login');
+        }, 2000);
+      } else if (token && tokenInfo) {
+        // Token-based password reset (from old shared link - backward compatible)
+        const result = await coupleService.resetPasswordWithToken(token, newPassword);
+        
+        if (!result.success) {
+          showToast(result.error || 'Failed to reset password', 'error');
+          setIsSubmitting(false);
+          return;
+        }
+        
+        showToast('Password set successfully! Please login to continue.', 'success');
+        
+        setTimeout(() => {
+          router.replace('/login');
+        }, 2000);
+      } else if (mode === 'first-login' && coupleId && gender) {
         // First-time password reset after enrollment
         await coupleService.resetPassword(coupleId, gender, newPassword);
         
@@ -223,6 +306,38 @@ export default function ResetPasswordScreen() {
 
   const canSubmit = isPasswordValid() && !isSubmitting;
 
+  // Show loading state while validating token or credentials
+  if ((token || linkUsername) && isValidatingToken) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ fontSize: 16, color: '#64748b' }}>Validating reset link...</Text>
+      </View>
+    );
+  }
+
+  // Show error state if token/credentials are invalid
+  if ((token || linkUsername) && tokenError) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <View style={{ backgroundColor: '#fef2f2', padding: 24, borderRadius: 16, alignItems: 'center', maxWidth: 400 }}>
+          <Text style={{ fontSize: 48, marginBottom: 16 }}>⚠️</Text>
+          <Text style={{ fontSize: 18, fontWeight: '600', color: '#991b1b', textAlign: 'center', marginBottom: 8 }}>
+            Invalid Reset Link
+          </Text>
+          <Text style={{ fontSize: 14, color: '#7f1d1d', textAlign: 'center', marginBottom: 24 }}>
+            {tokenError}
+          </Text>
+          <TouchableOpacity 
+            onPress={() => router.replace('/login')}
+            style={{ backgroundColor: '#006dab', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Go to Login</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {toast.visible && (
@@ -264,9 +379,14 @@ export default function ResetPasswordScreen() {
 
             <View style={isMobileWeb && styles.mobileWebFormWrapper}>
               <View style={styles.headerSection}>
-                <Text style={styles.title}>Reset Password</Text>
+                <Text style={styles.title}>
+                  {tokenInfo ? 'Set Your Password' : 'Reset Password'}
+                </Text>
                 <Text style={styles.subtitle}>
-                  Create a new secure password for your account
+                  {tokenInfo 
+                    ? `Hi ${tokenInfo.userName}! Create a secure password for your account`
+                    : 'Create a new secure password for your account'
+                  }
                 </Text>
               </View>
 
