@@ -5,17 +5,17 @@ import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Alert,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 import { CoupleStepEntry, coupleExerciseService, coupleService, coupleStepsService } from '../../services/firestore.service';
 
@@ -466,23 +466,16 @@ export default function AdminMonitoringScreen() {
     }
   };
 
-  // Helper to generate all dates between start and end
-  const getDatesBetween = (startDate: string, endDate: string): string[] => {
-    const dates: string[] = [];
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      dates.push(d.toISOString().split('T')[0]);
-    }
-    return dates;
-  };
-
   // Generate export data - fetches data for the entire date range
+  //
+  // IMPORTANT (performance): we fetch each couple's whole history in a small
+  // number of range queries (4 per couple) instead of 6 queries PER DAY.
+  // Fetching per-day made "All Time" (2020 -> today) fire ~1.3M requests at
+  // once, which froze the browser and rate-limited Firestore. Range queries
+  // bring that down to ~4 x (number of couples).
   const generateExportData = async () => {
     const dateRange = getExportDateRange();
     const exportData: any[] = [];
-    const dates = getDatesBetween(dateRange.start, dateRange.end);
     const stepGoal = 7000;
     const exerciseGoal = 60;
     const highKneesGoal = 30; // 30 minutes goal
@@ -490,8 +483,17 @@ export default function AdminMonitoringScreen() {
     // Get all couple IDs from the current logs
     const coupleIds = logs.map(log => log.coupleId);
 
-    // Fetch data for each couple for each date in the range
-    for (const coupleId of coupleIds) {
+    // Only emit rows for every couple (even empty ones) when exporting a single
+    // day snapshot. For multi-day ranges we only emit dates that actually have
+    // activity, otherwise "All Time" would produce hundreds of thousands of
+    // empty rows and freeze the exporter.
+    const singleDay = dateRange.start === dateRange.end;
+
+    // Run per-couple work with limited concurrency so we never have more than a
+    // handful of couples' queries in flight at once.
+    const CONCURRENCY = 8;
+
+    const buildCoupleRows = async (coupleId: string) => {
       const details = coupleDetails[coupleId];
 
       // Get actual names with proper fallback
@@ -502,73 +504,76 @@ export default function AdminMonitoringScreen() {
         ? details.femaleName
         : (details?.femaleEmail?.split('@')[0] || coupleId + '_F');
 
-      for (const date of dates) {
-        try {
-          // Fetch step data for this date
-          const [maleSteps, femaleSteps] = await Promise.all([
-            coupleStepsService.getByDate(coupleId, 'male', date),
-            coupleStepsService.getByDate(coupleId, 'female', date)
+      try {
+        // Fetch this couple's ENTIRE history for the range in 4 queries total
+        // (one per gender per metric), instead of one query per day.
+        const [maleStepEntries, femaleStepEntries, maleExerciseLogs, femaleExerciseLogs] =
+          await Promise.all([
+            coupleStepsService.getByDateRange(coupleId, 'male', dateRange.start, dateRange.end),
+            coupleStepsService.getByDateRange(coupleId, 'female', dateRange.start, dateRange.end),
+            coupleExerciseService.getByDateRange(coupleId, 'male', dateRange.start, dateRange.end),
+            coupleExerciseService.getByDateRange(coupleId, 'female', dateRange.start, dateRange.end),
           ]);
 
-          // Fetch exercise data for this date
-          const [maleExercise, femaleExercise] = await Promise.all([
-            coupleExerciseService.getTotalsForDate(coupleId, 'male', date),
-            coupleExerciseService.getTotalsForDate(coupleId, 'female', date)
-          ]);
+        // Group each result set by its date string.
+        const groupByDate = <T extends { date?: string }>(entries: T[]) => {
+          const map = new Map<string, T[]>();
+          for (const entry of entries) {
+            if (!entry.date) continue;
+            if (entry.date < dateRange.start || entry.date > dateRange.end) continue;
+            const list = map.get(entry.date);
+            if (list) list.push(entry);
+            else map.set(entry.date, [entry]);
+          }
+          return map;
+        };
 
-          // Fetch high knees exercise data for this date
-          const [maleExerciseLogs, femaleExerciseLogs] = await Promise.all([
-            coupleExerciseService.getByDate(coupleId, 'male', date),
-            coupleExerciseService.getByDate(coupleId, 'female', date)
-          ]);
+        const maleStepsByDate = groupByDate(maleStepEntries);
+        const femaleStepsByDate = groupByDate(femaleStepEntries);
+        const maleExByDate = groupByDate(maleExerciseLogs);
+        const femaleExByDate = groupByDate(femaleExerciseLogs);
 
-          // Filter high knees exercises and sum duration
-          const maleHighKnees = maleExerciseLogs.filter(log => log.exerciseType === 'high-knees');
-          const femaleHighKnees = femaleExerciseLogs.filter(log => log.exerciseType === 'high-knees');
-          const maleHighKneesDuration = maleHighKnees.reduce((sum, log) => sum + log.duration, 0);
-          const femaleHighKneesDuration = femaleHighKnees.reduce((sum, log) => sum + log.duration, 0);
+        // Union of all dates that have any activity for this couple.
+        const activeDates = new Set<string>([
+          ...maleStepsByDate.keys(),
+          ...femaleStepsByDate.keys(),
+          ...maleExByDate.keys(),
+          ...femaleExByDate.keys(),
+        ]);
 
-          const maleStepCount = maleSteps.reduce((sum: number, entry: CoupleStepEntry) => sum + entry.stepCount, 0);
-          const femaleStepCount = femaleSteps.reduce((sum: number, entry: CoupleStepEntry) => sum + entry.stepCount, 0);
+        // For a single-day snapshot always include the day so every couple is
+        // listed (with pending status) even if they logged nothing.
+        if (singleDay) activeDates.add(dateRange.start);
 
-          // Determine statuses
-          const getMaleStepStatus = (): LogStatus => {
-            if (maleStepCount >= stepGoal) return 'complete';
-            if (maleStepCount > 0) return 'partial';
-            return 'pending';
-          };
+        const stepStatus = (count: number): LogStatus =>
+          count >= stepGoal ? 'complete' : count > 0 ? 'partial' : 'pending';
+        const exerciseStatus = (duration: number): LogStatus =>
+          duration >= exerciseGoal ? 'complete' : duration > 0 ? 'partial' : 'pending';
+        const highKneesStatus = (duration: number): LogStatus =>
+          duration >= highKneesGoal ? 'complete' : duration > 0 ? 'partial' : 'pending';
 
-          const getFemaleStepStatus = (): LogStatus => {
-            if (femaleStepCount >= stepGoal) return 'complete';
-            if (femaleStepCount > 0) return 'partial';
-            return 'pending';
-          };
+        const rows: any[] = [];
+        for (const date of Array.from(activeDates).sort()) {
+          const maleStepCount = (maleStepsByDate.get(date) || [])
+            .reduce((sum, entry) => sum + entry.stepCount, 0);
+          const femaleStepCount = (femaleStepsByDate.get(date) || [])
+            .reduce((sum, entry) => sum + entry.stepCount, 0);
 
-          const getMaleExerciseStatus = (): LogStatus => {
-            if (maleExercise.duration >= exerciseGoal) return 'complete';
-            if (maleExercise.duration > 0) return 'partial';
-            return 'pending';
-          };
+          const maleEx = maleExByDate.get(date) || [];
+          const femaleEx = femaleExByDate.get(date) || [];
+          const maleExDuration = maleEx.reduce((sum, log) => sum + log.duration, 0);
+          const maleExCalories = maleEx.reduce((sum, log) => sum + (log.caloriesBurned || 0), 0);
+          const femaleExDuration = femaleEx.reduce((sum, log) => sum + log.duration, 0);
+          const femaleExCalories = femaleEx.reduce((sum, log) => sum + (log.caloriesBurned || 0), 0);
 
-          const getFemaleExerciseStatus = (): LogStatus => {
-            if (femaleExercise.duration >= exerciseGoal) return 'complete';
-            if (femaleExercise.duration > 0) return 'partial';
-            return 'pending';
-          };
+          const maleHighKneesDuration = maleEx
+            .filter(log => log.exerciseType === 'high-knees')
+            .reduce((sum, log) => sum + log.duration, 0);
+          const femaleHighKneesDuration = femaleEx
+            .filter(log => log.exerciseType === 'high-knees')
+            .reduce((sum, log) => sum + log.duration, 0);
 
-          const getMaleHighKneesStatus = (): LogStatus => {
-            if (maleHighKneesDuration >= highKneesGoal) return 'complete';
-            if (maleHighKneesDuration > 0) return 'partial';
-            return 'pending';
-          };
-
-          const getFemaleHighKneesStatus = (): LogStatus => {
-            if (femaleHighKneesDuration >= highKneesGoal) return 'complete';
-            if (femaleHighKneesDuration > 0) return 'partial';
-            return 'pending';
-          };
-
-          exportData.push({
+          rows.push({
             coupleId: coupleId,
             maleName: maleName,
             femaleName: femaleName,
@@ -580,26 +585,35 @@ export default function AdminMonitoringScreen() {
             reportDate: date,
             maleSteps: maleStepCount,
             femaleSteps: femaleStepCount,
-            maleStepsStatus: getMaleStepStatus(),
-            femaleStepsStatus: getFemaleStepStatus(),
-            maleExerciseDuration: maleExercise.duration || 0,
-            maleExerciseCalories: maleExercise.calories || 0,
-            femaleExerciseDuration: femaleExercise.duration || 0,
-            femaleExerciseCalories: femaleExercise.calories || 0,
-            maleExerciseStatus: getMaleExerciseStatus(),
-            femaleExerciseStatus: getFemaleExerciseStatus(),
+            maleStepsStatus: stepStatus(maleStepCount),
+            femaleStepsStatus: stepStatus(femaleStepCount),
+            maleExerciseDuration: maleExDuration,
+            maleExerciseCalories: maleExCalories,
+            femaleExerciseDuration: femaleExDuration,
+            femaleExerciseCalories: femaleExCalories,
+            maleExerciseStatus: exerciseStatus(maleExDuration),
+            femaleExerciseStatus: exerciseStatus(femaleExDuration),
             maleDietStatus: 'pending',
             femaleDietStatus: 'pending',
             maleHighKneesMinutes: maleHighKneesDuration,
             femaleHighKneesMinutes: femaleHighKneesDuration,
-            maleHighKneesStatus: getMaleHighKneesStatus(),
-            femaleHighKneesStatus: getFemaleHighKneesStatus(),
+            maleHighKneesStatus: highKneesStatus(maleHighKneesDuration),
+            femaleHighKneesStatus: highKneesStatus(femaleHighKneesDuration),
             coupleWalkingStatus: 'pending',
           });
-        } catch (error) {
-          console.error(`Error fetching data for couple ${coupleId} on ${date}:`, error);
         }
+        return rows;
+      } catch (error) {
+        console.error(`Error fetching export data for couple ${coupleId}:`, error);
+        return [];
       }
+    };
+
+    // Process couples in bounded-size batches (limited concurrency).
+    for (let i = 0; i < coupleIds.length; i += CONCURRENCY) {
+      const batch = coupleIds.slice(i, i + CONCURRENCY);
+      const batchResults = await Promise.all(batch.map(buildCoupleRows));
+      batchResults.forEach(rows => exportData.push(...rows));
     }
 
     // Sort by date then coupleId
@@ -618,6 +632,11 @@ export default function AdminMonitoringScreen() {
     setIsExporting(true);
     try {
       const { data, dateRange } = await generateExportData();
+
+      // Check if dataset is too large
+      if (data.length > 1000) {
+        Alert.alert('Large Dataset', `You are exporting ${data.length} records. This may take a moment...`);
+      }
 
       // CSV Headers - Clean and organized
       const headers = [
@@ -649,9 +668,11 @@ export default function AdminMonitoringScreen() {
         'Enrollment Date'
       ];
 
-      // Generate CSV content
-      let csvContent = headers.join(',') + '\n';
-      data.forEach(row => {
+      // Generate CSV content efficiently in chunks
+      const csvRows = [headers.join(',')];
+      
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
         const rowData = [
           row.reportDate,
           row.coupleId,
@@ -680,11 +701,13 @@ export default function AdminMonitoringScreen() {
           row.femalePhone,
           row.enrollmentDate
         ];
-        csvContent += rowData.join(',') + '\n';
-      });
+        csvRows.push(rowData.join(','));
+      }
+
+      const csvContent = csvRows.join('\n');
 
       if (isWeb) {
-        // Web download
+        // Web download - use Blob for better performance
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
@@ -694,6 +717,7 @@ export default function AdminMonitoringScreen() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url); // Clean up
       } else {
         // Mobile - use FileSystem and Sharing
         const fileName = `fit_for_baby_report_${dateRange.start}_to_${dateRange.end}.csv`;
@@ -706,7 +730,7 @@ export default function AdminMonitoringScreen() {
       Alert.alert('Success', 'CSV report exported successfully!');
     } catch (error) {
       console.error('Export error:', error);
-      Alert.alert('Error', 'Failed to export CSV report');
+      Alert.alert('Error', 'Failed to export CSV report. Please try a smaller date range.');
     } finally {
       setIsExporting(false);
     }
@@ -718,267 +742,20 @@ export default function AdminMonitoringScreen() {
     try {
       const { data, dateRange } = await generateExportData();
 
-      // Generate HTML content for PDF with professional design
-      const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Fit for Baby - Monitoring Report</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { 
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-      padding: 30px; 
-      color: #1e293b;
-      background: #fff;
-      line-height: 1.5;
-    }
-    .report-container {
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-    .header { 
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 30px;
-      padding-bottom: 20px;
-      border-bottom: 3px solid #006dab;
-    }
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-    }
-    .logo-placeholder {
-      width: 60px;
-      height: 60px;
-      background: linear-gradient(135deg, #006dab 0%, #0088d4 100%);
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 24px;
-      font-weight: bold;
-    }
-    .header-text h1 { 
-      font-size: 24px; 
-      font-weight: 700;
-      color: #006dab;
-      margin-bottom: 2px;
-    }
-    .header-text p { 
-      font-size: 13px; 
-      color: #64748b;
-    }
-    .header-right {
-      text-align: right;
-    }
-    .date-badge {
-      background: #f1f5f9;
-      padding: 12px 20px;
-      border-radius: 8px;
-      border-left: 4px solid #006dab;
-    }
-    .date-badge strong {
-      color: #006dab;
-      display: block;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .date-badge span {
-      font-size: 14px;
-      color: #334155;
-    }
-    
-    /* Summary Cards */
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin-bottom: 30px;
-    }
-    .summary-card {
-      padding: 20px;
-      border-radius: 12px;
-      text-align: center;
-      border: 1px solid #e2e8f0;
-    }
-    .summary-card.complete { background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border-color: #22c55e; }
-    .summary-card.partial { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-color: #f59e0b; }
-    .summary-card.missed { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border-color: #ef4444; }
-    .summary-card.total { background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); border-color: #3b82f6; }
-    .summary-value { font-size: 36px; font-weight: 800; margin-bottom: 5px; }
-    .summary-label { font-size: 13px; color: #64748b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
-    
-    /* Table Styles */
-    .section-title {
-      font-size: 18px;
-      font-weight: 700;
-      color: #006dab;
-      margin: 30px 0 15px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #e2e8f0;
-    }
-    .data-table { 
-      width: 100%; 
-      border-collapse: collapse;
-      font-size: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    .data-table thead tr { 
-      background: linear-gradient(135deg, #006dab 0%, #0088d4 100%);
-    }
-    .data-table th { 
-      color: white; 
-      padding: 14px 10px;
-      text-align: center;
-      font-weight: 600;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-      border-right: 1px solid rgba(255,255,255,0.2);
-    }
-    .data-table th:last-child { border-right: none; }
-    .data-table td { 
-      padding: 12px 10px; 
-      border-bottom: 1px solid #e2e8f0;
-      text-align: center;
-      vertical-align: middle;
-    }
-    .data-table tbody tr:nth-child(even) { background: #f8fafc; }
-    .data-table tbody tr:hover { background: #e0f2fe; }
-    
-    /* Cell Types */
-    .couple-cell {
-      text-align: left !important;
-      font-weight: 600;
-      color: #1e293b;
-    }
-    .name-cell {
-      text-align: left !important;
-    }
-    .name-cell .name { font-weight: 600; color: #1e293b; }
-    .name-cell .email { font-size: 10px; color: #64748b; margin-top: 2px; }
-    .metric-cell {
-      font-weight: 500;
-    }
-    .metric-value { font-size: 13px; font-weight: 600; color: #1e293b; }
-    .status-badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 12px;
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      margin-top: 4px;
-    }
-    .status-complete { background: #dcfce7; color: #15803d; }
-    .status-partial { background: #fef3c7; color: #b45309; }
-    .status-missed { background: #fee2e2; color: #b91c1c; }
-    .status-pending { background: #f1f5f9; color: #64748b; }
-    
-    /* Footer */
-    .footer {
-      margin-top: 40px;
-      padding-top: 20px;
-      border-top: 2px solid #e2e8f0;
-      text-align: center;
-    }
-    .footer p { font-size: 11px; color: #64748b; margin: 3px 0; }
-    .footer .brand { font-weight: 600; color: #006dab; }
-    
-    /* Print Button */
-    .print-btn {
-      display: inline-block;
-      background: linear-gradient(135deg, #006dab 0%, #0088d4 100%);
-      color: white;
-      padding: 14px 28px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      margin-top: 20px;
-      box-shadow: 0 4px 6px rgba(0, 109, 171, 0.3);
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .print-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 12px rgba(0, 109, 171, 0.4);
-    }
-    
-    @media print {
-      body { padding: 15px; }
-      .no-print { display: none !important; }
-      .data-table { font-size: 10px; }
-      .summary-grid { grid-template-columns: repeat(4, 1fr); }
-    }
-  </style>
-</head>
-<body>
-  <div class="report-container">
-    <div class="header">
-      <div class="header-left">
-        <div class="logo-placeholder">FFB</div>
-        <div class="header-text">
-          <h1>Fit for Baby</h1>
-          <p>Monitoring & Activity Report</p>
-        </div>
-      </div>
-      <div class="header-right">
-        <div class="date-badge">
-          <strong>Report Period</strong>
-          <span>${new Date(dateRange.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${dateRange.start !== dateRange.end ? ' - ' + new Date(dateRange.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
-        </div>
-      </div>
-    </div>
-    
-    <div class="summary-grid">
-      <div class="summary-card complete">
-        <div class="summary-value" style="color: #15803d;">${stats.complete}</div>
-        <div class="summary-label">Completed</div>
-      </div>
-      <div class="summary-card partial">
-        <div class="summary-value" style="color: #b45309;">${stats.partial}</div>
-        <div class="summary-label">Partial</div>
-      </div>
-      <div class="summary-card missed">
-        <div class="summary-value" style="color: #b91c1c;">${stats.missed}</div>
-        <div class="summary-label">Missed</div>
-      </div>
-      <div class="summary-card total">
-        <div class="summary-value" style="color: #1d4ed8;">${stats.total > 0 ? Math.round((stats.complete / stats.total) * 100) : 0}%</div>
-        <div class="summary-label">Compliance</div>
-      </div>
-    </div>
+      // Limit data for PDF to prevent browser freeze
+      const maxPDFRows = 200;
+      const limitedData = data.length > maxPDFRows ? data.slice(0, maxPDFRows) : data;
+      
+      if (data.length > maxPDFRows) {
+        Alert.alert(
+          'Large Dataset', 
+          `Your selection has ${data.length} records. PDF will show first ${maxPDFRows} rows. For full data, use CSV or Excel export.`,
+          [{ text: 'Continue', onPress: () => {} }]
+        );
+      }
 
-    <div class="section-title">📊 Detailed Activity Report (${data.length} entries)</div>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th style="width: 80px;">Date</th>
-          <th style="width: 100px;">Couple ID</th>
-          <th style="min-width: 140px;">Male Partner</th>
-          <th style="min-width: 140px;">Female Partner</th>
-          <th>M Steps</th>
-          <th>F Steps</th>
-          <th>M Exercise</th>
-          <th>F Exercise</th>
-          <th>M Diet</th>
-          <th>F Diet</th>
-          <th>M High Knees</th>
-          <th>F High Knees</th>
-          <th>Couple Walk</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${data.map(row => `
+      // Build table rows efficiently
+      const tableRows = limitedData.map(row => `
         <tr>
           <td>${new Date(row.reportDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
           <td class="couple-cell">${row.coupleId}</td>
@@ -1017,21 +794,126 @@ export default function AdminMonitoringScreen() {
             <span class="status-badge status-${row.femaleHighKneesStatus}">${row.femaleHighKneesStatus}</span>
           </td>
           <td><span class="status-badge status-${row.coupleWalkingStatus}">${row.coupleWalkingStatus}</span></td>
+        </tr>`).join('');
+
+      // Generate HTML content for PDF with professional design
+      const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fit for Baby - Monitoring Report</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; color: #1e293b; background: #fff; line-height: 1.5; }
+    .report-container { max-width: 1400px; margin: 0 auto; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #006dab; }
+    .header-left { display: flex; align-items: center; gap: 15px; }
+    .logo-placeholder { width: 60px; height: 60px; background: linear-gradient(135deg, #006dab 0%, #0088d4 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; font-weight: bold; }
+    .header-text h1 { font-size: 24px; font-weight: 700; color: #006dab; margin-bottom: 2px; }
+    .header-text p { font-size: 13px; color: #64748b; }
+    .date-badge { background: #f1f5f9; padding: 12px 20px; border-radius: 8px; border-left: 4px solid #006dab; }
+    .date-badge strong { color: #006dab; display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .date-badge span { font-size: 14px; color: #334155; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 30px; }
+    .summary-card { padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #e2e8f0; }
+    .summary-card.complete { background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border-color: #22c55e; }
+    .summary-card.partial { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-color: #f59e0b; }
+    .summary-card.missed { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border-color: #ef4444; }
+    .summary-card.total { background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); border-color: #3b82f6; }
+    .summary-value { font-size: 36px; font-weight: 800; margin-bottom: 5px; }
+    .summary-label { font-size: 13px; color: #64748b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+    .section-title { font-size: 18px; font-weight: 700; color: #006dab; margin: 30px 0 15px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+    .data-table thead tr { background: linear-gradient(135deg, #006dab 0%, #0088d4 100%); }
+    .data-table th { color: white; padding: 14px 10px; text-align: center; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-right: 1px solid rgba(255,255,255,0.2); }
+    .data-table th:last-child { border-right: none; }
+    .data-table td { padding: 12px 10px; border-bottom: 1px solid #e2e8f0; text-align: center; vertical-align: middle; }
+    .data-table tbody tr:nth-child(even) { background: #f8fafc; }
+    .data-table tbody tr:hover { background: #e0f2fe; }
+    .couple-cell { text-align: left !important; font-weight: 600; color: #1e293b; }
+    .name-cell { text-align: left !important; }
+    .name-cell .name { font-weight: 600; color: #1e293b; }
+    .name-cell .email { font-size: 10px; color: #64748b; margin-top: 2px; }
+    .metric-cell { font-weight: 500; }
+    .metric-value { font-size: 13px; font-weight: 600; color: #1e293b; }
+    .status-badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; margin-top: 4px; }
+    .status-complete { background: #dcfce7; color: #15803d; }
+    .status-partial { background: #fef3c7; color: #b45309; }
+    .status-missed { background: #fee2e2; color: #b91c1c; }
+    .status-pending { background: #f1f5f9; color: #64748b; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #e2e8f0; text-align: center; }
+    .footer p { font-size: 11px; color: #64748b; margin: 3px 0; }
+    .footer .brand { font-weight: 600; color: #006dab; }
+    .print-btn { display: inline-block; background: linear-gradient(135deg, #006dab 0%, #0088d4 100%); color: white; padding: 14px 28px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; margin-top: 20px; box-shadow: 0 4px 6px rgba(0, 109, 171, 0.3); transition: transform 0.2s, box-shadow 0.2s; }
+    .print-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0, 109, 171, 0.4); }
+    @media print { body { padding: 15px; } .no-print { display: none !important; } .data-table { font-size: 10px; } .summary-grid { grid-template-columns: repeat(4, 1fr); } }
+  </style>
+</head>
+<body>
+  <div class="report-container">
+    <div class="header">
+      <div class="header-left">
+        <div class="logo-placeholder">FFB</div>
+        <div class="header-text">
+          <h1>Fit for Baby</h1>
+          <p>Monitoring & Activity Report</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="date-badge">
+          <strong>Report Period</strong>
+          <span>${new Date(dateRange.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${dateRange.start !== dateRange.end ? ' - ' + new Date(dateRange.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
+        </div>
+      </div>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-card complete">
+        <div class="summary-value" style="color: #15803d;">${stats.complete}</div>
+        <div class="summary-label">Completed</div>
+      </div>
+      <div class="summary-card partial">
+        <div class="summary-value" style="color: #b45309;">${stats.partial}</div>
+        <div class="summary-label">Partial</div>
+      </div>
+      <div class="summary-card missed">
+        <div class="summary-value" style="color: #b91c1c;">${stats.missed}</div>
+        <div class="summary-label">Missed</div>
+      </div>
+      <div class="summary-card total">
+        <div class="summary-value" style="color: #1d4ed8;">${stats.total > 0 ? Math.round((stats.complete / stats.total) * 100) : 0}%</div>
+        <div class="summary-label">Compliance</div>
+      </div>
+    </div>
+    <div class="section-title">📊 Detailed Activity Report (${limitedData.length} ${data.length > maxPDFRows ? 'of ' + data.length : ''} entries)</div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 80px;">Date</th>
+          <th style="width: 100px;">Couple ID</th>
+          <th style="min-width: 140px;">Male Partner</th>
+          <th style="min-width: 140px;">Female Partner</th>
+          <th>M Steps</th>
+          <th>F Steps</th>
+          <th>M Exercise</th>
+          <th>F Exercise</th>
+          <th>M Diet</th>
+          <th>F Diet</th>
+          <th>M High Knees</th>
+          <th>F High Knees</th>
+          <th>Couple Walk</th>
         </tr>
-        `).join('')}
+      </thead>
+      <tbody>
+        ${tableRows}
       </tbody>
     </table>
-
     <div class="footer">
       <p class="brand">Fit for Baby - Health Monitoring System</p>
       <p>Generated on ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</p>
-      <p>Total Records: ${data.length} couples</p>
+      <p>Total Records: ${limitedData.length} couples</p>
     </div>
-    
     <div class="no-print" style="text-align: center; margin-top: 30px;">
-      <button onclick="window.print()" class="print-btn">
-        🖨️ Print / Save as PDF
-      </button>
+      <button onclick="window.print()" class="print-btn">🖨️ Print / Save as PDF</button>
     </div>
   </div>
 </body>
@@ -1043,6 +925,8 @@ export default function AdminMonitoringScreen() {
         if (newWindow) {
           newWindow.document.write(htmlContent);
           newWindow.document.close();
+        } else {
+          Alert.alert('Popup Blocked', 'Please allow popups for this site to view the PDF report.');
         }
       } else {
         // Mobile - save HTML and share
@@ -1067,117 +951,85 @@ export default function AdminMonitoringScreen() {
     try {
       const { data, dateRange } = await generateExportData();
 
-      // Generate Excel-compatible XML (SpreadsheetML) with better structure
+      // Check if dataset is too large
+      if (data.length > 1000) {
+        Alert.alert('Large Dataset', `You are exporting ${data.length} records. This may take a moment...`);
+      }
+
+      // Build XML rows efficiently
+      const activityRows: string[] = [];
+      const contactRows: string[] = [];
+      
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        const getStatusStyle = (status: string) => {
+          if (status === 'complete') return 'Complete';
+          if (status === 'partial') return 'Partial';
+          if (status === 'missed') return 'Missed';
+          return 'Pending';
+        };
+        
+        activityRows.push(`
+      <Row>
+        <Cell ss:StyleID="Cell"><Data ss:Type="String">${row.reportDate}</Data></Cell>
+        <Cell ss:StyleID="CellBold"><Data ss:Type="String">${row.coupleId}</Data></Cell>
+        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.maleName}</Data></Cell>
+        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.femaleName}</Data></Cell>
+        <Cell ss:StyleID="Number"><Data ss:Type="Number">${row.maleSteps}</Data></Cell>
+        <Cell ss:StyleID="${getStatusStyle(row.maleStepsStatus)}"><Data ss:Type="String">${row.maleStepsStatus.toUpperCase()}</Data></Cell>
+        <Cell ss:StyleID="Number"><Data ss:Type="Number">${row.femaleSteps}</Data></Cell>
+        <Cell ss:StyleID="${getStatusStyle(row.femaleStepsStatus)}"><Data ss:Type="String">${row.femaleStepsStatus.toUpperCase()}</Data></Cell>
+        <Cell ss:StyleID="Number"><Data ss:Type="Number">${row.maleExerciseDuration}</Data></Cell>
+        <Cell ss:StyleID="${getStatusStyle(row.maleExerciseStatus)}"><Data ss:Type="String">${row.maleExerciseStatus.toUpperCase()}</Data></Cell>
+        <Cell ss:StyleID="Number"><Data ss:Type="Number">${row.femaleExerciseDuration}</Data></Cell>
+        <Cell ss:StyleID="${getStatusStyle(row.femaleExerciseStatus)}"><Data ss:Type="String">${row.femaleExerciseStatus.toUpperCase()}</Data></Cell>
+        <Cell ss:StyleID="${getStatusStyle(row.maleDietStatus)}"><Data ss:Type="String">${row.maleDietStatus.toUpperCase()}</Data></Cell>
+        <Cell ss:StyleID="${getStatusStyle(row.femaleDietStatus)}"><Data ss:Type="String">${row.femaleDietStatus.toUpperCase()}</Data></Cell>
+        <Cell ss:StyleID="${getStatusStyle(row.coupleWalkingStatus)}"><Data ss:Type="String">${row.coupleWalkingStatus.toUpperCase()}</Data></Cell>
+      </Row>`);
+        
+        contactRows.push(`
+      <Row>
+        <Cell ss:StyleID="CellBold"><Data ss:Type="String">${row.coupleId}</Data></Cell>
+        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.maleName}</Data></Cell>
+        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.maleEmail}</Data></Cell>
+        <Cell ss:StyleID="Cell"><Data ss:Type="String">${row.malePhone}</Data></Cell>
+        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.femaleName}</Data></Cell>
+        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.femaleEmail}</Data></Cell>
+        <Cell ss:StyleID="Cell"><Data ss:Type="String">${row.femalePhone}</Data></Cell>
+        <Cell ss:StyleID="Cell"><Data ss:Type="String">${row.enrollmentDate}</Data></Cell>
+      </Row>`);
+      }
+
+      // Generate Excel-compatible XML (SpreadsheetML)
       const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:o="urn:schemas-microsoft-com:office:office"
-  xmlns:x="urn:schemas-microsoft-com:office:excel"
-  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
   <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
     <Title>Fit for Baby - Monitoring Report</Title>
     <Author>Fit for Baby Admin</Author>
     <Created>${new Date().toISOString()}</Created>
   </DocumentProperties>
   <Styles>
-    <Style ss:ID="Default">
-      <Alignment ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="11"/>
-    </Style>
-    <Style ss:ID="Title">
-      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="16" ss:Bold="1" ss:Color="#006dab"/>
-    </Style>
-    <Style ss:ID="Header">
-      <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
-      <Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/>
-      <Interior ss:Color="#006dab" ss:Pattern="Solid"/>
-      <Borders>
-        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#004d7a"/>
-      </Borders>
-    </Style>
-    <Style ss:ID="SubHeader">
-      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="9" ss:Bold="1" ss:Color="#334155"/>
-      <Interior ss:Color="#e2e8f0" ss:Pattern="Solid"/>
-    </Style>
-    <Style ss:ID="Cell">
-      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="10"/>
-      <Borders>
-        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e2e8f0"/>
-      </Borders>
-    </Style>
-    <Style ss:ID="CellLeft">
-      <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="10"/>
-      <Borders>
-        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e2e8f0"/>
-      </Borders>
-    </Style>
-    <Style ss:ID="CellBold">
-      <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1"/>
-      <Borders>
-        <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e2e8f0"/>
-      </Borders>
-    </Style>
-    <Style ss:ID="Complete">
-      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#15803d"/>
-      <Interior ss:Color="#dcfce7" ss:Pattern="Solid"/>
-    </Style>
-    <Style ss:ID="Partial">
-      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#b45309"/>
-      <Interior ss:Color="#fef3c7" ss:Pattern="Solid"/>
-    </Style>
-    <Style ss:ID="Missed">
-      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#b91c1c"/>
-      <Interior ss:Color="#fee2e2" ss:Pattern="Solid"/>
-    </Style>
-    <Style ss:ID="Pending">
-      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="10" ss:Color="#64748b"/>
-      <Interior ss:Color="#f1f5f9" ss:Pattern="Solid"/>
-    </Style>
-    <Style ss:ID="Number">
-      <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1"/>
-      <NumberFormat ss:Format="#,##0"/>
-    </Style>
+    <Style ss:ID="Default"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="11"/></Style>
+    <Style ss:ID="Title"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="16" ss:Bold="1" ss:Color="#006dab"/></Style>
+    <Style ss:ID="Header"><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#006dab" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#004d7a"/></Borders></Style>
+    <Style ss:ID="SubHeader"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="9" ss:Bold="1" ss:Color="#334155"/><Interior ss:Color="#e2e8f0" ss:Pattern="Solid"/></Style>
+    <Style ss:ID="Cell"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e2e8f0"/></Borders></Style>
+    <Style ss:ID="CellLeft"><Alignment ss:Horizontal="Left" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e2e8f0"/></Borders></Style>
+    <Style ss:ID="CellBold"><Alignment ss:Horizontal="Left" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e2e8f0"/></Borders></Style>
+    <Style ss:ID="Complete"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#15803d"/><Interior ss:Color="#dcfce7" ss:Pattern="Solid"/></Style>
+    <Style ss:ID="Partial"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#b45309"/><Interior ss:Color="#fef3c7" ss:Pattern="Solid"/></Style>
+    <Style ss:ID="Missed"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#b91c1c"/><Interior ss:Color="#fee2e2" ss:Pattern="Solid"/></Style>
+    <Style ss:ID="Pending"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#64748b"/><Interior ss:Color="#f1f5f9" ss:Pattern="Solid"/></Style>
+    <Style ss:ID="Number"><Alignment ss:Horizontal="Right" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1"/><NumberFormat ss:Format="#,##0"/></Style>
   </Styles>
-  
-  <!-- Main Activity Report Sheet -->
   <Worksheet ss:Name="Activity Report">
     <Table ss:DefaultColumnWidth="80" ss:DefaultRowHeight="24">
-      <Column ss:Width="90"/>
-      <Column ss:Width="100"/>
-      <Column ss:Width="150"/>
-      <Column ss:Width="150"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="80"/>
-      <Column ss:Width="90"/>
-      
-      <!-- Title Row -->
-      <Row ss:Height="30">
-        <Cell ss:StyleID="Title" ss:MergeAcross="14"><Data ss:Type="String">FIT FOR BABY - MONITORING REPORT</Data></Cell>
-      </Row>
-      <Row ss:Height="20">
-        <Cell ss:StyleID="SubHeader" ss:MergeAcross="14"><Data ss:Type="String">Report Period: ${dateRange.start} to ${dateRange.end} | Generated: ${new Date().toLocaleString()}</Data></Cell>
-      </Row>
+      <Column ss:Width="90"/><Column ss:Width="100"/><Column ss:Width="150"/><Column ss:Width="150"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="90"/>
+      <Row ss:Height="30"><Cell ss:StyleID="Title" ss:MergeAcross="14"><Data ss:Type="String">FIT FOR BABY - MONITORING REPORT</Data></Cell></Row>
+      <Row ss:Height="20"><Cell ss:StyleID="SubHeader" ss:MergeAcross="14"><Data ss:Type="String">Report Period: ${dateRange.start} to ${dateRange.end} | Generated: ${new Date().toLocaleString()}</Data></Cell></Row>
       <Row/>
-      
-      <!-- Header Row -->
       <Row ss:StyleID="Header" ss:Height="36">
         <Cell><Data ss:Type="String">Report Date</Data></Cell>
         <Cell><Data ss:Type="String">Couple ID</Data></Cell>
@@ -1195,48 +1047,14 @@ export default function AdminMonitoringScreen() {
         <Cell><Data ss:Type="String">Female Diet</Data></Cell>
         <Cell><Data ss:Type="String">Couple Walk</Data></Cell>
       </Row>
-      
-      <!-- Data Rows -->
-      ${data.map(row => `
-      <Row>
-        <Cell ss:StyleID="Cell"><Data ss:Type="String">${row.reportDate}</Data></Cell>
-        <Cell ss:StyleID="CellBold"><Data ss:Type="String">${row.coupleId}</Data></Cell>
-        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.maleName}</Data></Cell>
-        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.femaleName}</Data></Cell>
-        <Cell ss:StyleID="Number"><Data ss:Type="Number">${row.maleSteps}</Data></Cell>
-        <Cell ss:StyleID="${row.maleStepsStatus === 'complete' ? 'Complete' : row.maleStepsStatus === 'partial' ? 'Partial' : row.maleStepsStatus === 'missed' ? 'Missed' : 'Pending'}"><Data ss:Type="String">${row.maleStepsStatus.toUpperCase()}</Data></Cell>
-        <Cell ss:StyleID="Number"><Data ss:Type="Number">${row.femaleSteps}</Data></Cell>
-        <Cell ss:StyleID="${row.femaleStepsStatus === 'complete' ? 'Complete' : row.femaleStepsStatus === 'partial' ? 'Partial' : row.femaleStepsStatus === 'missed' ? 'Missed' : 'Pending'}"><Data ss:Type="String">${row.femaleStepsStatus.toUpperCase()}</Data></Cell>
-        <Cell ss:StyleID="Number"><Data ss:Type="Number">${row.maleExerciseDuration}</Data></Cell>
-        <Cell ss:StyleID="${row.maleExerciseStatus === 'complete' ? 'Complete' : row.maleExerciseStatus === 'partial' ? 'Partial' : row.maleExerciseStatus === 'missed' ? 'Missed' : 'Pending'}"><Data ss:Type="String">${row.maleExerciseStatus.toUpperCase()}</Data></Cell>
-        <Cell ss:StyleID="Number"><Data ss:Type="Number">${row.femaleExerciseDuration}</Data></Cell>
-        <Cell ss:StyleID="${row.femaleExerciseStatus === 'complete' ? 'Complete' : row.femaleExerciseStatus === 'partial' ? 'Partial' : row.femaleExerciseStatus === 'missed' ? 'Missed' : 'Pending'}"><Data ss:Type="String">${row.femaleExerciseStatus.toUpperCase()}</Data></Cell>
-        <Cell ss:StyleID="${row.maleDietStatus === 'complete' ? 'Complete' : row.maleDietStatus === 'partial' ? 'Partial' : row.maleDietStatus === 'missed' ? 'Missed' : 'Pending'}"><Data ss:Type="String">${row.maleDietStatus.toUpperCase()}</Data></Cell>
-        <Cell ss:StyleID="${row.femaleDietStatus === 'complete' ? 'Complete' : row.femaleDietStatus === 'partial' ? 'Partial' : row.femaleDietStatus === 'missed' ? 'Missed' : 'Pending'}"><Data ss:Type="String">${row.femaleDietStatus.toUpperCase()}</Data></Cell>
-        <Cell ss:StyleID="${row.coupleWalkingStatus === 'complete' ? 'Complete' : row.coupleWalkingStatus === 'partial' ? 'Partial' : row.coupleWalkingStatus === 'missed' ? 'Missed' : 'Pending'}"><Data ss:Type="String">${row.coupleWalkingStatus.toUpperCase()}</Data></Cell>
-      </Row>`).join('')}
+      ${activityRows.join('')}
     </Table>
   </Worksheet>
-  
-  <!-- Contact Details Sheet -->
   <Worksheet ss:Name="Contact Details">
     <Table ss:DefaultColumnWidth="120" ss:DefaultRowHeight="24">
-      <Column ss:Width="100"/>
-      <Column ss:Width="150"/>
-      <Column ss:Width="200"/>
-      <Column ss:Width="130"/>
-      <Column ss:Width="150"/>
-      <Column ss:Width="200"/>
-      <Column ss:Width="130"/>
-      <Column ss:Width="100"/>
-      
-      <!-- Title Row -->
-      <Row ss:Height="30">
-        <Cell ss:StyleID="Title" ss:MergeAcross="7"><Data ss:Type="String">COUPLE CONTACT DETAILS</Data></Cell>
-      </Row>
+      <Column ss:Width="100"/><Column ss:Width="150"/><Column ss:Width="200"/><Column ss:Width="130"/><Column ss:Width="150"/><Column ss:Width="200"/><Column ss:Width="130"/><Column ss:Width="100"/>
+      <Row ss:Height="30"><Cell ss:StyleID="Title" ss:MergeAcross="7"><Data ss:Type="String">COUPLE CONTACT DETAILS</Data></Cell></Row>
       <Row/>
-      
-      <!-- Header Row -->
       <Row ss:StyleID="Header" ss:Height="32">
         <Cell><Data ss:Type="String">Couple ID</Data></Cell>
         <Cell><Data ss:Type="String">Male Name</Data></Cell>
@@ -1247,103 +1065,21 @@ export default function AdminMonitoringScreen() {
         <Cell><Data ss:Type="String">Female Phone</Data></Cell>
         <Cell><Data ss:Type="String">Enrolled</Data></Cell>
       </Row>
-      
-      ${data.map(row => `
-      <Row>
-        <Cell ss:StyleID="CellBold"><Data ss:Type="String">${row.coupleId}</Data></Cell>
-        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.maleName}</Data></Cell>
-        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.maleEmail}</Data></Cell>
-        <Cell ss:StyleID="Cell"><Data ss:Type="String">${row.malePhone}</Data></Cell>
-        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.femaleName}</Data></Cell>
-        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.femaleEmail}</Data></Cell>
-        <Cell ss:StyleID="Cell"><Data ss:Type="String">${row.femalePhone}</Data></Cell>
-        <Cell ss:StyleID="Cell"><Data ss:Type="String">${row.enrollmentDate}</Data></Cell>
-      </Row>`).join('')}
+      ${contactRows.join('')}
     </Table>
   </Worksheet>
-  
-  <!-- Weight Tracking Sheet -->
-  <Worksheet ss:Name="Weight Tracking">
-    <Table ss:DefaultColumnWidth="100" ss:DefaultRowHeight="24">
-      <Column ss:Width="100"/>
-      <Column ss:Width="150"/>
-      <Column ss:Width="150"/>
-      <Column ss:Width="120"/>
-      <Column ss:Width="120"/>
-      <Column ss:Width="120"/>
-      <Column ss:Width="120"/>
-      
-      <!-- Title Row -->
-      <Row ss:Height="30">
-        <Cell ss:StyleID="Title" ss:MergeAcross="6"><Data ss:Type="String">WEIGHT TRACKING DATA</Data></Cell>
-      </Row>
-      <Row/>
-      
-      <!-- Header Row -->
-      <Row ss:StyleID="Header" ss:Height="32">
-        <Cell><Data ss:Type="String">Couple ID</Data></Cell>
-        <Cell><Data ss:Type="String">Male Name</Data></Cell>
-        <Cell><Data ss:Type="String">Female Name</Data></Cell>
-        <Cell><Data ss:Type="String">Male Weight (kg)</Data></Cell>
-        <Cell><Data ss:Type="String">Male Status</Data></Cell>
-        <Cell><Data ss:Type="String">Female Weight (kg)</Data></Cell>
-        <Cell><Data ss:Type="String">Female Status</Data></Cell>
-      </Row>
-      
-      ${data.map(row => `
-      <Row>
-        <Cell ss:StyleID="CellBold"><Data ss:Type="String">${row.coupleId}</Data></Cell>
-        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.maleName}</Data></Cell>
-        <Cell ss:StyleID="CellLeft"><Data ss:Type="String">${row.femaleName}</Data></Cell>
-        <Cell ss:StyleID="Number"><Data ss:Type="${row.maleWeight !== 'N/A' ? 'Number' : 'String'}">${row.maleWeight !== 'N/A' ? row.maleWeight : '-'}</Data></Cell>
-        <Cell ss:StyleID="${row.maleWeightStatus === 'complete' ? 'Complete' : row.maleWeightStatus === 'partial' ? 'Partial' : row.maleWeightStatus === 'missed' ? 'Missed' : 'Pending'}"><Data ss:Type="String">${row.maleWeightStatus.toUpperCase()}</Data></Cell>
-        <Cell ss:StyleID="Number"><Data ss:Type="${row.femaleWeight !== 'N/A' ? 'Number' : 'String'}">${row.femaleWeight !== 'N/A' ? row.femaleWeight : '-'}</Data></Cell>
-        <Cell ss:StyleID="${row.femaleWeightStatus === 'complete' ? 'Complete' : row.femaleWeightStatus === 'partial' ? 'Partial' : row.femaleWeightStatus === 'missed' ? 'Missed' : 'Pending'}"><Data ss:Type="String">${row.femaleWeightStatus.toUpperCase()}</Data></Cell>
-      </Row>`).join('')}
-    </Table>
-  </Worksheet>
-  
-  <!-- Summary Sheet -->
   <Worksheet ss:Name="Summary">
     <Table ss:DefaultColumnWidth="150" ss:DefaultRowHeight="28">
-      <Column ss:Width="200"/>
-      <Column ss:Width="150"/>
-      
-      <!-- Title Row -->
-      <Row ss:Height="35">
-        <Cell ss:StyleID="Title" ss:MergeAcross="1"><Data ss:Type="String">REPORT SUMMARY</Data></Cell>
-      </Row>
+      <Column ss:Width="200"/><Column ss:Width="150"/>
+      <Row ss:Height="35"><Cell ss:StyleID="Title" ss:MergeAcross="1"><Data ss:Type="String">REPORT SUMMARY</Data></Cell></Row>
       <Row/>
-      
-      <Row>
-        <Cell ss:StyleID="SubHeader"><Data ss:Type="String">Report Period</Data></Cell>
-        <Cell ss:StyleID="Cell"><Data ss:Type="String">${dateRange.start} to ${dateRange.end}</Data></Cell>
-      </Row>
-      <Row>
-        <Cell ss:StyleID="SubHeader"><Data ss:Type="String">Total Couples</Data></Cell>
-        <Cell ss:StyleID="Number"><Data ss:Type="Number">${data.length}</Data></Cell>
-      </Row>
-      <Row>
-        <Cell ss:StyleID="SubHeader"><Data ss:Type="String">Completed Activities</Data></Cell>
-        <Cell ss:StyleID="Complete"><Data ss:Type="Number">${stats.complete}</Data></Cell>
-      </Row>
-      <Row>
-        <Cell ss:StyleID="SubHeader"><Data ss:Type="String">Partial Activities</Data></Cell>
-        <Cell ss:StyleID="Partial"><Data ss:Type="Number">${stats.partial}</Data></Cell>
-      </Row>
-      <Row>
-        <Cell ss:StyleID="SubHeader"><Data ss:Type="String">Missed Activities</Data></Cell>
-        <Cell ss:StyleID="Missed"><Data ss:Type="Number">${stats.missed}</Data></Cell>
-      </Row>
-      <Row>
-        <Cell ss:StyleID="SubHeader"><Data ss:Type="String">Compliance Rate</Data></Cell>
-        <Cell ss:StyleID="Cell"><Data ss:Type="String">${stats.total > 0 ? Math.round((stats.complete / stats.total) * 100) : 0}%</Data></Cell>
-      </Row>
-      <Row/>
-      <Row>
-        <Cell ss:StyleID="SubHeader"><Data ss:Type="String">Generated On</Data></Cell>
-        <Cell ss:StyleID="Cell"><Data ss:Type="String">${new Date().toLocaleString()}</Data></Cell>
-      </Row>
+      <Row><Cell ss:StyleID="SubHeader"><Data ss:Type="String">Report Period</Data></Cell><Cell ss:StyleID="Cell"><Data ss:Type="String">${dateRange.start} to ${dateRange.end}</Data></Cell></Row>
+      <Row><Cell ss:StyleID="SubHeader"><Data ss:Type="String">Total Couples</Data></Cell><Cell ss:StyleID="Number"><Data ss:Type="Number">${data.length}</Data></Cell></Row>
+      <Row><Cell ss:StyleID="SubHeader"><Data ss:Type="String">Completed Activities</Data></Cell><Cell ss:StyleID="Complete"><Data ss:Type="Number">${stats.complete}</Data></Cell></Row>
+      <Row><Cell ss:StyleID="SubHeader"><Data ss:Type="String">Partial Activities</Data></Cell><Cell ss:StyleID="Partial"><Data ss:Type="Number">${stats.partial}</Data></Cell></Row>
+      <Row><Cell ss:StyleID="SubHeader"><Data ss:Type="String">Missed Activities</Data></Cell><Cell ss:StyleID="Missed"><Data ss:Type="Number">${stats.missed}</Data></Cell></Row>
+      <Row><Cell ss:StyleID="SubHeader"><Data ss:Type="String">Compliance Rate</Data></Cell><Cell ss:StyleID="Cell"><Data ss:Type="String">${stats.total > 0 ? Math.round((stats.complete / stats.total) * 100) : 0}%</Data></Cell></Row>
+      <Row/><Row><Cell ss:StyleID="SubHeader"><Data ss:Type="String">Generated On</Data></Cell><Cell ss:StyleID="Cell"><Data ss:Type="String">${new Date().toLocaleString()}</Data></Cell></Row>
     </Table>
   </Worksheet>
 </Workbook>`;
@@ -1358,6 +1094,7 @@ export default function AdminMonitoringScreen() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url); // Clean up
       } else {
         const fileName = `fit_for_baby_report_${dateRange.start}_to_${dateRange.end}.xls`;
         const fileUri = FileSystem.documentDirectory + fileName;
@@ -1369,7 +1106,7 @@ export default function AdminMonitoringScreen() {
       Alert.alert('Success', 'Excel report exported successfully!');
     } catch (error) {
       console.error('Export error:', error);
-      Alert.alert('Error', 'Failed to export Excel report');
+      Alert.alert('Error', 'Failed to export Excel report. Please try a smaller date range.');
     } finally {
       setIsExporting(false);
     }

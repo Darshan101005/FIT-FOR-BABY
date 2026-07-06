@@ -4,18 +4,18 @@ import { coupleService, doctorVisitService, formatDateString, nursingVisitServic
 import { Couple, DoctorVisit, NursingDepartmentVisit } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -150,17 +150,24 @@ export default function AdminAppointmentsScreen() {
       const allCouples = await coupleService.getAll();
       setCouples(allCouples);
 
-      // Load all doctor visits from all couples
-      const allDoctorVisits: DoctorVisit[] = [];
-      const allNursingVisits: NursingDepartmentVisit[] = [];
+      // Load all appointments in parallel batches
+      const doctorVisitsPromises: Promise<DoctorVisit[]>[] = [];
+      const nursingVisitsPromises: Promise<NursingDepartmentVisit[]>[] = [];
       
-      for (const couple of allCouples) {
-        const dv = await doctorVisitService.getAllForCouple(couple.coupleId);
-        allDoctorVisits.push(...dv);
-        
-        const nv = await nursingVisitService.getAll(couple.coupleId);
-        allNursingVisits.push(...nv);
-      }
+      allCouples.forEach((couple) => {
+        doctorVisitsPromises.push(doctorVisitService.getAllForCouple(couple.coupleId));
+        nursingVisitsPromises.push(nursingVisitService.getAll(couple.coupleId));
+      });
+
+      // Execute all promises in parallel
+      const [allDoctorVisitsArrays, allNursingVisitsArrays] = await Promise.all([
+        Promise.all(doctorVisitsPromises),
+        Promise.all(nursingVisitsPromises),
+      ]);
+
+      // Flatten arrays
+      const allDoctorVisits = allDoctorVisitsArrays.flat();
+      const allNursingVisits = allNursingVisitsArrays.flat();
 
       setDoctorVisits(allDoctorVisits);
       setNursingVisits(allNursingVisits);

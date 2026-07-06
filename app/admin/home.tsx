@@ -7,17 +7,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Animated,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -176,6 +176,13 @@ export default function AdminHomeScreen() {
   });
   const [logsNotCompletedCouples, setLogsNotCompletedCouples] = useState<CoupleWithMissingLogs[]>([]);
 
+  // Add cache for dashboard data
+  const [cachedDashboardData, setCachedDashboardData] = useState<{
+    data: DashboardStats | null;
+    timestamp: number | null;
+  }>({ data: null, timestamp: null });
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+
   // Search state
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -205,86 +212,122 @@ export default function AdminHomeScreen() {
   };
 
   // Load dashboard data
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (forceRefresh = false) => {
     try {
+      // Check cache first
+      const now = Date.now();
+      if (!forceRefresh && cachedDashboardData.data && cachedDashboardData.timestamp) {
+        const cacheAge = now - cachedDashboardData.timestamp;
+        if (cacheAge < CACHE_DURATION) {
+          console.log('Using cached dashboard data');
+          setDashboardStats(cachedDashboardData.data);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       setIsLoading(true);
       const today = formatDate(new Date());
 
-      // Fetch all couples
+      // Fetch all couples - this is needed for accurate counts
       const couples = await coupleService.getAll() as Couple[];
       const totalCouples = couples.length;
       const totalUsers = totalCouples * 2; // Each couple has 2 users
-      const activeCouples = couples.filter(c => c.status === 'active').length;
+      const activeCouples = couples.filter(c => c.status === 'active');
+      const activeCouplesCount = activeCouples.length;
       const inactiveCouples = couples.filter(c => c.status === 'inactive').length;
 
       // Calculate compliance for today
       let stepsLogged = 0;
       let dietLogged = 0;
       let exerciseLogged = 0;
-      const totalChecks = activeCouples * 2; // Check both male and female for each active couple
+      const totalChecks = activeCouplesCount * 2; // Check both male and female for each active couple
 
       const couplesWithMissingLogs: CoupleWithMissingLogs[] = [];
 
-      // Check logs for each active couple
-      for (const couple of couples.filter(c => c.status === 'active')) {
-        let coupleMissingLogs: string[] = [];
+      // Use Promise.all to batch check logs for ALL couples in parallel
+      const complianceChecks = await Promise.all(
+        activeCouples.map(async (couple) => {
+          let coupleMissingLogs: string[] = [];
+          let coupleStepsCount = 0;
+          let coupleDietCount = 0;
+          let coupleExerciseCount = 0;
 
-        // Check both male and female
-        for (const gender of ['male', 'female'] as const) {
-          try {
-            // Check steps
-            const steps = await coupleStepsService.getByDate(couple.coupleId, gender, today);
-            if (steps && steps.length > 0) {
-              stepsLogged++;
-            } else {
-              if (!coupleMissingLogs.includes('steps')) coupleMissingLogs.push('steps');
-            }
+          // Check both male and female in parallel
+          const genderChecks = await Promise.all(
+            ['male', 'female'].map(async (gender) => {
+              try {
+                // Check all three log types in parallel
+                const [steps, foodLogs, exerciseLogs] = await Promise.all([
+                  coupleStepsService.getByDate(couple.coupleId, gender as 'male' | 'female', today),
+                  coupleFoodLogService.getByDate(couple.coupleId, gender as 'male' | 'female', today),
+                  coupleExerciseService.getByDate(couple.coupleId, gender as 'male' | 'female', today),
+                ]);
 
-            // Check diet/food logs
-            const foodLogs = await coupleFoodLogService.getByDate(couple.coupleId, gender, today);
-            if (foodLogs && foodLogs.length > 0) {
-              dietLogged++;
-            } else {
-              if (!coupleMissingLogs.includes('diet')) coupleMissingLogs.push('diet');
-            }
+                return {
+                  hasSteps: steps && steps.length > 0,
+                  hasDiet: foodLogs && foodLogs.length > 0,
+                  hasExercise: exerciseLogs && exerciseLogs.length > 0,
+                };
+              } catch (error) {
+                console.error(`Error checking logs for ${couple.coupleId} ${gender}:`, error);
+                return { hasSteps: false, hasDiet: false, hasExercise: false };
+              }
+            })
+          );
 
-            // Check exercise (includes couple walking, high knees, etc.)
-            const exerciseLogs = await coupleExerciseService.getByDate(couple.coupleId, gender, today);
-            if (exerciseLogs && exerciseLogs.length > 0) {
-              exerciseLogged++;
-            } else {
-              if (!coupleMissingLogs.includes('exercise')) coupleMissingLogs.push('exercise');
-            }
-          } catch (error) {
-            console.error(`Error checking logs for ${couple.coupleId} ${gender}:`, error);
-          }
-        }
+          // Aggregate results
+          genderChecks.forEach(check => {
+            if (check.hasSteps) coupleStepsCount++;
+            if (check.hasDiet) coupleDietCount++;
+            if (check.hasExercise) coupleExerciseCount++;
+          });
 
-        // Add to missing logs list if any logs are missing (only track steps, diet, exercise)
-        const trackableLogs = coupleMissingLogs.filter(log => ['steps', 'diet', 'exercise'].includes(log));
+          // Track missing logs
+          if (coupleStepsCount === 0) coupleMissingLogs.push('steps');
+          if (coupleDietCount === 0) coupleMissingLogs.push('diet');
+          if (coupleExerciseCount === 0) coupleMissingLogs.push('exercise');
+
+          return {
+            couple,
+            stepsCount: coupleStepsCount,
+            dietCount: coupleDietCount,
+            exerciseCount: coupleExerciseCount,
+            missingLogs: coupleMissingLogs,
+          };
+        })
+      );
+
+      // Aggregate all results
+      complianceChecks.forEach(check => {
+        stepsLogged += check.stepsCount;
+        dietLogged += check.dietCount;
+        exerciseLogged += check.exerciseCount;
+
+        // Add to missing logs list if any logs are missing
+        const trackableLogs = check.missingLogs.filter(log => ['steps', 'diet', 'exercise'].includes(log));
         if (trackableLogs.length > 0) {
           const reasonMap: Record<string, string> = {
             'steps': 'Steps',
             'diet': 'Food',
             'exercise': 'Exercise',
           };
-          // Create a combined reason showing all missing items
           const missingReasons = trackableLogs.map(log => reasonMap[log]).filter(Boolean);
           const reason = missingReasons.length === 1
             ? `Missing ${missingReasons[0].toLowerCase()}`
             : `Missing ${missingReasons.length} logs`;
 
           couplesWithMissingLogs.push({
-            id: couple.coupleId,
-            coupleId: couple.coupleId,
-            maleName: couple.male?.name || 'N/A',
-            femaleName: couple.female?.name || 'N/A',
+            id: check.couple.coupleId,
+            coupleId: check.couple.coupleId,
+            maleName: check.couple.male?.name || 'N/A',
+            femaleName: check.couple.female?.name || 'N/A',
             lastLog: 'Today',
             reason: reason,
             missingLogs: trackableLogs,
           });
         }
-      }
+      });
 
       // Calculate percentages
       const stepsCompliance = totalChecks > 0 ? Math.round((stepsLogged / totalChecks) * 100) : 0;
@@ -297,7 +340,7 @@ export default function AdminHomeScreen() {
       setDashboardStats({
         totalCouples,
         totalUsers,
-        activeCouples,
+        activeCouples: activeCouplesCount,
         inactiveCouples,
         todayCompliance,
         logsNotCompletedCount: couplesWithMissingLogs.length,
@@ -308,6 +351,22 @@ export default function AdminHomeScreen() {
 
       // Set all couples with missing logs (no limit)
       setLogsNotCompletedCouples(couplesWithMissingLogs);
+
+      // Cache the dashboard stats
+      setCachedDashboardData({
+        data: {
+          totalCouples,
+          totalUsers,
+          activeCouples: activeCouplesCount,
+          inactiveCouples,
+          todayCompliance,
+          logsNotCompletedCount: couplesWithMissingLogs.length,
+          stepsCompliance,
+          dietCompliance,
+          exerciseCompliance,
+        },
+        timestamp: Date.now(),
+      });
 
     } catch (error) {
       console.error('Error loading dashboard data:', error);
