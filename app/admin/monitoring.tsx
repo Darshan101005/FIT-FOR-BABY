@@ -141,6 +141,10 @@ export default function AdminMonitoringScreen() {
 
   // Load couples data from Firestore
   useEffect(() => {
+    // Show the spinner immediately whenever the date changes (before the async
+    // Firestore snapshot fires) so admins never see stale/zero values first.
+    setIsLoading(true);
+
     const unsubscribe = coupleService.subscribe((couplesData) => {
       setCouples(couplesData);
 

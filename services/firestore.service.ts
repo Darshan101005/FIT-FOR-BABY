@@ -3,26 +3,26 @@
 // ============================================
 
 import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
-import { ActivityAction, ActivityCategory, ActivityLog, ActivityLogFilter, ActivityLogMetadata, ActivityType, Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DeviceStatus, DoctorVisit, DoctorVisitStatus, ExerciseLog, Feedback, FeedbackCategory, FeedbackStatus, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, UserDevice, UserRole, WeightLog } from '@/types/firebase.types';
+import { ActivityAction, ActivityCategory, ActivityLog, ActivityLogFilter, ActivityLogMetadata, ActivityType, Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, CustomQuestion, DeviceStatus, DoctorVisit, DoctorVisitStatus, ExerciseLog, Feedback, FeedbackCategory, FeedbackStatus, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireCustomization, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, UserDevice, UserRole, WeightLog } from '@/types/firebase.types';
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    deleteField,
-    doc,
-    getDoc,
-    getDocs,
-    increment,
-    limit,
-    onSnapshot,
-    orderBy,
-    query,
-    setDoc,
-    Timestamp,
-    Unsubscribe,
-    updateDoc,
-    where,
-    writeBatch
+  addDoc,
+  collection,
+  deleteDoc,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  increment,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  Timestamp,
+  Unsubscribe,
+  updateDoc,
+  where,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -1996,6 +1996,18 @@ export const coupleStepsService = {
     }
   },
 
+  // Update a step entry (e.g. correct the count)
+  async update(coupleId: string, stepId: string, data: { stepCount: number }): Promise<void> {
+    try {
+      const stepRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'steps', stepId);
+      await updateDoc(stepRef, { stepCount: data.stepCount, updatedAt: now() });
+      silentLog('coupleSteps', 'update', stepId, `Updated step entry to ${data.stepCount}`, undefined, coupleId);
+    } catch (error) {
+      console.error('Error updating step entry:', error);
+      throw error;
+    }
+  },
+
   // Subscribe to today's steps (real-time)
   subscribeToday(coupleId: string, gender: 'male' | 'female', callback: (entries: CoupleStepEntry[]) => void): Unsubscribe {
     try {
@@ -2194,6 +2206,28 @@ export const coupleExerciseService = {
       throw error;
     }
   },
+
+  // Update an exercise log
+  async update(coupleId: string, logId: string, data: Partial<{
+    exerciseType: string;
+    exerciseName: string;
+    nameTamil: string;
+    duration: number;
+    intensity: 'light' | 'moderate' | 'vigorous';
+    caloriesPerMinute: number;
+    caloriesBurned: number;
+    steps?: number;
+    partnerParticipated: boolean;
+  }>): Promise<void> {
+    try {
+      const logRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'exerciseLogs', logId);
+      await updateDoc(logRef, { ...data, updatedAt: now() });
+      silentLog('coupleExerciseLogs', 'update', logId, `Updated exercise log`, undefined, coupleId);
+    } catch (error) {
+      console.error('Error updating exercise log:', error);
+      throw error;
+    }
+  },
 };
 
 // ============================================
@@ -2362,6 +2396,27 @@ export const coupleFoodLogService = {
       silentLog('coupleFoodLogs', 'delete', logId, `Deleted food log`, undefined, coupleId);
     } catch (error) {
       console.error('Error deleting food log:', error);
+      throw error;
+    }
+  },
+
+  // Update a food log (meal type, foods, totals)
+  async update(coupleId: string, logId: string, data: Partial<{
+    mealType: string;
+    mealLabel: string;
+    foods: CoupleFoodLogItem[];
+    totalCalories: number;
+    totalProtein: number;
+    totalCarbs: number;
+    totalFat: number;
+    totalGrams: number;
+  }>): Promise<void> {
+    try {
+      const logRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'foodLogs', logId);
+      await updateDoc(logRef, { ...data, updatedAt: now() });
+      silentLog('coupleFoodLogs', 'update', logId, `Updated food log`, undefined, coupleId);
+    } catch (error) {
+      console.error('Error updating food log:', error);
       throw error;
     }
   },
@@ -2769,6 +2824,8 @@ const DEFAULT_GLOBAL_SETTINGS: Omit<GlobalSettings, 'updatedAt'> = {
       reminderEnabled: true,
     },
   },
+  // Manual data entry tool is ON by default for all admins.
+  manualDataEntryEnabled: true,
 };
 
 export const globalSettingsService = {
@@ -2871,6 +2928,76 @@ export const globalSettingsService = {
           ...DEFAULT_GLOBAL_SETTINGS,
           updatedAt: now(),
         } as GlobalSettings);
+      }
+    );
+  },
+};
+
+// ============================================
+// QUESTIONNAIRE CUSTOMIZATION SERVICE (Admin managed)
+// Path: /settings/questionnaireCustom
+// Additive layer: custom questions + disabled question ids.
+// ============================================
+
+const EMPTY_CUSTOMIZATION: QuestionnaireCustomization = {
+  customQuestions: [],
+  disabledQuestions: [],
+  editedQuestions: {},
+};
+
+export const questionnaireCustomizationService = {
+  async get(): Promise<QuestionnaireCustomization> {
+    try {
+      const ref = doc(db, COLLECTIONS.SETTINGS, 'questionnaireCustom');
+      const snapshot = await getDoc(ref);
+      if (snapshot.exists()) {
+        const data = snapshot.data() as QuestionnaireCustomization;
+        return {
+          customQuestions: Array.isArray(data.customQuestions) ? data.customQuestions : [],
+          disabledQuestions: Array.isArray(data.disabledQuestions) ? data.disabledQuestions : [],
+          editedQuestions: data.editedQuestions && typeof data.editedQuestions === 'object' ? data.editedQuestions : {},
+          updatedAt: data.updatedAt,
+          updatedBy: data.updatedBy,
+        };
+      }
+      return { ...EMPTY_CUSTOMIZATION };
+    } catch (error) {
+      console.error('Error getting questionnaire customization:', error);
+      return { ...EMPTY_CUSTOMIZATION };
+    }
+  },
+
+  // Overwrite the whole customization document
+  async save(data: { customQuestions: CustomQuestion[]; disabledQuestions: string[]; editedQuestions?: Record<string, any> }, adminId?: string): Promise<void> {
+    const ref = doc(db, COLLECTIONS.SETTINGS, 'questionnaireCustom');
+    await setDoc(ref, {
+      customQuestions: data.customQuestions,
+      disabledQuestions: data.disabledQuestions,
+      editedQuestions: data.editedQuestions || {},
+      updatedAt: now(),
+      ...(adminId ? { updatedBy: adminId } : {}),
+    }, { merge: true });
+    silentLog('questionnaireCustom', 'update', 'questionnaireCustom', 'Updated questionnaire customization', undefined, undefined, { customCount: data.customQuestions.length, disabledCount: data.disabledQuestions.length });
+  },
+
+  subscribe(callback: (c: QuestionnaireCustomization) => void): Unsubscribe {
+    const ref = doc(db, COLLECTIONS.SETTINGS, 'questionnaireCustom');
+    return onSnapshot(ref,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data() as QuestionnaireCustomization;
+          callback({
+            customQuestions: Array.isArray(data.customQuestions) ? data.customQuestions : [],
+            disabledQuestions: Array.isArray(data.disabledQuestions) ? data.disabledQuestions : [],
+            editedQuestions: data.editedQuestions && typeof data.editedQuestions === 'object' ? data.editedQuestions : {},
+          });
+        } else {
+          callback({ ...EMPTY_CUSTOMIZATION });
+        }
+      },
+      (error) => {
+        console.error('Questionnaire customization subscription error:', error);
+        callback({ ...EMPTY_CUSTOMIZATION });
       }
     );
   },

@@ -6,13 +6,76 @@
 import questionnaireJson from '@/assets/questions/questionnaire.json';
 import {
     ParsedQuestionnaire,
+    QuestionnaireCustomization,
     QuestionnaireLanguage,
     QuestionnairePart,
     QuestionnairePartProgress,
     QuestionnaireQuestion,
     QuestionnaireSection,
-    QuestionnaireSectionProgress,
+    QuestionnaireSectionProgress
 } from '@/types/firebase.types';
+
+// ============================================
+// ADMIN CUSTOMIZATION CACHE (additive layer)
+// Populated at runtime from Firestore. When empty, the questionnaire behaves
+// exactly as the base questionnaire.json (fully backward compatible).
+// ============================================
+export const CUSTOM_PART_ID = 'part_custom_admin';
+export const CUSTOM_SECTION_ID = 'section_custom_admin';
+
+let _customization: QuestionnaireCustomization = { customQuestions: [], disabledQuestions: [], editedQuestions: {} };
+
+/** Set the current customization (called after fetching from Firestore). */
+export const setQuestionnaireCustomization = (c: QuestionnaireCustomization | null | undefined) => {
+  _customization = {
+    customQuestions: Array.isArray(c?.customQuestions) ? c!.customQuestions : [],
+    disabledQuestions: Array.isArray(c?.disabledQuestions) ? c!.disabledQuestions : [],
+    editedQuestions: c?.editedQuestions && typeof c.editedQuestions === 'object' ? c.editedQuestions : {},
+  };
+};
+
+/** Get the current customization cache. */
+export const getQuestionnaireCustomization = (): QuestionnaireCustomization => _customization;
+
+/**
+ * List all BASE questions (from questionnaire.json) for a gender, ignoring
+ * customization. Used by the admin management UI to show/disable existing
+ * questions. Returns stable question IDs.
+ */
+export const listBaseQuestions = (
+  gender: 'male' | 'female'
+): Array<{ questionId: string; number: string; question: string; questionTamil?: string; type: string; options?: string[]; optionsTamil?: string[]; partId: string; sectionId: string; partTitle: string; sectionTitle: string }> => {
+  const data = questionnaireJson as any;
+  const genderKey = gender === 'male' ? 'men' : 'women';
+  const enData = data['english']?.[genderKey] || {};
+  const taData = data['tamil']?.[genderKey] || {};
+  const result: Array<any> = [];
+
+  Object.entries(enData).forEach(([partId, partData]: [string, any]) => {
+    Object.entries(partData).forEach(([sectionId, questions]: [string, any]) => {
+      (questions as any[]).forEach((q) => {
+        // Find matching Tamil question by number within the same part/section
+        const taSection = taData?.[partId]?.[sectionId] as any[] | undefined;
+        const taQ = Array.isArray(taSection) ? taSection.find((t) => t.number === q.number) : undefined;
+        result.push({
+          questionId: generateQuestionId(partId, sectionId, q.number),
+          number: q.number,
+          question: q.question,
+          questionTamil: taQ?.question,
+          type: q.type,
+          options: q.options,
+          optionsTamil: taQ?.options,
+          partId,
+          sectionId,
+          partTitle: getPartTitle(partId, 'english'),
+          sectionTitle: getSectionTitle(sectionId, 'english'),
+        });
+      });
+    });
+  });
+
+  return result;
+};
 
 // Human-readable titles for parts and sections
 const PART_TITLES: Record<string, { en: string; ta: string }> = {
@@ -31,6 +94,16 @@ const SECTION_TITLES: Record<string, { en: string; ta: string }> = {
     en: 'Clinical Data',
     ta: 'மருத்துவ தகவல்',
   },
+  [CUSTOM_SECTION_ID]: {
+    en: 'Additional Questions',
+    ta: 'கூடுதல் கேள்விகள்',
+  },
+};
+
+// Register custom part title
+PART_TITLES[CUSTOM_PART_ID] = {
+  en: 'Additional Questions',
+  ta: 'கூடுதல் கேள்விகள்',
 };
 
 /**
@@ -108,11 +181,71 @@ export const parseQuestionnaire = (
     });
   });
 
+  // ---- Apply admin customization (additive layer) ----
+  const genderKeyShort: 'men' | 'women' = gender === 'male' ? 'men' : 'women';
+  const isTamil = language === 'tamil';
+  const disabled = new Set(_customization.disabledQuestions || []);
+  const edits = _customization.editedQuestions || {};
+
+  // 1) Remove disabled questions + apply edits to base sections
+  parts.forEach((part) => {
+    part.sections.forEach((section) => {
+      section.questions = section.questions
+        .filter((q) => !disabled.has(generateQuestionId(part.id, section.id, q.number)))
+        .map((q) => {
+          const edit = edits[generateQuestionId(part.id, section.id, q.number)];
+          if (!edit) return q;
+          // Keep each language pure: an English edit only affects the English
+          // view; a Tamil edit only affects the Tamil view. Untouched language
+          // keeps its original base text/options.
+          const editedText = isTamil ? edit.questionTamil : edit.question;
+          const editedOptions = isTamil ? edit.optionsTamil : edit.options;
+          return {
+            ...q,
+            question: editedText || q.question,
+            options: q.type === 'mcq' ? (editedOptions && editedOptions.length ? editedOptions : q.options) : q.options,
+          };
+        });
+    });
+  });
+
+  // 2) Append enabled custom questions for this gender as a dedicated part
+  const customForGender = (_customization.customQuestions || []).filter(
+    (cq) => cq.enabled && (cq.gender === 'both' || cq.gender === genderKeyShort)
+  );
+  if (customForGender.length > 0) {
+    const customQuestions: QuestionnaireQuestion[] = customForGender.map((cq) => ({
+      number: cq.id, // stable id used as the question number
+      question: (isTamil ? (cq.questionTamil || cq.question) : cq.question) || cq.question,
+      type: cq.type,
+      options: cq.type === 'mcq'
+        ? ((isTamil ? (cq.optionsTamil || cq.options) : cq.options) || [])
+        : undefined,
+    }));
+    parts.push({
+      id: CUSTOM_PART_ID,
+      title: getPartTitle(CUSTOM_PART_ID, language),
+      sections: [
+        {
+          id: CUSTOM_SECTION_ID,
+          title: getSectionTitle(CUSTOM_SECTION_ID, language),
+          questions: customQuestions,
+        },
+      ],
+    });
+  }
+
+  // Recompute total after customization
+  const finalTotal = parts.reduce(
+    (sum, p) => sum + p.sections.reduce((s, sec) => s + sec.questions.length, 0),
+    0
+  );
+
   return {
     language,
     gender: gender === 'male' ? 'men' : 'women',
     parts,
-    totalQuestions,
+    totalQuestions: finalTotal,
   };
 };
 

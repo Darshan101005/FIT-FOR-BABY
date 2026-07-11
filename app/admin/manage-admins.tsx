@@ -1,5 +1,5 @@
 import { registerWithEmail } from '@/services/firebase';
-import { adminService } from '@/services/firestore.service';
+import { adminService, globalSettingsService } from '@/services/firestore.service';
 import { Admin as FirebaseAdmin } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,17 +8,17 @@ import { useRouter } from 'expo-router';
 import { getAuth, updatePassword } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Alert,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -83,6 +83,50 @@ export default function ManageAdminsScreen() {
 
   // Current logged-in user info (fetched from AsyncStorage/Firestore)
   const [currentUser, setCurrentUser] = useState<Admin | null>(null);
+
+  // Manual Data Entry feature flag
+  const [manualEntrySaved, setManualEntrySaved] = useState(true); // committed value
+  const [manualEntryPending, setManualEntryPending] = useState(true); // toggle UI value
+  const [showFeatureModal, setShowFeatureModal] = useState(false);
+  const [featurePassword, setFeaturePassword] = useState('');
+  const [featurePasswordError, setFeaturePasswordError] = useState('');
+  const [savingFeature, setSavingFeature] = useState(false);
+
+  // Load the current feature flag
+  useEffect(() => {
+    const unsub = globalSettingsService.subscribe((settings) => {
+      const enabled = settings.manualDataEntryEnabled !== false;
+      setManualEntrySaved(enabled);
+      setManualEntryPending(enabled);
+    });
+    return () => unsub();
+  }, []);
+
+  // Confirm the feature toggle change (password verified)
+  const handleFeatureToggleConfirm = async () => {
+    setFeaturePasswordError('');
+    if (!currentUser || !currentUser.password) {
+      setFeaturePasswordError('Unable to verify your credentials. Please re-login.');
+      return;
+    }
+    if (featurePassword !== currentUser.password) {
+      setFeaturePasswordError('Incorrect password. Please try again.');
+      return;
+    }
+    setSavingFeature(true);
+    try {
+      await globalSettingsService.update({ manualDataEntryEnabled: manualEntryPending }, currentUser.uid);
+      setManualEntrySaved(manualEntryPending);
+      setShowFeatureModal(false);
+      setFeaturePassword('');
+      Alert.alert('Saved', `Manual Data Entry tool is now ${manualEntryPending ? 'ENABLED' : 'DISABLED'} for all admins.`);
+    } catch (e) {
+      console.error('Error updating feature flag:', e);
+      setFeaturePasswordError('Failed to save. Please try again.');
+    } finally {
+      setSavingFeature(false);
+    }
+  };
 
   useEffect(() => {
     checkSuperAdminAccess();
@@ -1035,6 +1079,38 @@ export default function ManageAdminsScreen() {
         <View style={[styles.content, !isMobile && styles.contentDesktop]}>
           {renderStats()}
 
+          {/* Manual Data Entry feature toggle */}
+          <View style={styles.featureCard}>
+            <View style={styles.featureCardLeft}>
+              <View style={styles.featureIconWrap}>
+                <Ionicons name="create-outline" size={22} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.featureTitle}>Manual Data Entry Tool</Text>
+                <Text style={styles.featureDesc}>
+                  When enabled, the "Manual Data Entry" option appears in the admin menu for entering
+                  backdated steps, food and exercise. Turn off to hide it completely.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.featureControls}>
+              <TouchableOpacity
+                style={[styles.featureToggle, manualEntrySaved && styles.featureToggleOn]}
+                onPress={() => {
+                  // Toggling directly asks for password confirmation.
+                  setManualEntryPending(!manualEntrySaved);
+                  setFeaturePassword('');
+                  setFeaturePasswordError('');
+                  setShowFeatureModal(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.featureToggleKnob, manualEntrySaved && styles.featureToggleKnobOn]} />
+              </TouchableOpacity>
+              <Text style={styles.featureToggleLabel}>{manualEntrySaved ? 'On' : 'Off'}</Text>
+            </View>
+          </View>
+
           <View style={styles.listContainer}>
             <Text style={styles.sectionTitle}>
               {filterStatus === 'all' ? 'All Admins' : `${filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)} Admins`}
@@ -1059,6 +1135,55 @@ export default function ManageAdminsScreen() {
       {renderDeleteModal()}
       {renderPauseModal()}
       {renderOwnerPasswordModal()}
+
+      {/* Feature toggle password confirmation modal */}
+      <Modal
+        visible={showFeatureModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => { setShowFeatureModal(false); setFeaturePassword(''); setFeaturePasswordError(''); }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.deleteModalContent, isMobile && styles.modalContentMobile]}>
+            <View style={[styles.deleteIconContainer, { backgroundColor: COLORS.primary + '15' }]}>
+              <Ionicons name="lock-closed" size={48} color={COLORS.primary} />
+            </View>
+            <Text style={styles.deleteModalTitle}>Confirm Change</Text>
+            <Text style={styles.deleteModalText}>
+              You are about to {manualEntryPending ? 'ENABLE' : 'DISABLE'} the Manual Data Entry tool for all admins.
+              Enter your password to confirm.
+            </Text>
+            <View style={styles.formGroup}>
+              <TextInput
+                style={[styles.formInput, { marginTop: 10, borderColor: featurePasswordError ? COLORS.error : COLORS.border }]}
+                placeholder="Enter your password"
+                placeholderTextColor={COLORS.textMuted}
+                value={featurePassword}
+                secureTextEntry
+                autoCapitalize="none"
+                onChangeText={(text) => { setFeaturePassword(text); if (featurePasswordError) setFeaturePasswordError(''); }}
+              />
+              {featurePasswordError ? <Text style={styles.passwordErrorText}>{featurePasswordError}</Text> : null}
+            </View>
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity
+                style={styles.deleteModalCancelButton}
+                onPress={() => { setShowFeatureModal(false); setFeaturePassword(''); setFeaturePasswordError(''); setManualEntryPending(manualEntrySaved); }}
+                disabled={savingFeature}
+              >
+                <Text style={styles.deleteModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteModalConfirmButton, { backgroundColor: COLORS.primary }, (savingFeature || !featurePassword) && { opacity: 0.6 }]}
+                onPress={handleFeatureToggleConfirm}
+                disabled={savingFeature || !featurePassword}
+              >
+                {savingFeature ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.deleteModalConfirmText}>Confirm</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1252,6 +1377,84 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+
+  // Feature toggle card
+  featureCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  featureCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    flex: 1,
+  },
+  featureIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  featureDesc: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  featureControls: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  featureToggle: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.border,
+    padding: 3,
+    justifyContent: 'center',
+  },
+  featureToggleOn: {
+    backgroundColor: COLORS.primary,
+  },
+  featureToggleKnob: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
+    alignSelf: 'flex-start',
+  },
+  featureToggleKnobOn: {
+    alignSelf: 'flex-end',
+  },
+  featureToggleLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  featureSaveBtn: {
+    marginTop: 4,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: COLORS.success,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // List

@@ -1,11 +1,12 @@
 import {
-  generateQuestionId,
-  getNextPosition,
-  getPreviousPosition,
-  getQuestionByPosition,
-  parseQuestionnaire
+    generateQuestionId,
+    getNextPosition,
+    getPreviousPosition,
+    getQuestionByPosition,
+    parseQuestionnaire,
+    setQuestionnaireCustomization
 } from '@/data/questionnaireParser';
-import { questionnaireService } from '@/services/firestore.service';
+import { questionnaireCustomizationService, questionnaireService } from '@/services/firestore.service';
 import { QuestionnaireProgress as FirestoreQuestionnaireProgress, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireQuestion } from '@/types/firebase.types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14,19 +15,19 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -127,6 +128,15 @@ export default function QuestionnaireScreen() {
   useEffect(() => {
     const loadUserData = async () => {
       try {
+        // Load admin questionnaire customization into the parser cache FIRST
+        // so custom/disabled questions are reflected before rendering.
+        try {
+          const customization = await questionnaireCustomizationService.get();
+          setQuestionnaireCustomization(customization);
+        } catch (e) {
+          console.error('Error loading questionnaire customization:', e);
+        }
+
         const storedCoupleId = await AsyncStorage.getItem('coupleId');
         const storedGender = await AsyncStorage.getItem('userGender');
         

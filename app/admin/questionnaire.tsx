@@ -154,6 +154,10 @@ export default function AdminQuestionnaireScreen() {
         <Text style={styles.headerTitle}>Questionnaire Management</Text>
         <Text style={styles.headerSubtitle}>View and manage user questionnaires</Text>
       </View>
+      <TouchableOpacity style={styles.manageButton} onPress={() => router.push('/admin/manage-questionnaire' as any)}>
+        <Ionicons name="create-outline" size={18} color="#fff" />
+        {!isMobile && <Text style={styles.manageButtonText}>Manage Questions</Text>}
+      </TouchableOpacity>
       <TouchableOpacity style={styles.refreshButton} onPress={loadResponses}>
         <Ionicons name="refresh" size={20} color={COLORS.primary} />
       </TouchableOpacity>
@@ -769,6 +773,21 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary + '15',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  manageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 14,
+    height: 40,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  manageButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   content: {
     flex: 1,

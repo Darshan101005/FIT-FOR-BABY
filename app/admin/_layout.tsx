@@ -4,21 +4,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Image,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Animated,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
-import { supportRequestService } from '../../services/firestore.service';
+import { globalSettingsService, supportRequestService } from '../../services/firestore.service';
 
 // Fit for Baby Color Palette
 const COLORS = {
@@ -84,6 +84,13 @@ const navItems: NavItem[] = [
     icon: 'analytics-outline',
     iconFamily: 'Ionicons',
     route: '/admin/monitoring',
+  },
+  {
+    id: 'data-entry',
+    label: 'Manual Data Entry',
+    icon: 'create-outline',
+    iconFamily: 'Ionicons',
+    route: '/admin/data-entry',
   },
   {
     id: 'questionnaire',
@@ -186,6 +193,21 @@ export default function AdminLayout() {
   const [adminRole, setAdminRole] = useState('admin');
   const [adminInitials, setAdminInitials] = useState('AD');
   const [requestedCallsCount, setRequestedCallsCount] = useState<number>(0);
+  // Manual Data Entry feature flag (default ON). Hidden when toggled off.
+  const [manualEntryEnabled, setManualEntryEnabled] = useState(true);
+
+  // Subscribe to the global manual-data-entry feature flag
+  useEffect(() => {
+    const unsub = globalSettingsService.subscribe((settings) => {
+      setManualEntryEnabled(settings.manualDataEntryEnabled !== false);
+    });
+    return () => unsub();
+  }, []);
+
+  // Nav items filtered by feature flags
+  const visibleNavItems = navItems.filter(item =>
+    item.id === 'data-entry' ? manualEntryEnabled : true
+  );
 
   // Auth protection - redirect if not authenticated or not an admin
   useEffect(() => {
@@ -346,7 +368,7 @@ export default function AdminLayout() {
       <ScrollView style={styles.navContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.navSection}>
           {!sidebarCollapsed && <Text style={styles.navSectionTitle}>MAIN MENU</Text>}
-          {navItems.map((item) => renderNavItem(item, sidebarCollapsed))}
+          {visibleNavItems.map((item) => renderNavItem(item, sidebarCollapsed))}
         </View>
       </ScrollView>
 
@@ -414,7 +436,7 @@ export default function AdminLayout() {
 
         {/* Drawer Navigation */}
         <ScrollView style={styles.drawerNav}>
-          {navItems.map((item) => renderNavItem(item, false))}
+          {visibleNavItems.map((item) => renderNavItem(item, false))}
         </ScrollView>
 
         {/* Drawer Footer */}
@@ -517,6 +539,8 @@ export default function AdminLayout() {
           <Stack.Screen name="questionnaire" />
           <Stack.Screen name="tasks" />
           <Stack.Screen name="monitoring" />
+          <Stack.Screen name="data-entry" />
+          <Stack.Screen name="manage-questionnaire" />
           <Stack.Screen name="communication" />
           <Stack.Screen name="user-dashboard" />
         </Stack>

@@ -367,7 +367,42 @@ export interface AdminPermissions {
 export type QuestionnaireLanguage = 'english' | 'tamil';
 
 // Question types from JSON
-export type QuestionnaireQuestionType = 'fillup' | 'mcq';
+// fillup = short answer, mcq = multiple choice, textfield = long answer
+export type QuestionnaireQuestionType = 'fillup' | 'mcq' | 'textfield';
+
+// ============================================
+// ADMIN QUESTIONNAIRE CUSTOMIZATION
+// Path: /settings/questionnaireCustom
+// Additive layer over the base questionnaire.json — lets admins add custom
+// questions and hide (disable) existing ones without touching the base file.
+// ============================================
+export interface CustomQuestion {
+  id: string;                 // stable unique id, also used as the question "number"
+  gender: 'men' | 'women' | 'both';
+  question: string;           // English
+  questionTamil?: string;     // Tamil
+  type: QuestionnaireQuestionType; // 'mcq' | 'fillup' | 'textfield'
+  options?: string[];         // English options (for mcq)
+  optionsTamil?: string[];    // Tamil options (for mcq)
+  enabled: boolean;
+  createdAt?: Timestamp;
+}
+
+// Override for an existing base question (edit English/Tamil text & options)
+export interface EditedQuestion {
+  question?: string;        // English override
+  questionTamil?: string;   // Tamil override
+  options?: string[];       // English options override
+  optionsTamil?: string[];  // Tamil options override
+}
+
+export interface QuestionnaireCustomization {
+  customQuestions: CustomQuestion[];
+  disabledQuestions: string[]; // questionIds (partId_sectionId_number) to hide
+  editedQuestions?: Record<string, EditedQuestion>; // overrides for base questions
+  updatedAt?: Timestamp;
+  updatedBy?: string;
+}
 
 // Question structure from JSON
 export interface QuestionnaireQuestion {
@@ -721,6 +756,11 @@ export interface GlobalSettings {
       reminderEnabled: boolean;
     };
   };
+
+  // Feature flags
+  // Controls visibility of the admin "Manual Data Entry" tool. Default: true.
+  // Can be toggled off (password-confirmed) to hide the tool from the admin panel.
+  manualDataEntryEnabled?: boolean;
   
   // Timestamps
   updatedAt: Timestamp;
