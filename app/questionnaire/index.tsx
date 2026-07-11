@@ -1,10 +1,10 @@
 import {
-    generateQuestionId,
-    getNextPosition,
-    getPreviousPosition,
-    getQuestionByPosition,
-    parseQuestionnaire,
-    setQuestionnaireCustomization
+  generateQuestionId,
+  getNextPosition,
+  getPreviousPosition,
+  getQuestionByPosition,
+  parseQuestionnaire,
+  setQuestionnaireCustomization
 } from '@/data/questionnaireParser';
 import { questionnaireCustomizationService, questionnaireService } from '@/services/firestore.service';
 import { QuestionnaireProgress as FirestoreQuestionnaireProgress, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireQuestion } from '@/types/firebase.types';
@@ -15,19 +15,19 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
@@ -54,6 +54,7 @@ export default function QuestionnaireScreen() {
   const [showLangSwitchModal, setShowLangSwitchModal] = useState(false);
   const [showLangConfirmModal, setShowLangConfirmModal] = useState(false);
   const [pendingLanguage, setPendingLanguage] = useState<QuestionnaireLanguage | null>(null);
+  const [customizationReady, setCustomizationReady] = useState(0); // bumps when admin customization loads
   
   // User data from AsyncStorage
   const [coupleId, setCoupleId] = useState<string>('');
@@ -126,20 +127,21 @@ export default function QuestionnaireScreen() {
 
   // Load user data from AsyncStorage on mount
   useEffect(() => {
+    // Load admin questionnaire customization into the parser cache in the
+    // BACKGROUND (non-blocking). It must never delay/hang the questionnaire.
+    questionnaireCustomizationService
+      .get()
+      .then((customization) => {
+        setQuestionnaireCustomization(customization);
+        setCustomizationReady((v) => v + 1); // force re-parse so custom questions show
+      })
+      .catch((e) => console.error('Error loading questionnaire customization:', e));
+
     const loadUserData = async () => {
       try {
-        // Load admin questionnaire customization into the parser cache FIRST
-        // so custom/disabled questions are reflected before rendering.
-        try {
-          const customization = await questionnaireCustomizationService.get();
-          setQuestionnaireCustomization(customization);
-        } catch (e) {
-          console.error('Error loading questionnaire customization:', e);
-        }
-
         const storedCoupleId = await AsyncStorage.getItem('coupleId');
         const storedGender = await AsyncStorage.getItem('userGender');
-        
+
         if (storedCoupleId) {
           setCoupleId(storedCoupleId);
         }
@@ -150,8 +152,13 @@ export default function QuestionnaireScreen() {
         console.error('Error loading user data from AsyncStorage:', error);
       }
     };
-    
+
     loadUserData();
+
+    // Failsafe: never let the screen spin forever. If loading hasn't finished
+    // in 15s (e.g. slow/unreachable network), show the UI so the user can act.
+    const failsafe = setTimeout(() => setIsLoading(false), 15000);
+    return () => clearTimeout(failsafe);
   }, []);
 
   // Load existing progress when coupleId and gender are available
@@ -212,7 +219,7 @@ export default function QuestionnaireScreen() {
       currentPosition.sectionIndex,
       currentPosition.questionIndex
     );
-  }, [selectedLanguage, gender, currentPosition]);
+  }, [selectedLanguage, gender, currentPosition, customizationReady]);
 
   // Calculate overall progress
   const progressStats = useMemo(() => {
@@ -227,7 +234,7 @@ export default function QuestionnaireScreen() {
       total,
       percent,
     };
-  }, [selectedLanguage, gender, answers]);
+  }, [selectedLanguage, gender, answers, customizationReady]);
 
   const sectionQuestions = useMemo(() => {
     if (!selectedLanguage) return [];
@@ -244,7 +251,7 @@ export default function QuestionnaireScreen() {
       sectionId: section.id,
       sectionTitle: section.title,
     }));
-  }, [selectedLanguage, gender, currentPosition]);
+  }, [selectedLanguage, gender, currentPosition, customizationReady]);
 
   useEffect(() => {
     if (viewMode !== 'scroll') return;
@@ -267,14 +274,14 @@ export default function QuestionnaireScreen() {
     setToast({ visible: true, message, type });
     Animated.spring(toastAnim, {
       toValue: 20,
-      useNativeDriver: true,
+      useNativeDriver: !isWeb,
     }).start();
 
     setTimeout(() => {
       Animated.timing(toastAnim, {
         toValue: -100,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: !isWeb,
       }).start(() => {
         setToast({ visible: false, message: '', type: '' });
       });
@@ -285,13 +292,13 @@ export default function QuestionnaireScreen() {
     Animated.timing(fadeAnim, {
       toValue: 0,
       duration: 150,
-      useNativeDriver: true,
+      useNativeDriver: !isWeb,
     }).start(() => {
       callback();
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 150,
-        useNativeDriver: true,
+        useNativeDriver: !isWeb,
       }).start();
     });
   };
