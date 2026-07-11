@@ -5,24 +5,24 @@
 import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
 import { ActivityAction, ActivityCategory, ActivityLog, ActivityLogFilter, ActivityLogMetadata, ActivityType, Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, DeviceStatus, DoctorVisit, DoctorVisitStatus, ExerciseLog, Feedback, FeedbackCategory, FeedbackStatus, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, UserDevice, UserRole, WeightLog } from '@/types/firebase.types';
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  deleteField,
-  doc,
-  getDoc,
-  getDocs,
-  increment,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  setDoc,
-  Timestamp,
-  Unsubscribe,
-  updateDoc,
-  where,
-  writeBatch
+    addDoc,
+    collection,
+    deleteDoc,
+    deleteField,
+    doc,
+    getDoc,
+    getDocs,
+    increment,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    setDoc,
+    Timestamp,
+    Unsubscribe,
+    updateDoc,
+    where,
+    writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -4648,7 +4648,7 @@ export const activityLogService = {
     category?: ActivityCategory;
     userId?: string;
     coupleId?: string;
-    userRole?: UserRole | 'admin' | 'superadmin' | 'unknown';
+    userRole?: UserRole | 'admin' | 'superadmin' | 'owner' | 'unknown';
     attemptedEmail?: string;
     attemptedPhone?: string;
     type: ActivityType;

@@ -7,28 +7,26 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useWindowDimensions,
-    View
+  ActivityIndicator,
+  Animated,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
 } from 'react-native';
 import {
-    calculateNutrition,
-    foodCategories,
-    foodDatabase,
-    FoodItemData,
-    getFoodsByMealTime,
-    mealTimes,
-    searchFoods,
-    searchFoodsByMealTime
+  calculateNutrition,
+  foodCategories,
+  foodDatabase,
+  FoodItemData,
+  mealTimes,
+  searchFoods
 } from '../../data/foodDatabase';
 
 const isWeb = Platform.OS === 'web';
@@ -64,6 +62,19 @@ export default function LogFoodScreen() {
   const toastAnim = useRef(new Animated.Value(-100)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
   
+  // Custom food creation states
+  const [showCustomFoodModal, setShowCustomFoodModal] = useState(false);
+  const [customFoodName, setCustomFoodName] = useState('');
+  const [customFoodQuantity, setCustomFoodQuantity] = useState('');
+  const [customFoodProtein, setCustomFoodProtein] = useState('');
+  const [customFoodCarbs, setCustomFoodCarbs] = useState('');
+  const [customFoodGrams, setCustomFoodGrams] = useState('');
+  const [customFoodCalories, setCustomFoodCalories] = useState('');
+  
+  // Exit confirmation states
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [pendingExit, setPendingExit] = useState(false);
+  
   // Firestore integration states
   const [isSaving, setIsSaving] = useState(false);
   const [coupleId, setCoupleId] = useState<string | null>(null);
@@ -86,6 +97,64 @@ export default function LogFoodScreen() {
     }, [])
   );
 
+  // Capitalize first letter of each word intelligently
+  const capitalizeWords = (text: string): string => {
+    return text
+      .split(' ')
+      .map(word => {
+        if (word.length === 0) return word;
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(' ');
+  };
+
+  // Handle custom food creation
+  const handleCreateCustomFood = () => {
+    if (!customFoodName.trim()) {
+      showToast('Please enter food name', 'error');
+      return;
+    }
+
+    const capitalizedName = capitalizeWords(customFoodName.trim());
+    
+    // Create custom food item
+    const customFood: FoodItemData = {
+      id: `custom-${Date.now()}`,
+      name: capitalizedName,
+      nameTamil: capitalizedName,
+      category: 'others',
+      subCategory: 'Custom',
+      caloriesPer100g: customFoodCalories ? parseFloat(customFoodCalories) : 100,
+      proteinPer100g: customFoodProtein ? parseFloat(customFoodProtein) : 0,
+      carbsPer100g: customFoodCarbs ? parseFloat(customFoodCarbs) : 0,
+      fatPer100g: 0,
+      defaultServingSize: customFoodGrams ? parseFloat(customFoodGrams) : 100,
+      servingUnit: 'grams',
+      commonServings: [
+        { label: `${customFoodGrams || '100'}g`, grams: parseFloat(customFoodGrams || '100') },
+        { label: 'Custom', grams: 0 },
+      ],
+      isCustom: true,
+    };
+
+    // Select this custom food and move to quantity selection
+    setCurrentFood(customFood);
+    setCurrentServingIndex(0);
+    setCurrentQuantity(customFoodQuantity ? parseFloat(customFoodQuantity) : 1);
+    setStep('quantity');
+    setShowCustomFoodModal(false);
+    
+    // Reset custom food form
+    setCustomFoodName('');
+    setCustomFoodQuantity('');
+    setCustomFoodProtein('');
+    setCustomFoodCarbs('');
+    setCustomFoodGrams('');
+    setCustomFoodCalories('');
+    
+    showToast(`Custom food "${capitalizedName}" added!`, 'success');
+  };
+
   const showToast = (message: string, type: 'error' | 'success') => {
     setToast({ visible: true, message, type });
     Animated.spring(toastAnim, {
@@ -101,25 +170,13 @@ export default function LogFoodScreen() {
     }, 3000);
   };
 
-  // Debug effect to track filter changes
-  useEffect(() => {
-    console.log('====== FILTER STATE CHANGED ======');
-    console.log('Selected Meal Time:', selectedMealTime);
-    console.log('Selected Filter Category:', selectedFilterCategory);
-    console.log('Search Query:', searchQuery);
-  }, [selectedMealTime, selectedFilterCategory, searchQuery]);
-
-  // Filter foods by selected meal time and category
+  // Filter foods by selected meal time and category - GLOBALIZED (no mealTime restrictions)
   const filteredFoods = useMemo(() => {
     let foods: FoodItemData[] = [];
     
-    // First filter by meal time
-    if (searchQuery.trim() && selectedMealTime) {
-      foods = searchFoodsByMealTime(searchQuery, selectedMealTime);
-    } else if (searchQuery.trim()) {
+    // Search across ALL foods regardless of meal time (globalized)
+    if (searchQuery.trim()) {
       foods = searchFoods(searchQuery);
-    } else if (selectedMealTime) {
-      foods = getFoodsByMealTime(selectedMealTime);
     } else {
       foods = foodDatabase;
     }
@@ -136,33 +193,19 @@ export default function LogFoodScreen() {
     });
     foods = Array.from(uniqueFoodsMap.values());
     
-    console.log('Before category filter:', foods.length, 'foods');
-    console.log('Selected category:', selectedFilterCategory);
-    
     // Then filter by category if not "all"
     if (selectedFilterCategory !== 'all') {
-      foods = foods.filter(food => {
-        const matches = food.category === selectedFilterCategory;
-        if (!matches) {
-          console.log('Filtering out:', food.name, 'category:', food.category);
-        }
-        return matches;
-      });
+      foods = foods.filter(food => food.category === selectedFilterCategory);
     }
-    
-    console.log('After category filter:', foods.length, 'foods');
     
     return foods;
-  }, [searchQuery, selectedMealTime, selectedFilterCategory]);
+  }, [searchQuery, selectedFilterCategory]);
 
-  // Get unique categories from current meal time foods (for category tabs)
+  // Get unique categories from current meal time foods (for category tabs)  
   const availableCategories = useMemo(() => {
-    let foods: FoodItemData[] = [];
-    if (selectedMealTime) {
-      foods = getFoodsByMealTime(selectedMealTime);
-    } else {
-      foods = foodDatabase;
-    }
+    // Globalized - use all foods regardless of meal time
+    let foods: FoodItemData[] = foodDatabase;
+    
     // Remove custom entries and duplicates
     const uniqueFoodsMap = new Map<string, FoodItemData>();
     foods.filter(f => !f.isCustom).forEach(food => {
@@ -172,17 +215,13 @@ export default function LogFoodScreen() {
     });
     // Get unique categories from unique foods
     const categories = [...new Set(Array.from(uniqueFoodsMap.values()).map(f => f.category))] as FoodItemData['category'][];
-    console.log('====== AVAILABLE CATEGORIES ======');
-    console.log('Total foods:', Array.from(uniqueFoodsMap.values()).length);
-    console.log('Categories found:', categories);
-    console.log('Food categories array:', foodCategories.map(c => c.id));
     return categories;
-  }, [selectedMealTime]);
+  }, []); // No dependency on selectedMealTime - globalized
 
   const currentMealLabel = mealTimes.find(m => m.id === selectedMealTime)?.label || '';
 
   const totalNutrition = useMemo(() => {
-    return selectedFoods.reduce(
+    const result = selectedFoods.reduce(
       (acc, item) => {
         const serving = item.food.commonServings[item.servingIndex];
         const isCustomServing = serving.label === 'Custom';
@@ -220,6 +259,14 @@ export default function LogFoodScreen() {
       },
       { calories: 0, protein: 0, carbs: 0, fat: 0 }
     );
+    
+    // Round accumulated values to fix floating point precision issues
+    return {
+      calories: Math.round(result.calories),
+      protein: parseFloat(result.protein.toFixed(1)),
+      carbs: parseFloat(result.carbs.toFixed(1)),
+      fat: parseFloat(result.fat.toFixed(1)),
+    };
   }, [selectedFoods]);
 
   const handleSelectMealTime = (id: string) => {
@@ -341,8 +388,8 @@ export default function LogFoodScreen() {
         };
       });
 
-      // Calculate total grams
-      const totalGrams = selectedFoods.reduce((sum, sf) => {
+      // Calculate total grams and round to avoid floating point issues
+      const totalGrams = Math.round(selectedFoods.reduce((sum, sf) => {
         const serving = sf.food.commonServings[sf.servingIndex];
         const isCustomServing = serving.label === 'Custom';
         if (isCustomServing) {
@@ -350,7 +397,7 @@ export default function LogFoodScreen() {
         } else {
           return sum + (serving.grams * sf.quantity);
         }
-      }, 0);
+      }, 0));
 
       await coupleFoodLogService.add(coupleId, userGender, {
         mealType: selectedMealTime,
@@ -389,6 +436,11 @@ export default function LogFoodScreen() {
       setCurrentFood(null);
       setStep('food');
     } else if (step === 'food') {
+      // Check if there are unsaved items in cart
+      if (selectedFoods.length > 0) {
+        setShowExitModal(true);
+        return;
+      }
       setSelectedCategory(null);
       setSearchQuery('');
       setSelectedMealTime(null);
@@ -397,7 +449,43 @@ export default function LogFoodScreen() {
       setSelectedMealTime(null);
       setStep('meal');
     } else {
+      // Check if there are unsaved items in cart before going back completely
+      if (selectedFoods.length > 0) {
+        setShowExitModal(true);
+        setPendingExit(true);
+        return;
+      }
       router.back();
+    }
+  };
+
+  // Auto-save and exit
+  const handleAutoSaveAndExit = async () => {
+    if (selectedFoods.length > 0) {
+      await handleSaveLog();
+    }
+    setShowExitModal(false);
+    if (pendingExit) {
+      router.back();
+    } else {
+      setSelectedCategory(null);
+      setSearchQuery('');
+      setSelectedMealTime(null);
+      setStep('meal');
+    }
+  };
+
+  // Exit without saving
+  const handleExitWithoutSaving = () => {
+    setShowExitModal(false);
+    setSelectedFoods([]);
+    if (pendingExit) {
+      router.back();
+    } else {
+      setSelectedCategory(null);
+      setSearchQuery('');
+      setSelectedMealTime(null);
+      setStep('meal');
     }
   };
 
@@ -532,7 +620,6 @@ export default function LogFoodScreen() {
             selectedFilterCategory === 'all' && styles.categoryTabActive
           ]}
           onPress={() => {
-            console.log('Selected: All');
             setSelectedFilterCategory('all');
           }}
         >
@@ -544,10 +631,6 @@ export default function LogFoodScreen() {
         </TouchableOpacity>
         {(() => {
           const filteredCategories = foodCategories.filter(cat => cat.id !== 'others' && availableCategories.includes(cat.id as FoodItemData['category']));
-          console.log('====== FILTER TABS ======');
-          console.log('All foodCategories:', foodCategories.map(c => `${c.id}: ${c.label}`));
-          console.log('Available categories:', availableCategories);
-          console.log('Filtered categories to show:', filteredCategories.map(c => `${c.id}: ${c.label}`));
           return filteredCategories.map((category) => (
           <TouchableOpacity
             key={category.id}
@@ -557,7 +640,6 @@ export default function LogFoodScreen() {
               selectedFilterCategory === category.id && styles.categoryTabActive
             ]}
             onPress={() => {
-              console.log('Selected category:', category.id, category.label);
               setSelectedFilterCategory(category.id);
             }}
           >
@@ -570,6 +652,18 @@ export default function LogFoodScreen() {
         ));
         })()}
       </ScrollView>
+
+      {/* Custom Food Creation Button - Moved below search and filters */}
+      <TouchableOpacity
+        style={[styles.customFoodButton, { backgroundColor: '#006dab' }]}
+        onPress={() => setShowCustomFoodModal(true)}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add-circle-outline" size={20} color="#fff" />
+        <Text style={styles.customFoodButtonText}>
+          {language === 'ta' ? 'விருப்ப உணவை சேர்க்கவும்' : 'Create Custom Food'}
+        </Text>
+      </TouchableOpacity>
 
       {/* Food count display for debugging */}
       <Text style={[styles.resultCount, { color: colors.textSecondary }]}>
@@ -972,6 +1066,156 @@ export default function LogFoodScreen() {
         {step === 'summary' && renderSummary()}
       </ScrollView>
       
+      {/* Custom Food Creation Modal */}
+      {showCustomFoodModal && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: colors.cardBackground }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                {language === 'ta' ? 'விருப்ப உணவு' : 'Create Custom Food'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowCustomFoodModal(false)}>
+                <Ionicons name="close" size={28} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>
+                {language === 'ta' ? 'உணவு பெயர்' : 'Food Name'} *
+              </Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                placeholder={language === 'ta' ? 'உதா: தோசை' : 'e.g., Dosa'}
+                placeholderTextColor={colors.textMuted}
+                value={customFoodName}
+                onChangeText={setCustomFoodName}
+              />
+
+              <Text style={[styles.inputLabel, { color: colors.text }]}>
+                {language === 'ta' ? 'கிராம்ஸ்' : 'Grams'} ({language === 'ta' ? 'விரும்பினால்' : 'Optional'})
+              </Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                placeholder="100"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={customFoodGrams}
+                onChangeText={setCustomFoodGrams}
+              />
+
+              <Text style={[styles.inputLabel, { color: colors.text }]}>
+                {language === 'ta' ? 'கலோரிகள்' : 'Calories'} ({language === 'ta' ? 'விரும்பினால்' : 'Optional'})
+              </Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                placeholder="100"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={customFoodCalories}
+                onChangeText={setCustomFoodCalories}
+              />
+
+              <Text style={[styles.inputLabel, { color: colors.text }]}>
+                {language === 'ta' ? 'புரதம் (கி)' : 'Protein (g)'} ({language === 'ta' ? 'விரும்பினால்' : 'Optional'})
+              </Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                placeholder="5"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={customFoodProtein}
+                onChangeText={setCustomFoodProtein}
+              />
+
+              <Text style={[styles.inputLabel, { color: colors.text }]}>
+                {language === 'ta' ? 'கார்போஹைட்ரேட்' : 'Carbs (g)'} ({language === 'ta' ? 'விரும்பினால்' : 'Optional'})
+              </Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                placeholder="20"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={customFoodCarbs}
+                onChangeText={setCustomFoodCarbs}
+              />
+
+              <Text style={[styles.inputLabel, { color: colors.text }]}>
+                {language === 'ta' ? 'அளவு' : 'Quantity'} ({language === 'ta' ? 'விரும்பினால்' : 'Optional'})
+              </Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+                placeholder="1"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={customFoodQuantity}
+                onChangeText={setCustomFoodQuantity}
+              />
+
+              <TouchableOpacity
+                style={styles.createFoodButton}
+                onPress={handleCreateCustomFood}
+              >
+                <Text style={styles.createFoodButtonText}>
+                  {language === 'ta' ? 'உணவை சேர்க்கவும்' : 'Add Food'}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {/* Exit Confirmation Modal */}
+      {showExitModal && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.exitModalContainer, { backgroundColor: colors.cardBackground }]}>
+            <View style={[styles.exitModalIcon, { backgroundColor: '#fef3c7' }]}>
+              <Ionicons name="warning" size={48} color="#f59e0b" />
+            </View>
+            
+            <Text style={[styles.exitModalTitle, { color: colors.text }]}>
+              {language === 'ta' ? 'உணவு சேமிக்கப்படவில்லை' : 'Food Not Saved'}
+            </Text>
+            <Text style={[styles.exitModalMessage, { color: colors.textSecondary }]}>
+              {language === 'ta' 
+                ? 'நீங்கள் சேர்த்த உணவுகள் சேமிக்கப்படவில்லை. தொடர்ந்தால் உங்கள் உணவுகள் தானாகவே சேமிக்கப்படும் அல்லது கார்ட்டில் சென்று "உணவை பதிவு செய்" கிளிக் செய்யவும்.'
+                : 'Food entries are not saved. Proceeding will auto-save your entries, or visit cart and click "Log Meal" button.'
+              }
+            </Text>
+
+            <View style={styles.exitModalActions}>
+              <TouchableOpacity
+                style={[styles.exitModalButton, { backgroundColor: '#006dab' }]}
+                onPress={handleAutoSaveAndExit}
+              >
+                <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
+                <Text style={styles.exitModalButtonText}>
+                  {language === 'ta' ? 'சேமித்து வெளியேறு' : 'Auto-Save & Exit'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.exitModalButton, { backgroundColor: '#64748b' }]}
+                onPress={handleExitWithoutSaving}
+              >
+                <Ionicons name="close-circle-outline" size={22} color="#fff" />
+                <Text style={styles.exitModalButtonText}>
+                  {language === 'ta' ? 'சேமிக்காமல் வெளியேறு' : 'Exit Without Saving'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.exitModalCancelButton, { borderColor: colors.border }]}
+                onPress={() => setShowExitModal(false)}
+              >
+                <Text style={[styles.exitModalCancelText, { color: colors.text }]}>
+                  {language === 'ta' ? 'ரத்து செய்' : 'Cancel'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Bottom Navigation */}
       <BottomNavBar />
     </View>
@@ -993,7 +1237,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: isWeb ? undefined : 16,
     right: isWeb ? 20 : 16,
-    zIndex: 1000,
+    zIndex: 50, // Lower z-index to stay below cart button
     backgroundColor: '#ffffff',
     paddingHorizontal: 20,
     paddingVertical: 14,
@@ -1062,6 +1306,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 100, // Higher z-index to stay above toast
   },
   cartBadge: {
     position: 'absolute',
@@ -1680,5 +1925,153 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginBottom: 12,
     fontWeight: '600',
+  },
+  // Custom Food Button Styles
+  customFoodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#006dab',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginBottom: 12,
+    gap: 6,
+  },
+  customFoodButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  // Modal Styles
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  modalContainer: {
+    width: '90%',
+    maxWidth: 500,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 0,
+    maxHeight: '85%',
+    ...(isWeb && { boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)' }),
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  modalBody: {
+    padding: 20,
+    maxHeight: 500,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#0f172a',
+  },
+  createFoodButton: {
+    backgroundColor: '#006dab',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  createFoodButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  // Exit Modal Styles
+  exitModalContainer: {
+    width: '90%',
+    maxWidth: 420,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    ...(isWeb && { boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)' }),
+  },
+  exitModalIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#fef3c7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  exitModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0f172a',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  exitModalMessage: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  exitModalActions: {
+    width: '100%',
+    gap: 12,
+  },
+  exitModalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#006dab',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  exitModalButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  exitModalCancelButton: {
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  exitModalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#64748b',
   },
 });

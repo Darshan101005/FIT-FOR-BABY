@@ -368,7 +368,7 @@ export default function EnterPinScreen() {
             description: description,
             metadata: {
               switchType,
-              previousGender: previousGender || null,
+              previousGender: previousGender || undefined,
               newGender: selectedGender,
               userName: profileData.name,
             },

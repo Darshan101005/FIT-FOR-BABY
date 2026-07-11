@@ -1335,7 +1335,7 @@ export interface ActivityLog {
   // User identification (optional for 'general' category)
   userId?: string;             // User ID if known
   coupleId?: string;
-  userRole?: UserRole | 'admin' | 'superadmin' | 'unknown';
+  userRole?: UserRole | 'admin' | 'superadmin' | 'owner' | 'unknown';
   
   // For failed login attempts (when user is unknown)
   attemptedEmail?: string;     // Email that was attempted

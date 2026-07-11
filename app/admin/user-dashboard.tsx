@@ -3,15 +3,15 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from 'react-native';
 import { CoupleExerciseLog, CoupleFoodLog, CoupleStepEntry, CoupleWeightLog, coupleExerciseService, coupleFoodLogService, coupleService, coupleStepsService, coupleWeightLogService, formatDateString } from '../../services/firestore.service';
 
@@ -61,9 +61,20 @@ export default function UserDashboardScreen() {
   const isTablet = screenWidth >= 768 && screenWidth < 1024;
 
   const coupleId = params.coupleId as string || 'C_001';
+  // Date passed from monitoring page - use it so overview/details match the monitoring date
+  const dateParam = (params.date as string) || new Date().toISOString().split('T')[0];
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Returns "Today" if the date is today, otherwise a friendly formatted date
+  const getDateLabel = (dateStr: string): string => {
+    if (dateStr === todayStr) return 'Today';
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    if (dateStr === yesterday) return 'Yesterday';
+    return dateStr;
+  };
 
   const [selectedTab, setSelectedTab] = useState<'overview' | 'exercise' | 'meals'>('overview');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(dateParam);
   const [isLoading, setIsLoading] = useState(true);
   const [coupleData, setCoupleData] = useState<any>(null);
   const [maleUser, setMaleUser] = useState<UserData | null>(null);
@@ -80,10 +91,12 @@ export default function UserDashboardScreen() {
   const [showHeightHistoryModal, setShowHeightHistoryModal] = useState(false);
   const [showStepHistoryModal, setShowStepHistoryModal] = useState(false);
   const [selectedGenderForHistory, setSelectedGenderForHistory] = useState<'male' | 'female'>('male');
-  const [exerciseDateFilter, setExerciseDateFilter] = useState<'all' | 'today' | 'yesterday' | 'custom'>('all');
-  const [customExerciseDate, setCustomExerciseDate] = useState(new Date().toISOString().split('T')[0]);
-  const [mealDateFilter, setMealDateFilter] = useState<'all' | 'today' | 'yesterday' | 'custom'>('all');
-  const [customMealDate, setCustomMealDate] = useState(new Date().toISOString().split('T')[0]);
+  // If a specific past date was passed from monitoring, default the detail filters to that date
+  const initialDateFilter: 'all' | 'today' | 'yesterday' | 'custom' = dateParam !== todayStr ? 'custom' : 'all';
+  const [exerciseDateFilter, setExerciseDateFilter] = useState<'all' | 'today' | 'yesterday' | 'custom'>(initialDateFilter);
+  const [customExerciseDate, setCustomExerciseDate] = useState(dateParam);
+  const [mealDateFilter, setMealDateFilter] = useState<'all' | 'today' | 'yesterday' | 'custom'>(initialDateFilter);
+  const [customMealDate, setCustomMealDate] = useState(dateParam);
   const [showDatePickerModal, setShowDatePickerModal] = useState(false);
   const [showMealDatePickerModal, setShowMealDatePickerModal] = useState(false);
   const [tempSelectedDate, setTempSelectedDate] = useState({ year: new Date().getFullYear(), month: new Date().getMonth(), day: new Date().getDate() });
@@ -469,7 +482,7 @@ export default function UserDashboardScreen() {
           onPress={() => openWeightHistory(isMale ? 'male' : 'female')}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={[styles.userStatValue, { color: COLORS.primary }]}>{user?.bmi?.toFixed(1) || '-'}</Text>
+            <Text style={[styles.userStatValue, { color: COLORS.primary }]}>{typeof user?.bmi === 'number' ? user.bmi.toFixed(1) : '-'}</Text>
             <Ionicons name="chevron-forward" size={14} color={COLORS.primary} style={{ marginLeft: 2 }} />
           </View>
           <Text style={styles.userStatLabel}>BMI</Text>
@@ -561,8 +574,8 @@ export default function UserDashboardScreen() {
   // Overview Tab
   const renderOverview = () => (
     <View style={styles.overviewContainer}>
-      {/* Today's Summary - Both Users */}
-      <Text style={styles.sectionTitle}>Today's Summary - {selectedDate}</Text>
+      {/* Summary - Both Users (label reflects the selected date) */}
+      <Text style={styles.sectionTitle}>{selectedDate === todayStr ? "Today's Summary" : `Summary - ${selectedDate}`}</Text>
       
       {/* Male User Summary */}
       <View style={styles.userSummarySection}>
@@ -863,14 +876,14 @@ export default function UserDashboardScreen() {
           .slice(0, 3)
           .map((log) => renderExerciseItem(log as CoupleExerciseLog, log.isMale))}
         {todayMaleExerciseLogs.length === 0 && todayFemaleExerciseLogs.length === 0 && (
-          <Text style={styles.noDataText}>No exercises logged today</Text>
+          <Text style={styles.noDataText}>{selectedDate === todayStr ? 'No exercises logged today' : 'No exercises logged on this date'}</Text>
         )}
       </View>
 
       {/* Recent Meals - Both Users */}
       <View style={styles.recentSection}>
         <View style={styles.recentHeader}>
-          <Text style={styles.sectionTitle}>Today's Meals (Calories Intake)</Text>
+          <Text style={styles.sectionTitle}>{selectedDate === todayStr ? "Today's Meals (Calories Intake)" : `Meals (Calories Intake) - ${selectedDate}`}</Text>
           <TouchableOpacity onPress={() => setSelectedTab('meals')}>
             <Text style={styles.viewAllText}>View All</Text>
           </TouchableOpacity>
@@ -878,7 +891,7 @@ export default function UserDashboardScreen() {
         {todayMaleFoodLogs.slice(0, 2).map((meal) => renderMealItem(meal, true))}
         {todayFemaleFoodLogs.slice(0, 2).map((meal) => renderMealItem(meal, false))}
         {todayMaleFoodLogs.length === 0 && todayFemaleFoodLogs.length === 0 && (
-          <Text style={styles.noDataText}>No meals logged today</Text>
+          <Text style={styles.noDataText}>{selectedDate === todayStr ? 'No meals logged today' : 'No meals logged on this date'}</Text>
         )}
       </View>
     </View>
@@ -1155,10 +1168,10 @@ export default function UserDashboardScreen() {
   const getFilteredMealTotals = (gender: 'male' | 'female') => {
     const logs = gender === 'male' ? filteredMaleFoodLogs : filteredFemaleFoodLogs;
     return {
-      calories: logs.reduce((sum, log) => sum + log.totalCalories, 0),
-      protein: logs.reduce((sum, log) => sum + log.totalProtein, 0),
-      carbs: logs.reduce((sum, log) => sum + log.totalCarbs, 0),
-      fat: logs.reduce((sum, log) => sum + log.totalFat, 0),
+      calories: Math.round(logs.reduce((sum, log) => sum + log.totalCalories, 0)),
+      protein: parseFloat(logs.reduce((sum, log) => sum + log.totalProtein, 0).toFixed(1)),
+      carbs: parseFloat(logs.reduce((sum, log) => sum + log.totalCarbs, 0).toFixed(1)),
+      fat: parseFloat(logs.reduce((sum, log) => sum + log.totalFat, 0).toFixed(1)),
       mealCount: logs.length,
     };
   };
@@ -1533,15 +1546,15 @@ export default function UserDashboardScreen() {
         </View>
         <View style={styles.mealTotalItem}>
           <Text style={styles.mealTotalLabel}>Protein</Text>
-          <Text style={styles.mealTotalValue}>{meal.totalProtein}g</Text>
+          <Text style={styles.mealTotalValue}>{Number(meal.totalProtein).toFixed(1)}g</Text>
         </View>
         <View style={styles.mealTotalItem}>
           <Text style={styles.mealTotalLabel}>Carbs</Text>
-          <Text style={styles.mealTotalValue}>{meal.totalCarbs}g</Text>
+          <Text style={styles.mealTotalValue}>{Number(meal.totalCarbs).toFixed(1)}g</Text>
         </View>
         <View style={styles.mealTotalItem}>
           <Text style={styles.mealTotalLabel}>Fat</Text>
-          <Text style={styles.mealTotalValue}>{meal.totalFat}g</Text>
+          <Text style={styles.mealTotalValue}>{Number(meal.totalFat).toFixed(1)}g</Text>
         </View>
       </View>
     </View>
@@ -1622,7 +1635,7 @@ export default function UserDashboardScreen() {
                         </View>
                         <View style={styles.summaryItem}>
                           <Text style={styles.summaryLabel}>Latest BMI</Text>
-                          <Text style={styles.summaryValue}>{weightLogs[0].bmi?.toFixed(1) || '-'}</Text>
+                          <Text style={styles.summaryValue}>{typeof weightLogs[0].bmi === 'number' ? weightLogs[0].bmi.toFixed(1) : '-'}</Text>
                         </View>
                         <View style={styles.summaryItem}>
                           <Text style={styles.summaryLabel}>Total Logs</Text>
@@ -1664,7 +1677,7 @@ export default function UserDashboardScreen() {
                         {log.bmi && (
                           <View style={styles.historyStatItem}>
                             <MaterialCommunityIcons name="scale-balance" size={16} color={COLORS.info} />
-                            <Text style={styles.historyStatValue}>BMI: {log.bmi.toFixed(1)}</Text>
+                            <Text style={styles.historyStatValue}>BMI: {typeof log.bmi === 'number' ? log.bmi.toFixed(1) : '-'}</Text>
                           </View>
                         )}
                         {log.waist && (

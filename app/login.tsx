@@ -141,7 +141,7 @@ export default function LoginScreen() {
         // Get the name of the user who needs to complete setup
         const incompleteUser = !maleSetupComplete ? couple.male.name : couple.female.name;
         try {
-          await activityLogService.logFailedLogin('login_failed', phoneNumber, false, `Quick access failed: ${incompleteUser} has not completed first-time setup`);
+          await activityLogService.logFailedLogin('login_failed', credential, false, `Quick access failed: ${incompleteUser} has not completed first-time setup`);
         } catch (logError) {
           console.log('Failed login log error (non-critical):', logError);
         }
@@ -152,7 +152,7 @@ export default function LoginScreen() {
 
       if (couple.male.status === 'inactive' && couple.female.status === 'inactive') {
         try {
-          await activityLogService.logFailedLogin('login_failed', phoneNumber, false, 'Quick access failed: Both accounts in couple are paused/inactive');
+          await activityLogService.logFailedLogin('login_failed', credential, false, 'Quick access failed: Both accounts in couple are paused/inactive');
         } catch (logError) {
           console.log('Failed login log error (non-critical):', logError);
         }

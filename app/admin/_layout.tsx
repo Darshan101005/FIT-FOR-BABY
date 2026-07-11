@@ -560,8 +560,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   logo: {
-    width: 44,
-    height: 44,
+    width: 60,
+    height: 60,
   },
   logoText: {
     flex: 1,
