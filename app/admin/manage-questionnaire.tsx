@@ -386,22 +386,32 @@ export default function ManageQuestionnaireScreen() {
             <Ionicons name="pencil" size={14} color={COLORS.textMuted} />
             <Text style={styles.hint}>Tap the pencil to change text/options (English & Tamil). The eye toggle hides a question from users.</Text>
           </View>
-          {baseQuestions.map(q => {
+          {baseQuestions.map((q, idx) => {
             const isDisabled = disabledQuestions.includes(q.questionId);
             const override = editedQuestions[q.questionId];
             const displayEn = override?.question || q.question;
             const displayTa = override?.questionTamil || q.questionTamil;
+            // Show a section header whenever the section changes
+            const showSectionHeader = idx === 0 || baseQuestions[idx - 1].sectionId !== q.sectionId;
             return (
-              <View key={q.questionId} style={styles.qRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.qText, isDisabled && styles.qTextDisabled]}>{q.number}. {displayEn}{override ? '  (edited)' : ''}</Text>
-                  {!!displayTa && <Text style={styles.qTamil}>{displayTa}</Text>}
-                  <Text style={styles.qMeta}>{q.sectionTitle} • {q.type === 'mcq' ? 'Multiple Choice' : q.type === 'fillup' ? 'Short Answer' : 'Long Answer'}{isDisabled ? ' • HIDDEN' : ''}</Text>
-                </View>
-                <View style={styles.qActions}>
-                  {override && <TouchableOpacity onPress={() => revertBaseEdit(q.questionId)}><Ionicons name="refresh" size={18} color={COLORS.warning} /></TouchableOpacity>}
-                  <TouchableOpacity onPress={() => startEditBase(q)}><Ionicons name="pencil" size={18} color={COLORS.primary} /></TouchableOpacity>
-                  <TouchableOpacity onPress={() => toggleBaseDisabled(q.questionId)}><Ionicons name={isDisabled ? 'eye-off' : 'eye'} size={22} color={isDisabled ? COLORS.textMuted : COLORS.success} /></TouchableOpacity>
+              <View key={q.questionId}>
+                {showSectionHeader && (
+                  <View style={styles.sectionHeader}>
+                    <Ionicons name="folder-open-outline" size={16} color={COLORS.primary} />
+                    <Text style={styles.sectionHeaderText}>{q.sectionTitle}</Text>
+                  </View>
+                )}
+                <View style={styles.qRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.qText, isDisabled && styles.qTextDisabled]}>{q.number}. {displayEn}{override ? '  (edited)' : ''}</Text>
+                    {!!displayTa && <Text style={styles.qTamil}>{displayTa}</Text>}
+                    <Text style={styles.qMeta}>{q.type === 'mcq' ? 'Multiple Choice' : q.type === 'fillup' ? 'Short Answer' : 'Long Answer'}{isDisabled ? ' • HIDDEN' : ''}</Text>
+                  </View>
+                  <View style={styles.qActions}>
+                    {override && <TouchableOpacity onPress={() => revertBaseEdit(q.questionId)}><Ionicons name="refresh" size={18} color={COLORS.warning} /></TouchableOpacity>}
+                    <TouchableOpacity onPress={() => startEditBase(q)}><Ionicons name="pencil" size={18} color={COLORS.primary} /></TouchableOpacity>
+                    <TouchableOpacity onPress={() => toggleBaseDisabled(q.questionId)}><Ionicons name={isDisabled ? 'eye-off' : 'eye'} size={22} color={isDisabled ? COLORS.textMuted : COLORS.success} /></TouchableOpacity>
+                  </View>
                 </View>
               </View>
             );
@@ -454,6 +464,8 @@ const styles = StyleSheet.create({
   cancelBtn: { paddingHorizontal: 18, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, justifyContent: 'center' },
   cancelBtnText: { color: COLORS.textSecondary, fontSize: 14, fontWeight: '600' },
   muted: { color: COLORS.textMuted, fontSize: 13, paddingVertical: 8 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.primary + '10', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, marginTop: 16, marginBottom: 4 },
+  sectionHeaderText: { fontSize: 14, fontWeight: '800', color: COLORS.primary },
   qRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight, gap: 12 },
   qText: { fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },
   qTamil: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },

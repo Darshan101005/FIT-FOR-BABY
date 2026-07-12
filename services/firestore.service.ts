@@ -5,24 +5,24 @@
 import { calculateProgress, initializeProgress } from '@/data/questionnaireParser';
 import { ActivityAction, ActivityCategory, ActivityLog, ActivityLogFilter, ActivityLogMetadata, ActivityType, Admin, Appointment, AppointmentStatus, Broadcast, Chat, ChatMessage, COLLECTIONS, CustomQuestion, DeviceStatus, DoctorVisit, DoctorVisitStatus, ExerciseLog, Feedback, FeedbackCategory, FeedbackStatus, FoodLog, GlobalSettings, Notification, NurseVisit, NursingDepartmentVisit, NursingVisitStatus, QuestionnaireAnswer, QuestionnaireCustomization, QuestionnaireLanguage, QuestionnaireProgress, StepEntry, SupportRequest, SupportRequestStatus, User, UserDevice, UserRole, WeightLog } from '@/types/firebase.types';
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  deleteField,
-  doc,
-  getDoc,
-  getDocs,
-  increment,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  setDoc,
-  Timestamp,
-  Unsubscribe,
-  updateDoc,
-  where,
-  writeBatch
+    addDoc,
+    collection,
+    deleteDoc,
+    deleteField,
+    doc,
+    getDoc,
+    getDocs,
+    increment,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    setDoc,
+    Timestamp,
+    Unsubscribe,
+    updateDoc,
+    where,
+    writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -4097,6 +4097,56 @@ export const questionnaireService = {
       silentLog('questionnaire', 'delete', `${coupleId}-${gender}`, `Reset questionnaire`, undefined, coupleId, { gender });
     } catch (error) {
       console.error('Error resetting questionnaire:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Admin bulk save: write a full set of answers for a user in one operation.
+   * Used by the admin Manual Data Entry questionnaire filler.
+   */
+  async adminSaveResponses(
+    coupleId: string,
+    gender: 'male' | 'female',
+    language: QuestionnaireLanguage,
+    answers: Record<string, QuestionnaireAnswer>,
+    markComplete: boolean
+  ): Promise<void> {
+    try {
+      const docRef = doc(db, COLLECTIONS.COUPLES, coupleId, 'questionnaire', gender);
+      const existing = await this.getProgress(coupleId, gender);
+      const answeredIds = Object.keys(answers);
+      const progress = calculateProgress(language, gender, answeredIds);
+
+      const payload: any = {
+        coupleId,
+        gender,
+        language,
+        answers,
+        progress,
+        currentPosition: existing?.currentPosition || { partIndex: 0, sectionIndex: 0, questionIndex: 0 },
+        status: markComplete ? 'completed' : 'in-progress',
+        isComplete: markComplete,
+        startedAt: existing?.startedAt || now(),
+        completedAt: markComplete ? now() : (existing?.completedAt || null),
+        lastUpdatedAt: now(),
+        createdAt: existing?.createdAt || now(),
+      };
+
+      await setDoc(docRef, payload, { merge: true });
+
+      const coupleRef = doc(db, COLLECTIONS.COUPLES, coupleId);
+      await updateDoc(coupleRef, {
+        [`${gender}.questionnaireStarted`]: true,
+        [`${gender}.questionnaireLanguage`]: language,
+        [`${gender}.questionnaireCompleted`]: markComplete,
+        ...(markComplete ? { [`${gender}.questionnaireCompletedAt`]: now() } : {}),
+        updatedAt: now(),
+      });
+
+      silentLog('questionnaire', 'update', `${coupleId}-${gender}`, `Admin ${markComplete ? 'completed' : 'saved'} questionnaire`, undefined, coupleId, { gender, admin: true, progressPercent: progress.percentComplete });
+    } catch (error) {
+      console.error('Error saving admin questionnaire responses:', error);
       throw error;
     }
   },

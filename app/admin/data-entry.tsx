@@ -2,27 +2,27 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  useWindowDimensions,
-  View
+    ActivityIndicator,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View
 } from 'react-native';
 import { calculateNutrition, foodDatabase, FoodItemData, mealTimes, searchFoods } from '../../data/foodDatabase';
 import {
-  CoupleExerciseLog,
-  coupleExerciseService,
-  CoupleFoodLog,
-  CoupleFoodLogItem,
-  coupleFoodLogService,
-  coupleService,
-  CoupleStepEntry,
-  coupleStepsService,
+    CoupleExerciseLog,
+    coupleExerciseService,
+    CoupleFoodLog,
+    CoupleFoodLogItem,
+    coupleFoodLogService,
+    coupleService,
+    CoupleStepEntry,
+    coupleStepsService,
 } from '../../services/firestore.service';
 
 const isWeb = Platform.OS === 'web';
@@ -44,7 +44,11 @@ const COLORS = {
   borderLight: '#f1f5f9',
 };
 
-type DataType = 'steps' | 'food' | 'exercise';
+type DataType = 'steps' | 'food' | 'exercise' | 'questionnaire';
+
+// Capitalize the first letter of each word (e.g. "dosa butter" -> "Dosa Butter")
+const capitalizeWords = (text: string): string =>
+  text.split(' ').map(w => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w)).join(' ');
 
 const EXERCISE_OPTIONS = [
   { id: 'couple-walking', name: 'Couple Walking', caloriesPerMinute: 4, requiresSteps: true, isCouple: true },
@@ -110,6 +114,13 @@ export default function AdminDataEntryScreen() {
   const [foodQuery, setFoodQuery] = useState('');
   const [cart, setCart] = useState<CartFood[]>([]);
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
+  // Custom food creation
+  const [showCustomFood, setShowCustomFood] = useState(false);
+  const [cfName, setCfName] = useState('');
+  const [cfGrams, setCfGrams] = useState('');
+  const [cfCalories, setCfCalories] = useState('');
+  const [cfProtein, setCfProtein] = useState('');
+  const [cfCarbs, setCfCarbs] = useState('');
 
   // Exercise
   const [exerciseId, setExerciseId] = useState('couple-walking');
@@ -266,6 +277,31 @@ export default function AdminDataEntryScreen() {
   const addToCart = (food: FoodItemData) => {
     const idx = food.commonServings.findIndex(s => s.label !== 'Custom');
     setCart(prev => [...prev, { food, servingIndex: idx >= 0 ? idx : 0, quantity: 1 }]);
+  };
+
+  // Create a custom food and add it to the cart
+  const handleCreateCustomFood = () => {
+    if (!cfName.trim()) { showBanner('error', 'Enter a food name.'); return; }
+    const grams = cfGrams ? parseFloat(cfGrams) : 100;
+    const customFood: FoodItemData = {
+      id: `custom-${Date.now()}`,
+      name: capitalizeWords(cfName.trim()),
+      nameTamil: capitalizeWords(cfName.trim()),
+      category: 'others',
+      subCategory: 'Custom',
+      caloriesPer100g: cfCalories ? (parseFloat(cfCalories) / grams) * 100 : 100,
+      proteinPer100g: cfProtein ? (parseFloat(cfProtein) / grams) * 100 : 0,
+      carbsPer100g: cfCarbs ? (parseFloat(cfCarbs) / grams) * 100 : 0,
+      fatPer100g: 0,
+      defaultServingSize: grams,
+      servingUnit: 'serving',
+      commonServings: [{ label: `${grams}g`, grams }],
+      isCustom: true,
+    };
+    setCart(prev => [...prev, { food: customFood, servingIndex: 0, quantity: 1 }]);
+    setShowCustomFood(false);
+    setCfName(''); setCfGrams(''); setCfCalories(''); setCfProtein(''); setCfCarbs('');
+    showBanner('success', `Custom food "${customFood.name}" added to meal.`);
   };
   const removeFromCart = (i: number) => setCart(prev => prev.filter((_, idx) => idx !== i));
   const updateCartQty = (i: number, delta: number) => setCart(prev => prev.map((item, idx) => idx === i ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item));
@@ -646,6 +682,7 @@ export default function AdminDataEntryScreen() {
                 { id: 'steps', label: 'Steps', icon: 'footsteps' },
                 { id: 'food', label: 'Food', icon: 'nutrition' },
                 { id: 'exercise', label: 'Exercise', icon: 'fitness' },
+                { id: 'questionnaire', label: 'Questionnaire', icon: 'clipboard' },
               ] as { id: DataType; label: string; icon: string }[]).map(t => (
                 <TouchableOpacity key={t.id} style={[styles.tab, dataType === t.id && styles.tabActive]} onPress={() => setDataType(t.id)}>
                   <Ionicons name={t.icon as any} size={18} color={dataType === t.id ? COLORS.primary : COLORS.textSecondary} />
@@ -725,6 +762,43 @@ export default function AdminDataEntryScreen() {
                   <Ionicons name="search" size={18} color={COLORS.textMuted} />
                   <TextInput style={styles.searchInput} placeholder="Search any food (idli, dosa, coffee...)" placeholderTextColor={COLORS.textMuted} value={foodQuery} onChangeText={setFoodQuery} />
                 </View>
+
+                {/* Create Custom Food */}
+                <TouchableOpacity style={styles.customFoodBtn} onPress={() => setShowCustomFood(v => !v)}>
+                  <Ionicons name={showCustomFood ? 'remove-circle-outline' : 'add-circle-outline'} size={18} color={COLORS.primary} />
+                  <Text style={styles.customFoodBtnText}>{showCustomFood ? 'Close Custom Food' : 'Enter Custom Food'}</Text>
+                </TouchableOpacity>
+                {showCustomFood && (
+                  <View style={styles.customFoodBox}>
+                    <Text style={styles.fieldLabel}>Food Name *</Text>
+                    <TextInput style={styles.numberInput} placeholder="e.g. Ragi Dosa" placeholderTextColor={COLORS.textMuted} value={cfName} onChangeText={setCfName} />
+                    <View style={styles.cfRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fieldLabel}>Grams</Text>
+                        <TextInput style={styles.numberInput} placeholder="100" placeholderTextColor={COLORS.textMuted} keyboardType="numeric" value={cfGrams} onChangeText={setCfGrams} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fieldLabel}>Calories</Text>
+                        <TextInput style={styles.numberInput} placeholder="Optional" placeholderTextColor={COLORS.textMuted} keyboardType="numeric" value={cfCalories} onChangeText={setCfCalories} />
+                      </View>
+                    </View>
+                    <View style={styles.cfRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fieldLabel}>Protein (g)</Text>
+                        <TextInput style={styles.numberInput} placeholder="Optional" placeholderTextColor={COLORS.textMuted} keyboardType="numeric" value={cfProtein} onChangeText={setCfProtein} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fieldLabel}>Carbs (g)</Text>
+                        <TextInput style={styles.numberInput} placeholder="Optional" placeholderTextColor={COLORS.textMuted} keyboardType="numeric" value={cfCarbs} onChangeText={setCfCarbs} />
+                      </View>
+                    </View>
+                    <TouchableOpacity style={styles.primaryBtnSm} onPress={handleCreateCustomFood}>
+                      <Ionicons name="add" size={18} color="#fff" />
+                      <Text style={styles.primaryBtnSmText}>Add to Meal</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 <ScrollView style={styles.foodList} nestedScrollEnabled>
                   {foodResults.map(f => (
                     <TouchableOpacity key={f.id} style={styles.foodRow} onPress={() => addToCart(f)}>
@@ -842,6 +916,22 @@ export default function AdminDataEntryScreen() {
               </View>
             )}
 
+            {/* QUESTIONNAIRE */}
+            {dataType === 'questionnaire' && (
+              <View style={styles.section}>
+                <Text style={styles.qInfo}>
+                  Fill the questionnaire section-wise. Switch between English & Tamil, and edit, delete or refill anytime.
+                </Text>
+                <TouchableOpacity
+                  style={styles.saveBtn}
+                  onPress={() => router.push(`/admin/fill-questionnaire?coupleId=${selectedCoupleId}&gender=${gender}&coupleName=${encodeURIComponent(selectedCouple?.id || '')}` as any)}
+                >
+                  <Ionicons name="clipboard-outline" size={18} color="#fff" />
+                  <Text style={styles.saveBtnText}>Open Questionnaire</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {loadingEntries && !saving && !deletingId && <ActivityIndicator color={COLORS.primary} style={{ marginTop: 12 }} />}
           </View>
         )}
@@ -913,6 +1003,13 @@ const styles = StyleSheet.create({
   mealChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   mealChipText: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
   mealChipTextActive: { color: '#fff' },
+  customFoodBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, marginTop: 4 },
+  customFoodBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
+  customFoodBox: { backgroundColor: COLORS.background, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, padding: 12, marginBottom: 8 },
+  cfRow: { flexDirection: 'row', gap: 10 },
+  primaryBtnSm: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.primary, paddingVertical: 12, borderRadius: 10, marginTop: 6 },
+  primaryBtnSmText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  qInfo: { fontSize: 14, color: COLORS.textSecondary, lineHeight: 21, marginBottom: 16 },
   foodList: { maxHeight: 220, marginTop: 10 },
   foodRow: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, marginBottom: 8, backgroundColor: COLORS.background },
   foodName: { fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },

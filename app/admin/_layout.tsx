@@ -4,17 +4,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Image,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions
+    ActivityIndicator,
+    Animated,
+    Image,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
@@ -541,6 +541,7 @@ export default function AdminLayout() {
           <Stack.Screen name="monitoring" />
           <Stack.Screen name="data-entry" />
           <Stack.Screen name="manage-questionnaire" />
+          <Stack.Screen name="fill-questionnaire" />
           <Stack.Screen name="communication" />
           <Stack.Screen name="user-dashboard" />
         </Stack>
