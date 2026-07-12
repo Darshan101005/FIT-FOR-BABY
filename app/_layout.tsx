@@ -14,6 +14,25 @@ import { ActivityIndicator, Linking, Platform, StyleSheet, Text, View } from 're
 
 const isWeb = Platform.OS === 'web';
 
+// Silence known, harmless react-native-web deprecation warnings so the console
+// stays clean. These come from framework-level style props used across many
+// components (shadow*/textShadow*) and web Animated fallback (useNativeDriver).
+(() => {
+  const SUPPRESSED = [
+    'shadow*" style props are deprecated',
+    'textShadow*" style props are deprecated',
+    'useNativeDriver` is not supported because the native animated module is missing',
+  ];
+  const shouldSuppress = (args: any[]) => {
+    const first = args && args.length ? String(args[0]) : '';
+    return SUPPRESSED.some((s) => first.includes(s));
+  };
+  const origWarn = console.warn;
+  const origError = console.error;
+  console.warn = (...args: any[]) => { if (shouldSuppress(args)) return; origWarn.apply(console, args); };
+  console.error = (...args: any[]) => { if (shouldSuppress(args)) return; origError.apply(console, args); };
+})();
+
 // Loading screen component
 function LoadingScreen() {
   return (
